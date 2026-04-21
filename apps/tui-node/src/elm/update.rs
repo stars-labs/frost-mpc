@@ -165,28 +165,76 @@ pub fn update(model: &mut Model, msg: Message) -> Option<Command> {
         
         // ============= Wallet Management Messages =============
 
-        // Substep 1.2 stub: the PasswordPromptComponent isn't capable of
-        // emitting this yet (placeholder has no input fields), so reaching
-        // this arm at runtime is not possible until Substep 1.3 wires the
-        // real input widget. Still worth implementing now so the message
-        // variant is live and we can cover it in unit tests — makes the
-        // handoff in 1.3/1.4 a compile-time diff rather than a new feature.
+        // Route the staged password to the right downstream flow. This
+        // handler is the single join point where both the creator and the
+        // joiner paths hand off to the DKG layer — upstream, they diverge
+        // (ThresholdConfig-Enter vs JoinSession-Enter); downstream, they
+        // both land on DKGProgress via their respective Commands.
         //
-        // Behaviour today: stash the password and advance to DKGProgress.
-        // The actual keystore encryption (Stage 2) reads from
-        // `pending_password` and clears it.
+        // Disambiguation: at this point the joiner already has
+        // `active_session` populated (set when they clicked a session on
+        // the JoinSession screen); the creator does not (the session is
+        // announced by `Command::StartDKG`, which runs from inside
+        // `Message::CreateWallet`'s handler).
+        //
+        // Stage 2 will introduce the actual keystore-write step that
+        // reads `pending_password` and clears it after encryption.
         Message::SubmitPassword { value } => {
-            // Do not log the password itself, even at debug level.
-            info!("Password submitted ({} chars) — staging and advancing to DKGProgress", value.len());
+            info!(
+                "Password submitted ({} chars) — routing to DKG",
+                value.len()
+            );
             model.wallet_state.pending_password = Some(value);
-            // Placeholder DKGProgress session id; the real one flows in via
-            // `UpdateDKGSessionId` from the signal server. Matches the
-            // pattern already used by `Message::CreateWallet`.
-            model.push_screen(Screen::DKGProgress {
-                session_id: "pending".to_string(),
-            });
-            model.ui_state.focus = crate::elm::model::ComponentId::DKGProgress;
-            None
+
+            if let Some(session) = model.active_session.clone() {
+                // Joiner path — the session is known; JoinDKG will send
+                // the SessionStatusUpdate and await Round 1 packages.
+                let session_id = session.session_id.clone();
+                model.push_screen(Screen::DKGProgress {
+                    session_id: session_id.clone(),
+                });
+                model.ui_state.focus = crate::elm::model::ComponentId::DKGProgress;
+                model
+                    .ui_state
+                    .selected_indices
+                    .entry(crate::elm::model::ComponentId::DKGProgress)
+                    .or_insert(0);
+                Some(Command::JoinDKG { session_id })
+            } else if let Some(cw) = model.wallet_state.creating_wallet.clone() {
+                // Creator path — build the `WalletConfig` out of whatever
+                // the user configured on `ThresholdConfig` (preferred) or
+                // picked from a template, and hand off to
+                // `Message::CreateWallet` which already handles the
+                // session-announce + DKGProgress navigation dance.
+                let config = cw.custom_config.unwrap_or_else(|| {
+                    cw.template
+                        .as_ref()
+                        .map(|t| WalletConfig {
+                            name: t.name.clone(),
+                            threshold: t.threshold,
+                            total_participants: t.total_participants,
+                            mode: cw.mode.clone().unwrap_or(WalletMode::Online),
+                        })
+                        .unwrap_or_else(|| WalletConfig {
+                            name: "MPC Wallet".to_string(),
+                            threshold: 2,
+                            total_participants: 3,
+                            mode: WalletMode::Online,
+                        })
+                });
+                Some(Command::SendMessage(Message::CreateWallet { config }))
+            } else {
+                // Neither creator nor joiner state is set — this shouldn't
+                // happen because the only way to reach PasswordPrompt is
+                // through one of those two flows. Log loudly rather than
+                // silently drop so the regression is debuggable.
+                warn!(
+                    "SubmitPassword fired with no active_session and no \
+                     creating_wallet — navigation edge regressed upstream"
+                );
+                model.go_home();
+                None
+            }
         }
 
         Message::CreateWallet { config } => {
@@ -1289,32 +1337,36 @@ pub fn update(model: &mut Model, msg: Message) -> Option<Command> {
                     // Get the threshold configuration and start DKG
                     info!("ThresholdConfig confirmed - starting DKG process");
                     
-                    // Get the config from custom_config or use defaults
-                    let config = if let Some(ref creating_wallet) = model.wallet_state.creating_wallet {
-                        if let Some(ref custom_config) = creating_wallet.custom_config {
-                            // Use the config that was modified by the arrow keys
-                            custom_config.clone()
-                        } else {
-                            // Fallback to defaults if custom_config wasn't initialized
-                            WalletConfig {
+                    // Ensure the chosen config is persisted on the
+                    // `creating_wallet` state so `Message::SubmitPassword`
+                    // can retrieve it after password capture. The UI code
+                    // already writes to `custom_config` on arrow-key
+                    // edits; this is a belt-and-suspenders write in case
+                    // someone landed here with defaults.
+                    if model.wallet_state.creating_wallet.is_none() {
+                        model.wallet_state.creating_wallet =
+                            Some(CreateWalletState::default());
+                    }
+                    if let Some(ref mut cw) = model.wallet_state.creating_wallet {
+                        if cw.custom_config.is_none() {
+                            cw.custom_config = Some(WalletConfig {
                                 name: "MPC Wallet".to_string(),
                                 threshold: 2,
                                 total_participants: 3,
-                                mode: creating_wallet.mode.clone().unwrap_or(WalletMode::Online),
-                            }
+                                mode: cw.mode.clone().unwrap_or(WalletMode::Online),
+                            });
                         }
-                    } else {
-                        // Complete fallback
-                        WalletConfig {
-                            name: "MPC Wallet".to_string(),
-                            threshold: 2,
-                            total_participants: 3,
-                            mode: WalletMode::Online,
-                        }
-                    };
-                    
-                    info!("Starting DKG with config: {:?}", config);
-                    Some(Command::SendMessage(Message::CreateWallet { config }))
+                    }
+
+                    // Route through the password-capture screen before
+                    // starting the DKG. `Message::SubmitPassword` picks
+                    // the config back up and dispatches CreateWallet,
+                    // which is where session announcement + StartDKG
+                    // kick in.
+                    info!("ThresholdConfig confirmed — routing to PasswordPrompt");
+                    model.push_screen(Screen::PasswordPrompt);
+                    model.ui_state.focus = crate::elm::model::ComponentId::PasswordPrompt;
+                    None
                 }
                 Screen::JoinSession => {
                     // Get the selected session index from the JoinSession component
@@ -1345,19 +1397,19 @@ pub fn update(model: &mut Model, msg: Message) -> Option<Command> {
                     // Get the session from the filtered list
                     if let Some(session) = filtered_sessions.get(selected_idx).cloned() {
                         info!("Joining DKG session: {}", session.session_id);
-                        
-                        let session_id = session.session_id.clone();
-                        
-                        // Set up the session state
-                        model.active_session = Some(session);
-                        
-                        // Navigate to DKG Progress screen
-                        model.push_screen(Screen::DKGProgress { session_id: session_id.clone() });
-                        model.ui_state.focus = crate::elm::model::ComponentId::DKGProgress;
-                        model.ui_state.selected_indices.entry(crate::elm::model::ComponentId::DKGProgress).or_insert(0);
 
-                        // Start joining the DKG session
-                        Some(Command::JoinDKG { session_id })
+                        // Stash the session so `Message::SubmitPassword` can
+                        // recognize this as the joiner path and dispatch
+                        // `Command::JoinDKG` with the right session_id.
+                        model.active_session = Some(session);
+
+                        // Route through the password-capture screen before
+                        // actually joining. This ensures the local key-share
+                        // encryption password is staged before the DKG
+                        // starts producing a KeyPackage we need to persist.
+                        model.push_screen(Screen::PasswordPrompt);
+                        model.ui_state.focus = crate::elm::model::ComponentId::PasswordPrompt;
+                        None
                     } else {
                         warn!("No session available at index {}", selected_idx);
                         None

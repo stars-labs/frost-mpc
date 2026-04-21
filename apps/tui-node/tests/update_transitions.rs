@@ -232,12 +232,52 @@ fn fresh_model_has_no_pending_password() {
     );
 }
 
-#[test]
-fn submit_password_stashes_value_and_advances_to_dkg_progress() {
+/// Shared: put the model into the state ThresholdConfig-Enter leaves it in
+/// before it routes to PasswordPrompt. The creating_wallet has a
+/// custom_config so SubmitPassword can retrieve it.
+fn creator_on_password_prompt() -> tui_node::elm::Model {
+    use tui_node::elm::model::{CreateWalletState, WalletConfig, WalletMode};
     let mut model = fresh_model();
     model.current_screen = Screen::PasswordPrompt;
+    model.wallet_state.creating_wallet = Some(CreateWalletState {
+        mode: Some(WalletMode::Online),
+        template: None,
+        custom_config: Some(WalletConfig {
+            name: "unit-test-wallet".to_string(),
+            threshold: 2,
+            total_participants: 3,
+            mode: WalletMode::Online,
+        }),
+    });
+    model
+}
 
-    let _ = update(
+/// Shared: joiner-path setup — active_session is populated by the
+/// AcceptSession click before PasswordPrompt is pushed.
+fn joiner_on_password_prompt() -> tui_node::elm::Model {
+    use tui_node::SessionInfo;
+    use tui_node::protocal::signal::SessionType;
+    let mut model = fresh_model();
+    model.current_screen = Screen::PasswordPrompt;
+    model.active_session = Some(SessionInfo {
+        session_id: "dkg-test-session".to_string(),
+        proposer_id: "mpc-1".to_string(),
+        total: 3,
+        threshold: 2,
+        participants: vec!["mpc-1".to_string(), "mpc-2".to_string(), "mpc-3".to_string()],
+        session_type: SessionType::DKG,
+        curve_type: "unified".to_string(),
+        coordination_type: "online".to_string(),
+    });
+    model
+}
+
+#[test]
+fn creator_submit_password_stashes_value_and_dispatches_create_wallet() {
+    use tui_node::elm::command::Command;
+    let mut model = creator_on_password_prompt();
+
+    let cmd = update(
         &mut model,
         Message::SubmitPassword {
             value: "hunter2-but-longer".to_string(),
@@ -249,9 +289,80 @@ fn submit_password_stashes_value_and_advances_to_dkg_progress() {
         Some("hunter2-but-longer"),
         "SubmitPassword must stash the value for the Stage 2 finaliser to consume"
     );
+
+    // Creator path hands off to CreateWallet via SendMessage, which then
+    // navigates to DKGProgress and announces the session.
+    match cmd {
+        Some(Command::SendMessage(Message::CreateWallet { config })) => {
+            assert_eq!(config.name, "unit-test-wallet");
+            assert_eq!(config.threshold, 2);
+            assert_eq!(config.total_participants, 3);
+        }
+        other => panic!(
+            "creator SubmitPassword should dispatch CreateWallet, got {:?}",
+            other
+        ),
+    }
+}
+
+#[test]
+fn joiner_submit_password_stashes_value_and_dispatches_join_dkg() {
+    use tui_node::elm::command::Command;
+    let mut model = joiner_on_password_prompt();
+
+    let cmd = update(
+        &mut model,
+        Message::SubmitPassword {
+            value: "another-long-password".to_string(),
+        },
+    );
+
+    assert_eq!(
+        model.wallet_state.pending_password.as_deref(),
+        Some("another-long-password"),
+    );
+
+    // Joiner dispatches Command::JoinDKG directly; navigation to
+    // DKGProgress happens inside this handler (unlike the creator path,
+    // where CreateWallet does the nav).
+    match cmd {
+        Some(Command::JoinDKG { session_id }) => {
+            assert_eq!(session_id, "dkg-test-session");
+        }
+        other => panic!(
+            "joiner SubmitPassword should dispatch JoinDKG, got {:?}",
+            other
+        ),
+    }
     assert!(
         matches!(model.current_screen, Screen::DKGProgress { .. }),
-        "SubmitPassword should push DKGProgress; got {:?}",
+        "joiner SubmitPassword should push DKGProgress; got {:?}",
+        model.current_screen
+    );
+}
+
+#[test]
+fn submit_password_with_neither_flow_configured_goes_home() {
+    // Pathological case — shouldn't happen in practice (upstream edges
+    // always populate one of the two), but we verify the defensive
+    // fallback rather than hitting an unwrap.
+    let mut model = fresh_model();
+    model.current_screen = Screen::PasswordPrompt;
+
+    let cmd = update(
+        &mut model,
+        Message::SubmitPassword {
+            value: "someemergencypassword".to_string(),
+        },
+    );
+
+    assert!(
+        cmd.is_none(),
+        "the pathological branch must not dispatch any Command"
+    );
+    assert!(
+        matches!(model.current_screen, Screen::MainMenu),
+        "go_home should land us on MainMenu so the user has a way out; got {:?}",
         model.current_screen
     );
 }

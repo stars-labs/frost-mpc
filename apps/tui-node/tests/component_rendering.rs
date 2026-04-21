@@ -135,10 +135,9 @@ fn renders_finalization_at_95_percent() {
 }
 
 // -----------------------------------------------------------------
-// PasswordPromptComponent (Substep 1.2 placeholder)
+// PasswordPromptComponent (Substep 1.3: real two-field input)
 // -----------------------------------------------------------------
-#[test]
-fn password_prompt_placeholder_renders_wip_notice_and_esc_hint() {
+fn render_password_prompt() -> String {
     use tui_node::elm::components::PasswordPromptComponent;
 
     let backend = TestBackend::new(120, 20);
@@ -152,20 +151,46 @@ fn password_prompt_placeholder_renders_wip_notice_and_esc_hint() {
         })
         .expect("TestBackend draw must succeed");
 
-    let rendered = buffer_to_string(terminal.backend().buffer());
+    buffer_to_string(terminal.backend().buffer())
+}
+
+#[test]
+fn password_prompt_renders_title_and_both_fields() {
+    let rendered = render_password_prompt();
     assert_contains(
         &rendered,
         "Set Wallet Password",
-        "placeholder should render the block title so users know which screen they're on",
+        "screen title must render so users know which screen they're on",
+    );
+    assert_contains(&rendered, "Password", "password field label must render");
+    assert_contains(&rendered, "Confirm", "confirm field label must render");
+}
+
+#[test]
+fn password_prompt_renders_keybinding_hints() {
+    let rendered = render_password_prompt();
+    // The bottom hint line lists the three interactions. Assert all three —
+    // a user landing here with no history should see their options.
+    assert_contains(&rendered, "Enter", "submit hint must render");
+    assert_contains(&rendered, "Tab", "field-switch hint must render");
+    assert_contains(&rendered, "Esc", "cancel hint must render");
+}
+
+#[test]
+fn password_prompt_explains_password_is_local_only() {
+    // Critical UX: the password is *not* a shared secret. If this copy
+    // drifts or disappears, users may attempt to coordinate a shared
+    // password out-of-band, which is both unnecessary and a security
+    // anti-pattern (shared secrets leak faster). Pin the copy here.
+    let rendered = render_password_prompt();
+    assert_contains(
+        &rendered,
+        "device",
+        "explainer should mention 'device' so the local-only semantics are visible",
     );
     assert_contains(
         &rendered,
-        "WIP",
-        "placeholder should advertise its WIP status so accidental demos don't look broken",
-    );
-    assert_contains(
-        &rendered,
-        "Esc",
-        "placeholder must show the Esc-to-go-back hint — that's its only interaction today",
+        "their own",
+        "explainer should make clear each participant picks their own password",
     );
 }

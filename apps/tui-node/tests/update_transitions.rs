@@ -790,12 +790,17 @@ fn sign_submit_on_empty_draft_warns_and_returns_none() {
 
 #[test]
 fn sign_submit_dispatches_initiate_signing_and_clears_draft() {
+    // Warm-session SignSubmit: the wallet IS unlocked, so this goes
+    // directly to InitiateSigning without a password roundtrip. The
+    // cold-start path has its own test
+    // (`sign_submit_when_wallet_not_unlocked_routes_to_password_prompt`).
     use tui_node::elm::command::Command;
     let mut model = fresh_model();
     model.current_screen = Screen::SignTransaction {
         wallet_id: "wallet-test".to_string(),
     };
     model.wallet_state.curve_type = "secp256k1";
+    model.wallet_state.wallet_unlocked_id = Some("wallet-test".to_string());
     for c in "Sign this".chars() {
         update(&mut model, Message::SignTypeChar(c));
     }
@@ -1014,6 +1019,188 @@ fn navigate_home_clears_last_completed_signature() {
     });
     update(&mut model, Message::NavigateHome);
     assert!(model.wallet_state.last_completed_signature.is_none());
+}
+
+// -----------------------------------------------------------------
+// Cold-start creator signing path
+// -----------------------------------------------------------------
+
+#[test]
+fn sign_submit_when_wallet_unlocked_dispatches_initiate_signing_directly() {
+    // Warm session: DKG just ran, wallet_unlocked_id matches the
+    // target wallet → no password roundtrip needed.
+    use tui_node::elm::command::Command;
+    let mut model = fresh_model();
+    model.current_screen = Screen::SignTransaction {
+        wallet_id: "w-warm".to_string(),
+    };
+    model.wallet_state.wallet_unlocked_id = Some("w-warm".to_string());
+    model.wallet_state.curve_type = "secp256k1";
+    for c in "hi".chars() {
+        update(&mut model, Message::SignTypeChar(c));
+    }
+    let cmd = update(&mut model, Message::SignSubmit);
+    match cmd {
+        Some(Command::SendMessage(Message::InitiateSigning { request })) => {
+            assert_eq!(request.wallet_id, "w-warm");
+            assert_eq!(request.transaction_data, b"hi");
+        }
+        other => panic!(
+            "warm-session SignSubmit must dispatch InitiateSigning directly; got {:?}",
+            other
+        ),
+    }
+    // Pending-sign state stays empty because we didn't route through
+    // PasswordPrompt.
+    assert!(model.wallet_state.pending_sign_message.is_none());
+    assert!(model.wallet_state.pending_sign_wallet_id.is_none());
+}
+
+#[test]
+fn sign_submit_when_wallet_not_unlocked_routes_to_password_prompt() {
+    let mut model = fresh_model();
+    model.current_screen = Screen::SignTransaction {
+        wallet_id: "w-cold".to_string(),
+    };
+    // wallet_unlocked_id deliberately None — simulating a cold start
+    // where the user restarted the binary and has never unlocked.
+    assert!(model.wallet_state.wallet_unlocked_id.is_none());
+
+    for c in "msg".chars() {
+        update(&mut model, Message::SignTypeChar(c));
+    }
+    let cmd = update(&mut model, Message::SignSubmit);
+    assert!(
+        cmd.is_none(),
+        "cold SignSubmit routes through navigation, no Command dispatched at this step"
+    );
+    assert!(
+        matches!(model.current_screen, Screen::PasswordPrompt),
+        "cold SignSubmit must push PasswordPrompt; got {:?}",
+        model.current_screen
+    );
+    // Message + wallet_id stashed for the WalletUnlocked handler to
+    // consume; session_id left None — that's the creator-cold-start
+    // flag as distinct from the joiner path.
+    assert_eq!(
+        model.wallet_state.pending_sign_message.as_deref(),
+        Some(b"msg".as_ref())
+    );
+    assert_eq!(
+        model.wallet_state.pending_sign_wallet_id.as_deref(),
+        Some("w-cold"),
+    );
+    assert!(
+        model.wallet_state.pending_sign_session_id.is_none(),
+        "session_id None is the creator-cold-start flag"
+    );
+    // Draft cleared so the user doesn't accidentally re-submit.
+    assert_eq!(model.wallet_state.sign_message_draft, "");
+}
+
+#[test]
+fn submit_password_for_creator_cold_start_dispatches_unlock_wallet() {
+    use tui_node::elm::command::Command;
+    let mut model = fresh_model();
+    model.current_screen = Screen::PasswordPrompt;
+    model.wallet_state.keystore_path = "/tmp/k".to_string();
+    // State as SignSubmit would leave it in a cold-start flow.
+    model.wallet_state.pending_sign_message = Some(b"hello".to_vec());
+    model.wallet_state.pending_sign_wallet_id = Some("w-cold".to_string());
+    model.wallet_state.pending_sign_session_id = None;
+
+    let cmd = update(
+        &mut model,
+        Message::SubmitPassword {
+            value: "mysecret".to_string(),
+        },
+    );
+    match cmd {
+        Some(Command::UnlockWallet { wallet_id, keystore_path, .. }) => {
+            assert_eq!(wallet_id, "w-cold");
+            assert_eq!(keystore_path, "/tmp/k");
+        }
+        other => panic!(
+            "creator-cold-start SubmitPassword must dispatch UnlockWallet; got {:?}",
+            other
+        ),
+    }
+    // Payload remains stashed — WalletUnlocked will drain it next.
+    assert!(model.wallet_state.pending_sign_message.is_some());
+}
+
+#[test]
+fn wallet_unlocked_with_pending_sign_no_session_id_dispatches_initiate_signing() {
+    // Mirror of the joiner-path test but with session_id = None,
+    // which is the creator-cold-start signal.
+    use tui_node::elm::command::Command;
+    let mut model = fresh_model();
+    model.wallet_state.pending_sign_message = Some(b"cold-sign".to_vec());
+    model.wallet_state.pending_sign_wallet_id = Some("w-cold".to_string());
+    model.wallet_state.pending_sign_session_id = None;
+    model.wallet_state.curve_type = "secp256k1";
+
+    let cmd = update(
+        &mut model,
+        Message::WalletUnlocked {
+            wallet_id: "w-cold".to_string(),
+        },
+    );
+    match cmd {
+        Some(Command::SendMessage(Message::InitiateSigning { request })) => {
+            assert_eq!(request.wallet_id, "w-cold");
+            assert_eq!(request.transaction_data, b"cold-sign");
+            assert_eq!(request.chain, "secp256k1");
+        }
+        other => panic!(
+            "creator-cold-start WalletUnlocked must dispatch InitiateSigning via SendMessage; got {:?}",
+            other
+        ),
+    }
+    // All pending-sign fields drained.
+    assert!(model.wallet_state.pending_sign_message.is_none());
+    assert!(model.wallet_state.pending_sign_wallet_id.is_none());
+    assert!(model.wallet_state.pending_sign_session_id.is_none());
+}
+
+#[test]
+fn dkg_finalized_marks_wallet_unlocked() {
+    // DKG leaves KeyPackage live on AppState — mark the wallet as
+    // unlocked so the user can sign without retyping their password.
+    let mut model = finalized_fixture_model();
+    let _ = update(&mut model, sample_dkg_finalized_msg());
+    assert_eq!(
+        model.wallet_state.wallet_unlocked_id.as_deref(),
+        Some("finalized-test"),
+        "DKGFinalized must set wallet_unlocked_id to the just-created wallet"
+    );
+}
+
+#[test]
+fn wallet_unlocked_message_sets_unlocked_id() {
+    let mut model = fresh_model();
+    let _ = update(
+        &mut model,
+        Message::WalletUnlocked {
+            wallet_id: "w-explicit".to_string(),
+        },
+    );
+    assert_eq!(
+        model.wallet_state.wallet_unlocked_id.as_deref(),
+        Some("w-explicit"),
+    );
+}
+
+#[test]
+fn navigate_home_clears_wallet_unlocked_id() {
+    let mut model = fresh_model();
+    model.wallet_state.wallet_unlocked_id = Some("w-something".to_string());
+    update(&mut model, Message::NavigateHome);
+    assert!(
+        model.wallet_state.wallet_unlocked_id.is_none(),
+        "NavigateHome must clear wallet_unlocked_id so the next sign \
+         attempt re-unlocks conservatively"
+    );
 }
 
 #[test]

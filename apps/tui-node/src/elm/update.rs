@@ -165,6 +165,11 @@ pub fn update(model: &mut Model, msg: Message) -> Option<Command> {
             // frame. Same invariant for the post-signing snapshot.
             model.wallet_state.last_finalized_wallet = None;
             model.wallet_state.last_completed_signature = None;
+            // Don't carry unlocked-wallet state through home either —
+            // the user navigated away, conservative default is "next
+            // sign needs to re-unlock". Same logic as clearing the
+            // DKG-time drafts.
+            model.wallet_state.wallet_unlocked_id = None;
             model.go_home();
             None
         }
@@ -272,10 +277,52 @@ pub fn update(model: &mut Model, msg: Message) -> Option<Command> {
         // reads `pending_password` and clears it after encryption.
         Message::SubmitPassword { value } => {
             info!(
-                "Password submitted ({} chars) — routing to DKG",
+                "Password submitted ({} chars) — routing to DKG/sign",
                 value.len()
             );
             model.wallet_state.pending_password = Some(value);
+
+            // Creator-side cold-start signing: SignSubmit stashed
+            // `pending_sign_message` + `pending_sign_wallet_id` but NO
+            // `pending_sign_session_id` (there's no incoming session yet;
+            // we're about to announce one). Unlock the wallet → on
+            // success, `WalletUnlocked` re-dispatches as an InitiateSigning
+            // which announces + starts the ceremony.
+            //
+            // This check runs BEFORE the active_session branch because
+            // `active_session` might still hold a stale DKG SessionInfo
+            // from earlier in the run; the pending-sign fields are the
+            // definitive signal that we're about to sign.
+            if model.wallet_state.pending_sign_message.is_some()
+                && model.wallet_state.pending_sign_session_id.is_none()
+            {
+                let wallet_id = match model.wallet_state.pending_sign_wallet_id.clone() {
+                    Some(id) => id,
+                    None => {
+                        warn!(
+                            "SubmitPassword with pending_sign_message but no \
+                             pending_sign_wallet_id — SignSubmit navigation broke"
+                        );
+                        model.wallet_state.pending_password = None;
+                        return None;
+                    }
+                };
+                let password = model
+                    .wallet_state
+                    .pending_password
+                    .take()
+                    .unwrap_or_default();
+                info!(
+                    "SubmitPassword on cold-start sign for wallet '{}' — \
+                     dispatching UnlockWallet",
+                    wallet_id
+                );
+                return Some(Command::UnlockWallet {
+                    wallet_id,
+                    password,
+                    keystore_path: model.wallet_state.keystore_path.clone(),
+                });
+            }
 
             if let Some(session) = model.active_session.clone() {
                 // Joiner path — fork on session_type. DKG sessions go
@@ -673,8 +720,6 @@ pub fn update(model: &mut Model, msg: Message) -> Option<Command> {
         Message::SignSubmit => {
             // Empty-message check: FROST will happily sign an empty byte
             // string, but doing so accidentally would be awful UX.
-            // Surface as an inline notification for now (C.5 adds the
-            // proper SignatureComplete screen).
             if model.wallet_state.sign_message_draft.is_empty() {
                 model.ui_state.notifications.push(Notification {
                     id: Uuid::new_v4().to_string(),
@@ -706,19 +751,44 @@ pub fn update(model: &mut Model, msg: Message) -> Option<Command> {
             };
 
             let message_bytes = model.wallet_state.sign_message_draft.as_bytes().to_vec();
-            // Clear immediately so the sign button can't be re-triggered
-            // for the same message by accident.
+            // Clear the draft so the user can't accidentally re-submit
+            // the same message twice if they hit Enter repeatedly.
             model.wallet_state.clear_sign_draft();
 
-            // Curve and chain_id fields aren't used by the protocol layer
-            // but fill them in honestly for logs/future use.
-            let request = crate::elm::message::SigningRequest {
-                wallet_id,
-                transaction_data: message_bytes,
-                chain: model.wallet_state.curve_type.to_string(),
-                metadata: None,
-            };
-            Some(Command::SendMessage(Message::InitiateSigning { request }))
+            // Warm path: `wallet_unlocked_id` matches this wallet, so
+            // AppState.key_package is live — dispatch InitiateSigning
+            // directly. No password roundtrip needed.
+            //
+            // Cold path: either the user restarted the binary after a
+            // DKG, or they're signing with a wallet they've never
+            // unlocked this session. Stash the request on the Model
+            // and route through PasswordPrompt → UnlockWallet → back
+            // into this flow via the `WalletUnlocked` handler (which
+            // checks for a pending_sign_message without a
+            // pending_sign_session_id and dispatches InitiateSigning).
+            if model.wallet_state.wallet_unlocked_id.as_deref() == Some(&wallet_id) {
+                let request = crate::elm::message::SigningRequest {
+                    wallet_id,
+                    transaction_data: message_bytes,
+                    chain: model.wallet_state.curve_type.to_string(),
+                    metadata: None,
+                };
+                Some(Command::SendMessage(Message::InitiateSigning { request }))
+            } else {
+                info!(
+                    "SignSubmit: wallet '{}' not unlocked — routing through PasswordPrompt",
+                    wallet_id
+                );
+                model.wallet_state.pending_sign_message = Some(message_bytes);
+                model.wallet_state.pending_sign_wallet_id = Some(wallet_id);
+                // Leave pending_sign_session_id as None — that's the
+                // flag WalletUnlocked uses to distinguish creator
+                // cold-start from joiner accept.
+                model.wallet_state.pending_sign_session_id = None;
+                model.push_screen(Screen::PasswordPrompt);
+                model.ui_state.focus = crate::elm::model::ComponentId::PasswordPrompt;
+                None
+            }
         }
 
         // Phase C.1: signing-time keystore hydration results. These are
@@ -734,6 +804,9 @@ pub fn update(model: &mut Model, msg: Message) -> Option<Command> {
         // + show a toast.
         Message::WalletUnlocked { wallet_id } => {
             info!("✅ Wallet unlocked: {}", wallet_id);
+            // Mark the wallet as unlocked so subsequent SignSubmits on
+            // the same wallet don't ask for the password again.
+            model.wallet_state.wallet_unlocked_id = Some(wallet_id.clone());
             model.ui_state.notifications.push(Notification {
                 id: Uuid::new_v4().to_string(),
                 text: format!("🔓 Wallet '{}' unlocked", wallet_id),
@@ -746,37 +819,55 @@ pub fn update(model: &mut Model, msg: Message) -> Option<Command> {
             let pending_sid = model.wallet_state.pending_sign_session_id.take();
             let pending_wallet = model.wallet_state.pending_sign_wallet_id.take();
 
-            if let (Some(msg), Some(sid), Some(wid)) =
-                (pending_msg, pending_sid, pending_wallet)
-            {
-                if wid != wallet_id {
-                    warn!(
-                        "WalletUnlocked for {} but pending_sign_wallet_id was {} — \
-                         proceeding with unlocked wallet",
-                        wallet_id, wid
+            match (pending_msg, pending_sid, pending_wallet) {
+                // Joiner path — session_id is present because the user
+                // accepted a signing session off the JoinSession screen,
+                // the SubmitPassword handler stashed everything before
+                // dispatching UnlockWallet.
+                (Some(msg), Some(sid), Some(wid)) => {
+                    if wid != wallet_id {
+                        warn!(
+                            "WalletUnlocked for {} but pending_sign_wallet_id was {} — \
+                             proceeding with unlocked wallet",
+                            wallet_id, wid
+                        );
+                    }
+                    info!(
+                        "🖊️  WalletUnlocked with pending signing ({} bytes) — \
+                         dispatching JoinSigning on session {}",
+                        msg.len(),
+                        sid
                     );
+                    model.push_screen(Screen::SigningProgress {
+                        request_id: sid.clone(),
+                    });
+                    Some(Command::JoinSigning {
+                        session_id: sid,
+                        message_bytes: msg,
+                    })
                 }
-                info!(
-                    "🖊️  WalletUnlocked with pending signing ({} bytes) — \
-                     dispatching JoinSigning on session {}",
-                    msg.len(),
-                    sid
-                );
-                // SigningProgress screen: for Phase C we reuse
-                // DKGProgress's mount route (the component renders
-                // participant mesh status, which is exactly what we
-                // want to show during signing too). A dedicated
-                // component is a polish item for Phase D.
-                model.push_screen(Screen::SigningProgress {
-                    request_id: sid.clone(),
-                });
-                return Some(Command::JoinSigning {
-                    session_id: sid,
-                    message_bytes: msg,
-                });
+                // Creator cold-start path — the user pressed Sign on a
+                // wallet whose KeyPackage wasn't in AppState, so
+                // SignSubmit stashed the message and routed through
+                // PasswordPrompt. No session existed yet; InitiateSigning
+                // announces the new one from scratch.
+                (Some(msg), None, Some(wid)) => {
+                    info!(
+                        "🖊️  WalletUnlocked with pending cold-start sign ({} bytes) — \
+                         dispatching InitiateSigning for wallet {}",
+                        msg.len(),
+                        wid
+                    );
+                    let request = crate::elm::message::SigningRequest {
+                        wallet_id: wid,
+                        transaction_data: msg,
+                        chain: model.wallet_state.curve_type.to_string(),
+                        metadata: None,
+                    };
+                    Some(Command::SendMessage(Message::InitiateSigning { request }))
+                }
+                _ => None,
             }
-
-            None
         }
 
         Message::WalletUnlockFailed { error } => {
@@ -1247,6 +1338,10 @@ pub fn update(model: &mut Model, msg: Message) -> Option<Command> {
                     curve_type: curve_type.clone(),
                     addresses: addresses.clone(),
                 });
+            // DKG leaves the KeyPackage live on AppState; mark the
+            // wallet as unlocked so an immediate SignSubmit can skip
+            // the PasswordPrompt roundtrip.
+            model.wallet_state.wallet_unlocked_id = Some(wallet_id.clone());
 
             model.ui_state.notifications.push(Notification {
                 id: Uuid::new_v4().to_string(),

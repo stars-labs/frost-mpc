@@ -170,6 +170,18 @@ pub struct WalletState {
     /// screen. Cleared on `NavigateHome` so a second signing attempt
     /// doesn't render stale data.
     pub last_completed_signature: Option<CompletedSignatureInfo>,
+    /// Wallet id whose `KeyPackage` is currently loaded in
+    /// `AppState.key_package`. Set by `Message::DKGFinalized` (DKG
+    /// leaves the key live on AppState) and by `Message::WalletUnlocked`
+    /// (explicit unlock from disk). `update.rs` uses this as a proxy
+    /// for "is this wallet unlockable-free for the next signing
+    /// ceremony?" since the update function can't reach `AppState`
+    /// synchronously.
+    ///
+    /// Cleared by `NavigateHome` and on process restart (default
+    /// `None`). An explicit lock-wallet action would clear this too;
+    /// we don't have one today.
+    pub wallet_unlocked_id: Option<String>,
 }
 
 /// Snapshot of the data the `WalletComplete` screen needs to render.

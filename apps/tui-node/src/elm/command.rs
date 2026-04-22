@@ -1952,6 +1952,44 @@ impl Command {
                     }
                 }
 
+                // Re-establish the WebRTC mesh for this signing
+                // ceremony. On a warm run this is a no-op (peer
+                // connections are still alive from the DKG that just
+                // finished); on a cold run (post-restart) this is
+                // essential — without it `SIGN_COMMIT` has no data
+                // channel to flow through. The existing retry loop in
+                // `broadcast_signing_frame` (10 × 500ms) absorbs the
+                // few seconds the handshake takes.
+                //
+                // We dispatch via `Message::InitiateWebRTCWithParticipants`
+                // rather than calling the WebRTC helper directly because
+                // this Command runs on the same tokio task as the
+                // in-line `handle_start_signing` below; the message
+                // path keeps the initiation on a fresh task and lets
+                // our commit broadcast proceed concurrently with
+                // ongoing handshakes.
+                {
+                    let peers: Vec<String> = {
+                        let state = app_state.lock().await;
+                        state
+                            .session
+                            .as_ref()
+                            .map(|s| {
+                                s.participants
+                                    .iter()
+                                    .filter(|p| *p != &self_device_id)
+                                    .cloned()
+                                    .collect()
+                            })
+                            .unwrap_or_default()
+                    };
+                    if !peers.is_empty() {
+                        let _ = tx.send(Message::InitiateWebRTCWithParticipants {
+                            participants: peers,
+                        });
+                    }
+                }
+
                 // Kick off the local half of the ceremony. Peers race us —
                 // whoever gathers threshold commitments first advances.
                 crate::protocal::signing::handle_start_signing::<C>(
@@ -1979,6 +2017,101 @@ impl Command {
                     let state = app_state.lock().await;
                     state.device_id.clone()
                 };
+
+                // Cold-joiner path: if AppState.session is None
+                // (fresh boot, no prior DKG in this run), rebuild it
+                // from the just-unlocked wallet's keystore metadata —
+                // same shape as StartSigning's cold path. Without this
+                // `protocal::signing::broadcast_signing_frame` has no
+                // participant list to enumerate.
+                //
+                // Warm joiner path: session carries over from the DKG
+                // that ran earlier in the same process; leave it alone
+                // (its session_type may already be Signing from an
+                // earlier ceremony; the protocol layer doesn't care).
+                {
+                    let mut state = app_state.lock().await;
+                    if state.session.is_none() {
+                        // Find the wallet by its session_id-derived id.
+                        // The current_wallet_id was set by UnlockWallet.
+                        let (meta, keystore_path) = (
+                            state
+                                .keystore
+                                .as_ref()
+                                .and_then(|ks| {
+                                    state
+                                        .current_wallet_id
+                                        .as_ref()
+                                        .and_then(|id| ks.get_wallet(id).cloned())
+                                }),
+                            state.signal_server_url.clone(),
+                        );
+                        let _ = keystore_path; // unused; kept for clarity
+                        match meta {
+                            Some(m) => {
+                                info!(
+                                    "JoinSigning cold-joiner: rebuilt session {} from \
+                                     wallet metadata ({}-of-{}, {} participants)",
+                                    session_id,
+                                    m.threshold,
+                                    m.total_participants,
+                                    m.participants.len()
+                                );
+                                state.session = Some(crate::protocal::signal::SessionInfo {
+                                    session_id: session_id.clone(),
+                                    proposer_id: String::new(),
+                                    total: m.total_participants,
+                                    threshold: m.threshold,
+                                    participants: m.participants.clone(),
+                                    session_type: crate::protocal::signal::SessionType::Signing {
+                                        wallet_name: m.session_id.clone(),
+                                        curve_type: m.curve_type.clone(),
+                                        blockchain: m.curve_type.clone(),
+                                        group_public_key: m.group_public_key.clone(),
+                                    },
+                                    curve_type: m.curve_type.clone(),
+                                    coordination_type: "Network".to_string(),
+                                    signing_message_hex: None,
+                                });
+                            }
+                            None => {
+                                warn!(
+                                    "JoinSigning cold-joiner: no wallet metadata for \
+                                     current_wallet_id — peers list will be empty"
+                                );
+                            }
+                        }
+                    }
+                }
+
+                // Same mesh-re-establishment as StartSigning — joiners
+                // typically come from a cold boot too (they pressed
+                // Sign on an existing wallet list after restart), so
+                // their WebRTC peer connections need to be (re)created.
+                // Warm joiners (in the same run as the DKG) are a
+                // no-op — the existing connections stay alive.
+                {
+                    let peers: Vec<String> = {
+                        let state = app_state.lock().await;
+                        state
+                            .session
+                            .as_ref()
+                            .map(|s| {
+                                s.participants
+                                    .iter()
+                                    .filter(|p| *p != &self_device_id)
+                                    .cloned()
+                                    .collect()
+                            })
+                            .unwrap_or_default()
+                    };
+                    if !peers.is_empty() {
+                        let _ = tx.send(Message::InitiateWebRTCWithParticipants {
+                            participants: peers,
+                        });
+                    }
+                }
+
                 crate::protocal::signing::handle_start_signing::<C>(
                     app_state.clone(),
                     self_device_id,

@@ -51,6 +51,13 @@ pub struct AppState<C: Ciphersuite> {
     pub frost_commitments: std::collections::BTreeMap<frost_core::Identifier<C>, frost_core::round1::SigningCommitments<C>>,
     pub frost_signature_shares: std::collections::BTreeMap<frost_core::Identifier<C>, frost_core::round2::SignatureShare<C>>,
     pub frost_nonces: Option<frost_core::round1::SigningNonces<C>>,
+    /// Raw bytes being signed in the current signing ceremony. Written by
+    /// the coordinator-side `handle_start_signing` call, then referenced
+    /// by every `process_signing_round1` / `process_signing_round2` call
+    /// on this node so the FROST `SigningPackage` can be constructed
+    /// identically across participants. Cleared when signing completes
+    /// or fails. `None` outside a signing ceremony.
+    pub signing_message: Option<Vec<u8>>,
     // More compatibility fields
     pub identifier_map: Option<std::collections::HashMap<String, frost_core::Identifier<C>>>,
     pub offline_sessions: std::collections::HashMap<String, crate::offline::OfflineSession>,
@@ -135,6 +142,7 @@ where
             frost_commitments: std::collections::BTreeMap::new(),
             frost_signature_shares: std::collections::BTreeMap::new(),
             frost_nonces: None,
+            signing_message: None,
             identifier_map: None,
             offline_sessions: std::collections::HashMap::new(),
             offline_config: None,
@@ -205,6 +213,7 @@ where
             frost_commitments: std::collections::BTreeMap::new(),
             frost_signature_shares: std::collections::BTreeMap::new(),
             frost_nonces: None,
+            signing_message: None,
             identifier_map: None,
             offline_sessions: std::collections::HashMap::new(),
             offline_config: None,

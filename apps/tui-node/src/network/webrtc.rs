@@ -129,6 +129,49 @@ pub async fn dispatch_data_channel_msg<C>(
                 }
                 return;
             }
+            // Phase C: signing-round frames. Same shape as DKG rounds,
+            // different prefix. Constants in `protocal::signing` keep the
+            // string literals single-sourced.
+            if let Some(b64) = msg_text.strip_prefix(crate::protocal::signing::SIGN_COMMIT_PREFIX) {
+                info!("🖊️  Received SIGN_COMMIT from {}", device_id_recv);
+                match BASE64.decode(b64) {
+                    Ok(commitment_bytes) => {
+                        if let Some(tx) = &ui_msg_tx {
+                            let _ = tx.send(
+                                crate::elm::message::Message::ProcessSigningRound1 {
+                                    from_device: device_id_recv.clone(),
+                                    commitment_bytes,
+                                },
+                            );
+                        }
+                    }
+                    Err(e) => error!(
+                        "Failed to base64-decode SIGN_COMMIT from {}: {}",
+                        device_id_recv, e
+                    ),
+                }
+                return;
+            }
+            if let Some(b64) = msg_text.strip_prefix(crate::protocal::signing::SIGN_SHARE_PREFIX) {
+                info!("🖊️  Received SIGN_SHARE from {}", device_id_recv);
+                match BASE64.decode(b64) {
+                    Ok(share_bytes) => {
+                        if let Some(tx) = &ui_msg_tx {
+                            let _ = tx.send(
+                                crate::elm::message::Message::ProcessSigningRound2 {
+                                    from_device: device_id_recv.clone(),
+                                    share_bytes,
+                                },
+                            );
+                        }
+                    }
+                    Err(e) => error!(
+                        "Failed to base64-decode SIGN_SHARE from {}: {}",
+                        device_id_recv, e
+                    ),
+                }
+                return;
+            }
             info!("📨 SimpleMessage from {}: {}", device_id_recv, msg_text);
             return;
         }

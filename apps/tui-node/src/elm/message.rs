@@ -136,6 +136,15 @@ pub enum Message {
     UpdateSigningProgress { request_id: String, progress: f32 },
     SigningComplete { request_id: String, signature: Vec<u8> },
     SigningFailed { request_id: String, error: String },
+    /// Received a peer's Round 1 signing commitment over the WebRTC mesh.
+    /// Dispatched by the primary data-channel reader after decoding
+    /// `SIGN_COMMIT:<base64>`; the handler forwards to
+    /// `Command::ProcessSigningRound1` which drives the FROST accumulator
+    /// in `protocal::signing`.
+    ProcessSigningRound1 { from_device: String, commitment_bytes: Vec<u8> },
+    /// Received a peer's Round 2 signature share over the WebRTC mesh.
+    /// Shape mirrors `ProcessSigningRound1`.
+    ProcessSigningRound2 { from_device: String, share_bytes: Vec<u8> },
     
     // Network events
     WebSocketConnected,

@@ -46,7 +46,7 @@ impl Default for DkgMode {
 /// Returns `None` only if `device_id` is not in the list, or if the resulting
 /// index is out of FROST's identifier range (which can't actually happen for
 /// reasonable session sizes).
-fn canonical_identifier<C: Ciphersuite>(
+pub(crate) fn canonical_identifier<C: Ciphersuite>(
     participants: &[String],
     device_id: &str,
 ) -> Option<Identifier<C>> {

@@ -172,6 +172,14 @@ pub fn update(model: &mut Model, msg: Message) -> Option<Command> {
             model.wallet_state.wallet_unlocked_id = None;
             // Stale pre-hash message shouldn't outlive the flow.
             model.wallet_state.pending_raw_message = None;
+            // Any pending signing handoff state becomes stale the
+            // moment the user is back home — clear so a future
+            // DKG-creator PasswordPrompt submit doesn't misroute.
+            // (See the WalletUnlockFailed comment for the specific
+            // bug this prevents.)
+            model.wallet_state.pending_sign_message = None;
+            model.wallet_state.pending_sign_wallet_id = None;
+            model.wallet_state.pending_sign_session_id = None;
             model.go_home();
             None
         }
@@ -291,11 +299,22 @@ pub fn update(model: &mut Model, msg: Message) -> Option<Command> {
             // success, `WalletUnlocked` re-dispatches as an InitiateSigning
             // which announces + starts the ceremony.
             //
-            // This check runs BEFORE the active_session branch because
-            // `active_session` might still hold a stale DKG SessionInfo
-            // from earlier in the run; the pending-sign fields are the
-            // definitive signal that we're about to sign.
-            if model.wallet_state.pending_sign_message.is_some()
+            // **Gated on `creating_wallet.is_none() && active_session.is_none()`**
+            // because those fields are the definitive "this is a DKG
+            // flow" signal — and they dominate over stale
+            // `pending_sign_*` state from a prior failed sign. Without
+            // this gate, a failed cold-start sign (e.g. mesh timeout
+            // that never cleared `pending_sign_message`) would hijack
+            // the next legitimate creator/joiner DKG password submit
+            // and try to UnlockWallet a wallet the user isn't signing
+            // with — the exact bug that produced
+            // "UnlockWallet: load_wallet_file failed: Invalid password"
+            // on a DKG-creator PasswordPrompt.
+            let is_creator_dkg = model.wallet_state.creating_wallet.is_some();
+            let is_joiner = model.active_session.is_some();
+            if !is_creator_dkg
+                && !is_joiner
+                && model.wallet_state.pending_sign_message.is_some()
                 && model.wallet_state.pending_sign_session_id.is_none()
             {
                 let wallet_id = match model.wallet_state.pending_sign_wallet_id.clone() {
@@ -936,6 +955,15 @@ pub fn update(model: &mut Model, msg: Message) -> Option<Command> {
                 title: "Unlock Failed".to_string(),
                 message: error,
             });
+            // Critical: clear any pending signing state so a subsequent
+            // DKG-creator PasswordPrompt submit isn't hijacked into
+            // UnlockWallet on this-failed wallet_id. Without this,
+            // a bad password here permanently wedges every future
+            // SubmitPassword into the cold-sign branch.
+            model.wallet_state.pending_sign_message = None;
+            model.wallet_state.pending_sign_wallet_id = None;
+            model.wallet_state.pending_sign_session_id = None;
+            model.wallet_state.pending_raw_message = None;
             None
         }
 

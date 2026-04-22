@@ -1229,6 +1229,298 @@ fn navigate_home_clears_wallet_unlocked_id() {
 }
 
 #[test]
+fn submit_password_in_creator_dkg_ignores_stale_pending_sign() {
+    // Regression guard for the "creator DKG PasswordPrompt produces
+    // 'Unlock Failed' modal" bug. Scenario:
+    //   1. User does a cold-start sign that fails (mesh timeout, etc).
+    //   2. Handlers didn't clear pending_sign_*. State leaks.
+    //   3. User navigates away and later hits "Create New Wallet".
+    //   4. ThresholdConfig → PasswordPrompt. User types their
+    //      brand-new password, hits Enter.
+    //   5. Previously: SubmitPassword saw pending_sign_message.is_some()
+    //      and dispatched UnlockWallet → "Invalid password" modal
+    //      (the wallet file is real but the user typed a NEW password).
+    //   6. After the fix: creator-DKG flow dominates — the check is
+    //      now gated on creating_wallet.is_none() && !active_session.
+    use tui_node::elm::command::Command;
+    use tui_node::elm::model::{CreateWalletState, WalletConfig, WalletMode};
+
+    let mut model = fresh_model();
+    model.current_screen = Screen::PasswordPrompt;
+    // Simulate the stale leak from a prior failed sign:
+    model.wallet_state.pending_sign_message = Some(b"old sign".to_vec());
+    model.wallet_state.pending_sign_wallet_id = Some("wallet-dkg_stale".to_string());
+    model.wallet_state.pending_sign_session_id = None;
+    // And the legitimate creator-DKG state from ThresholdConfig:
+    model.wallet_state.creating_wallet = Some(CreateWalletState {
+        mode: Some(WalletMode::Online),
+        template: None,
+        custom_config: Some(WalletConfig {
+            name: "new-wallet".to_string(),
+            threshold: 2,
+            total_participants: 3,
+            mode: WalletMode::Online,
+        }),
+    });
+
+    let cmd = update(
+        &mut model,
+        Message::SubmitPassword {
+            value: "brandnew-password".to_string(),
+        },
+    );
+
+    // MUST dispatch the creator DKG path, NOT UnlockWallet on the stale
+    // wallet.
+    match cmd {
+        Some(Command::SendMessage(Message::CreateWallet { config })) => {
+            assert_eq!(config.name, "new-wallet");
+        }
+        other => panic!(
+            "creator DKG SubmitPassword with stale pending_sign_* must \
+             dispatch CreateWallet, NOT UnlockWallet; got {:?}",
+            other
+        ),
+    }
+}
+
+#[test]
+fn wallet_unlock_failed_clears_pending_sign_state() {
+    // The other half of the fix: if unlock fails (e.g. wrong password),
+    // don't leave the pending_sign_* fields set — they'll hijack the
+    // next PasswordPrompt submit.
+    let mut model = fresh_model();
+    model.wallet_state.pending_sign_message = Some(b"hash".to_vec());
+    model.wallet_state.pending_sign_wallet_id = Some("w".to_string());
+    model.wallet_state.pending_sign_session_id = None;
+
+    update(
+        &mut model,
+        Message::WalletUnlockFailed {
+            error: "Invalid password".to_string(),
+        },
+    );
+
+    assert!(
+        model.wallet_state.pending_sign_message.is_none(),
+        "WalletUnlockFailed must clear pending_sign_message"
+    );
+    assert!(model.wallet_state.pending_sign_wallet_id.is_none());
+    assert!(model.wallet_state.pending_sign_session_id.is_none());
+}
+
+#[test]
+fn navigate_home_clears_pending_sign_state() {
+    // Belt-and-suspenders: if a user Escapes out of a sign flow back
+    // to MainMenu for any reason, the pending state must not survive.
+    let mut model = fresh_model();
+    model.wallet_state.pending_sign_message = Some(b"hash".to_vec());
+    model.wallet_state.pending_sign_wallet_id = Some("w".to_string());
+    model.wallet_state.pending_sign_session_id = None;
+
+    update(&mut model, Message::NavigateHome);
+
+    assert!(model.wallet_state.pending_sign_message.is_none());
+    assert!(model.wallet_state.pending_sign_wallet_id.is_none());
+    assert!(model.wallet_state.pending_sign_session_id.is_none());
+}
+
+#[test]
+fn full_chain_failed_sign_then_fresh_dkg_does_not_misroute() {
+    // This is the END-TO-END reproduction of the user's bug. Mirror
+    // the exact transitions from the log:
+    //   1. cold-start SignSubmit stashes pending_sign_* + routes to PasswordPrompt
+    //   2. UnlockWallet fails → WalletUnlockFailed fires → modal + state cleanup
+    //   3. User dismisses modal and NavigateHome
+    //   4. User hits "Create New Wallet" → eventually lands on PasswordPrompt with a
+    //      populated creating_wallet
+    //   5. SubmitPassword on the NEW password
+    // Must route to CreateWallet, not a stale UnlockWallet. The fix
+    // is layered (all three gates matter): remove any one and the chain
+    // regresses.
+    use tui_node::elm::command::Command;
+    use tui_node::elm::model::{CreateWalletState, WalletConfig, WalletMode};
+
+    let mut model = fresh_model();
+    model.wallet_state.keystore_path = "/tmp/k".to_string();
+    model.wallet_state.curve_type = "secp256k1";
+    model.wallet_state.wallet_unlocked_id = None;
+
+    // --- Step 1: user tries to sign with an existing wallet, cold ---
+    // Populate a wallet in the cache so SignSubmit has a target.
+    use tui_node::keystore::WalletMetadata;
+    model.wallet_state.wallets = vec![WalletMetadata::new(
+        "wallet-dkg_old".to_string(),
+        "mpc-1".to_string(),
+        "secp256k1".to_string(),
+        2,
+        3,
+        1,
+        "aabb".to_string(),
+    )];
+    model.current_screen = Screen::SignTransaction {
+        wallet_id: "wallet-dkg_old".to_string(),
+    };
+    for c in "hello".chars() {
+        update(&mut model, Message::SignTypeChar(c));
+    }
+    let sign_cmd = update(&mut model, Message::SignSubmit);
+    assert!(
+        matches!(sign_cmd, None),
+        "cold SignSubmit routes via nav push, no command"
+    );
+    assert!(
+        matches!(model.current_screen, Screen::PasswordPrompt),
+        "cold SignSubmit pushes PasswordPrompt"
+    );
+    assert!(
+        model.wallet_state.pending_sign_message.is_some(),
+        "cold SignSubmit stashes the hash-to-sign"
+    );
+
+    // --- Step 2: user types WRONG password, UnlockWallet fails ---
+    // (We skip the actual UnlockWallet dispatch — what matters for
+    // this regression is the WalletUnlockFailed cleanup.)
+    update(
+        &mut model,
+        Message::WalletUnlockFailed {
+            error: "Invalid password".to_string(),
+        },
+    );
+    assert!(
+        model.wallet_state.pending_sign_message.is_none(),
+        "after WalletUnlockFailed, pending_sign_message must be gone"
+    );
+    assert!(
+        matches!(model.ui_state.modal, Some(tui_node::elm::model::Modal::Error { .. })),
+        "error modal must surface so the user acknowledges"
+    );
+
+    // --- Step 3: user navigates home (defense-in-depth clear) ---
+    model.ui_state.modal = None; // user dismissed the modal
+    update(&mut model, Message::NavigateHome);
+    assert!(model.wallet_state.pending_sign_message.is_none());
+    assert!(model.wallet_state.pending_sign_wallet_id.is_none());
+
+    // --- Step 4: user enters Create New Wallet flow ---
+    model.current_screen = Screen::PasswordPrompt;
+    model.wallet_state.creating_wallet = Some(CreateWalletState {
+        mode: Some(WalletMode::Online),
+        template: None,
+        custom_config: Some(WalletConfig {
+            name: "brand-new".to_string(),
+            threshold: 2,
+            total_participants: 3,
+            mode: WalletMode::Online,
+        }),
+    });
+
+    // --- Step 5: password submit — must route to CreateWallet ---
+    let cmd = update(
+        &mut model,
+        Message::SubmitPassword {
+            value: "brandnew-password".to_string(),
+        },
+    );
+    match cmd {
+        Some(Command::SendMessage(Message::CreateWallet { config })) => {
+            assert_eq!(
+                config.name, "brand-new",
+                "creator DKG flow wins — NOT the stale sign flow"
+            );
+        }
+        other => panic!(
+            "after the failed-sign → home → create-wallet chain, \
+             SubmitPassword must CreateWallet; got {:?}",
+            other
+        ),
+    }
+}
+
+#[test]
+fn submit_password_in_joiner_flow_ignores_stale_pending_sign() {
+    // Symmetric to the creator test: the joiner DKG / joiner signing
+    // flow is also gated against stale pending_sign_*. The signal for
+    // "this is a joiner" is `active_session.is_some()`.
+    use tui_node::SessionInfo;
+    use tui_node::elm::command::Command;
+    use tui_node::protocal::signal::SessionType;
+
+    let mut model = fresh_model();
+    model.current_screen = Screen::PasswordPrompt;
+    model.wallet_state.keystore_path = "/tmp/k".to_string();
+    // Leaked state:
+    model.wallet_state.pending_sign_message = Some(b"stale".to_vec());
+    model.wallet_state.pending_sign_wallet_id = Some("wallet-stale".to_string());
+    model.wallet_state.pending_sign_session_id = None;
+    // Real joiner intent:
+    model.active_session = Some(SessionInfo {
+        session_id: "dkg-joiner-flow".to_string(),
+        proposer_id: "mpc-1".to_string(),
+        total: 3,
+        threshold: 2,
+        participants: vec!["mpc-1".into(), "mpc-2".into(), "mpc-3".into()],
+        session_type: SessionType::DKG,
+        curve_type: "secp256k1".to_string(),
+        coordination_type: "Network".to_string(),
+        signing_message_hex: None,
+    });
+
+    let cmd = update(
+        &mut model,
+        Message::SubmitPassword {
+            value: "joiner-pw-123".to_string(),
+        },
+    );
+
+    match cmd {
+        Some(Command::JoinDKG { session_id }) => {
+            assert_eq!(session_id, "dkg-joiner-flow");
+        }
+        other => panic!(
+            "joiner DKG flow must dominate over stale pending_sign_*; got {:?}",
+            other
+        ),
+    }
+}
+
+#[test]
+fn sign_submit_can_still_route_when_no_dkg_or_joiner_intent() {
+    // After the gating fix, make sure the LEGITIMATE cold-sign flow
+    // still works — i.e. the gate doesn't over-block. User without
+    // creating_wallet AND without active_session CAN route to
+    // UnlockWallet.
+    use tui_node::elm::command::Command;
+    let mut model = fresh_model();
+    model.current_screen = Screen::PasswordPrompt;
+    model.wallet_state.keystore_path = "/tmp/k".to_string();
+    model.wallet_state.pending_sign_message = Some(b"real hash".to_vec());
+    model.wallet_state.pending_sign_wallet_id = Some("wallet-real".to_string());
+    model.wallet_state.pending_sign_session_id = None;
+    // Neither creating_wallet nor active_session — the "legitimate
+    // cold-start sign" case.
+    assert!(model.wallet_state.creating_wallet.is_none());
+    assert!(model.active_session.is_none());
+
+    let cmd = update(
+        &mut model,
+        Message::SubmitPassword {
+            value: "sign-unlock-pw".to_string(),
+        },
+    );
+    match cmd {
+        Some(Command::UnlockWallet { wallet_id, .. }) => {
+            assert_eq!(wallet_id, "wallet-real");
+        }
+        other => panic!(
+            "legitimate cold-start sign MUST still route to UnlockWallet; \
+             got {:?}",
+            other
+        ),
+    }
+}
+
+#[test]
 fn submit_password_on_signing_session_dispatches_unlock_and_stashes_payload() {
     // Joiner path for Phase C.4: when active_session is a Signing
     // variant, SubmitPassword must dispatch Command::UnlockWallet

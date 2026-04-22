@@ -98,6 +98,23 @@ pub enum Message {
     ProcessDKGRound1 { from_device: String, package_bytes: Vec<u8> },  // Process received DKG Round 1 package
     ProcessDKGRound2 { from_device: String, package_bytes: Vec<u8> },  // Process received DKG Round 2 package
     DKGKeyGenerated { group_pubkey_hex: String },                      // Final FROST key ready
+    /// Fires after `Command::UnlockWallet` successfully decrypted the
+    /// wallet file and stashed `KeyPackage` + `PublicKeyPackage` on
+    /// AppState. The handler pushes the next screen in the signing
+    /// flow (usually SignTransaction or SigningProgress, depending on
+    /// which path kicked off the unlock).
+    WalletUnlocked {
+        wallet_id: String,
+    },
+    /// Emitted on any failure in `Command::UnlockWallet` — wrong
+    /// password, unknown wallet id, decrypt error, or deserialize
+    /// error. The update handler surfaces this as a user-visible modal
+    /// and drops the user back to WalletDetail / Manage Wallets. No
+    /// panic under any condition.
+    WalletUnlockFailed {
+        error: String,
+    },
+
     /// Fires after `Command::FinalizeWalletFromDkg` has encrypted the key
     /// share and written the wallet file to disk. Terminates the DKG flow:
     /// the update handler clears `pending_password` / `creating_wallet`

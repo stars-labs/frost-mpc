@@ -376,6 +376,36 @@ pub fn update(model: &mut Model, msg: Message) -> Option<Command> {
             Some(Command::LoadWallets)
         }
         
+        // Phase C.1: signing-time keystore hydration results. These are
+        // emitted by `Command::UnlockWallet`. On success we just log + push
+        // a notification; actual follow-up navigation (→ SignTransaction or
+        // SigningProgress) is driven by the next-stage Commands that
+        // dispatched the unlock in the first place.
+        Message::WalletUnlocked { wallet_id } => {
+            info!("✅ Wallet unlocked: {}", wallet_id);
+            model.ui_state.notifications.push(Notification {
+                id: Uuid::new_v4().to_string(),
+                text: format!("🔓 Wallet '{}' unlocked", wallet_id),
+                kind: NotificationKind::Success,
+                timestamp: Utc::now(),
+                dismissible: true,
+            });
+            None
+        }
+
+        Message::WalletUnlockFailed { error } => {
+            // Surface as a modal so the user has to acknowledge before
+            // continuing — signing with a stale/missing KeyPackage would
+            // produce nonsense, so we must block the flow until the user
+            // either retries or navigates away.
+            error!("Wallet unlock failed: {}", error);
+            model.ui_state.modal = Some(Modal::Error {
+                title: "Unlock Failed".to_string(),
+                message: error,
+            });
+            None
+        }
+
         Message::WalletsLoaded { wallets } => {
             info!("Loaded {} wallets", wallets.len());
             let old_count = model.wallet_state.wallets.len();

@@ -78,6 +78,20 @@ pub enum Command {
         keystore_path: String,
         wallet_name: String,
     },
+    /// Hot-load an existing wallet: decrypt the keystore file with
+    /// `password`, deserialize the `(KeyPackage, PublicKeyPackage)` tuple
+    /// from the blob (see [`encode_keystore_blob`]), and stash both onto
+    /// `AppState` so the signing protocol layer has what it needs.
+    ///
+    /// `password` is taken by value — same discipline as
+    /// `FinalizeWalletFromDkg`. The update-layer dispatcher is expected
+    /// to clear the Model-side copy before dispatching; this Command is
+    /// the last place the plaintext exists in-process.
+    UnlockWallet {
+        wallet_id: String,
+        password: String,
+        keystore_path: String,
+    },
 
     // Signing operations
     StartSigning { request: SigningRequest },
@@ -99,6 +113,100 @@ pub enum Command {
     // System operations
     Quit,
     None,
+}
+
+/// Serialize `(KeyPackage, PublicKeyPackage)` into the byte stream that
+/// `Keystore::create_wallet_multi_chain` encrypts for us.
+///
+/// Framing is `[kp_len: u32 LE][kp_bytes][pkp_len: u32 LE][pkp_bytes]` so the
+/// reader doesn't need a separator and both halves can be length-checked
+/// cheaply. We use FROST's own `.serialize()` (compact binary) rather than
+/// JSON/bincode because the frost-core types don't all gate their serde
+/// derives on the same feature flag and `.serialize()` is the
+/// canonical round-trip pairing with `.deserialize()`.
+pub(crate) fn encode_keystore_blob<C: frost_core::Ciphersuite>(
+    key_package: &frost_core::keys::KeyPackage<C>,
+    public_key_package: &frost_core::keys::PublicKeyPackage<C>,
+) -> Result<Vec<u8>, String> {
+    let kp = key_package
+        .serialize()
+        .map_err(|e| format!("KeyPackage::serialize: {:?}", e))?;
+    let pkp = public_key_package
+        .serialize()
+        .map_err(|e| format!("PublicKeyPackage::serialize: {:?}", e))?;
+    let kp_len = u32::try_from(kp.len()).map_err(|_| "KeyPackage too large".to_string())?;
+    let pkp_len = u32::try_from(pkp.len()).map_err(|_| "PublicKeyPackage too large".to_string())?;
+
+    let mut out = Vec::with_capacity(8 + kp.len() + pkp.len());
+    out.extend_from_slice(&kp_len.to_le_bytes());
+    out.extend_from_slice(&kp);
+    out.extend_from_slice(&pkp_len.to_le_bytes());
+    out.extend_from_slice(&pkp);
+    Ok(out)
+}
+
+/// Inverse of [`encode_keystore_blob`]. Fails with a descriptive error on
+/// any truncation, over-read, or FROST deserialize failure — so
+/// `UnlockWallet` can turn those into a `WalletUnlockFailed` rather than a
+/// panic on a malformed file.
+pub(crate) fn decode_keystore_blob<C: frost_core::Ciphersuite>(
+    bytes: &[u8],
+) -> Result<
+    (
+        frost_core::keys::KeyPackage<C>,
+        frost_core::keys::PublicKeyPackage<C>,
+    ),
+    String,
+> {
+    fn read_u32_le(buf: &[u8], offset: usize) -> Result<(u32, usize), String> {
+        let end = offset
+            .checked_add(4)
+            .ok_or_else(|| "length overflow".to_string())?;
+        if end > buf.len() {
+            return Err(format!(
+                "truncated: need 4 bytes at offset {offset}, have {}",
+                buf.len().saturating_sub(offset)
+            ));
+        }
+        let mut arr = [0u8; 4];
+        arr.copy_from_slice(&buf[offset..end]);
+        Ok((u32::from_le_bytes(arr), end))
+    }
+
+    let (kp_len, mut pos) = read_u32_le(bytes, 0)?;
+    let kp_len = kp_len as usize;
+    let kp_end = pos
+        .checked_add(kp_len)
+        .ok_or_else(|| "kp length overflow".to_string())?;
+    if kp_end > bytes.len() {
+        return Err(format!(
+            "truncated KeyPackage: need {kp_len} bytes, have {}",
+            bytes.len().saturating_sub(pos)
+        ));
+    }
+    let kp = frost_core::keys::KeyPackage::<C>::deserialize(&bytes[pos..kp_end])
+        .map_err(|e| format!("KeyPackage::deserialize: {:?}", e))?;
+    pos = kp_end;
+
+    let (pkp_len, npos) = read_u32_le(bytes, pos)?;
+    pos = npos;
+    let pkp_len = pkp_len as usize;
+    let pkp_end = pos
+        .checked_add(pkp_len)
+        .ok_or_else(|| "pkp length overflow".to_string())?;
+    if pkp_end > bytes.len() {
+        return Err(format!(
+            "truncated PublicKeyPackage: need {pkp_len} bytes, have {}",
+            bytes.len().saturating_sub(pos)
+        ));
+    }
+    let pkp = frost_core::keys::PublicKeyPackage::<C>::deserialize(&bytes[pos..pkp_end])
+        .map_err(|e| format!("PublicKeyPackage::deserialize: {:?}", e))?;
+
+    // Intentionally ignore trailing bytes — a future format with an extra
+    // field would still decode up to this point. For today, there should
+    // be no trailing bytes.
+    Ok((kp, pkp))
 }
 
 /// Parse a `session_info` JSON blob (as sent over the wire by the Cloudflare
@@ -1333,10 +1441,19 @@ impl Command {
                         return Ok(());
                     };
 
-                    let key_share_data = match key_package.serialize() {
+                    // We need BOTH the KeyPackage (this node's secret share)
+                    // AND the PublicKeyPackage (the group-wide map of verifying
+                    // shares) to sign later — aggregate() takes the pubkey
+                    // package. Can't reconstruct PublicKeyPackage from
+                    // KeyPackage alone; KeyPackage only holds THIS node's
+                    // verifying share, not the others'. Frame both
+                    // into a single encrypted blob as:
+                    //     [kp_len: u32 LE][kp_bytes][pkp_len: u32 LE][pkp_bytes]
+                    // Stage C.1's UnlockWallet reverses this framing.
+                    let key_share_data = match encode_keystore_blob(key_package, public_key_package) {
                         Ok(bytes) => bytes,
                         Err(e) => {
-                            let err = format!("FinalizeWalletFromDkg: KeyPackage::serialize failed: {:?}", e);
+                            let err = format!("FinalizeWalletFromDkg: encode_keystore_blob failed: {}", e);
                             error!("{}", err);
                             let _ = tx.send(Message::DKGFailed { error: err });
                             return Ok(());
@@ -1487,6 +1604,92 @@ impl Command {
                 });
             }
 
+            Command::UnlockWallet { wallet_id, password, keystore_path } => {
+                // Counterpart to `FinalizeWalletFromDkg`: decrypt the
+                // keystore file, deserialize the `(KeyPackage, PubKeyPackage)`
+                // tuple, and write both onto AppState so the signing
+                // protocol layer has everything FROST needs.
+                //
+                // `password` is taken by value; it goes out of scope at the
+                // end of this arm, matching the single-plaintext-site
+                // invariant from Phase A.
+                info!("Unlocking wallet '{}'", wallet_id);
+
+                use crate::keystore::Keystore;
+
+                let device_id = {
+                    let state = app_state.lock().await;
+                    state.device_id.clone()
+                };
+
+                // Hydrate a local Keystore instance so we can call
+                // `load_wallet_file` — the shared `Arc<Keystore>` is
+                // read-only and the load path doesn't need the live
+                // cache anyway.
+                let ks = match Keystore::new(&keystore_path, &device_id) {
+                    Ok(ks) => ks,
+                    Err(e) => {
+                        let err = format!(
+                            "UnlockWallet: Keystore::new({}, {}) failed: {}",
+                            keystore_path, device_id, e
+                        );
+                        error!("{}", err);
+                        let _ = tx.send(Message::WalletUnlockFailed { error: err });
+                        return Ok(());
+                    }
+                };
+
+                // `load_wallet_file` returns the decrypted blob bytes.
+                // Wrong-password / wrong-wallet_id errors bubble up as
+                // `KeystoreError` — no panic.
+                let blob = match ks.load_wallet_file(&wallet_id, &password) {
+                    Ok(b) => b,
+                    Err(e) => {
+                        let err = format!("UnlockWallet: load_wallet_file failed: {}", e);
+                        // Don't log the password in any form.
+                        error!("{}", err);
+                        let _ = tx.send(Message::WalletUnlockFailed { error: err });
+                        return Ok(());
+                    }
+                };
+
+                // Drop the password now — nothing else needs it. This is
+                // the single end-of-lifetime point for the plaintext.
+                drop(password);
+
+                let (key_package, public_key_package) = match decode_keystore_blob::<C>(&blob) {
+                    Ok(t) => t,
+                    Err(e) => {
+                        let err = format!("UnlockWallet: decode_keystore_blob failed: {}", e);
+                        error!("{}", err);
+                        let _ = tx.send(Message::WalletUnlockFailed { error: err });
+                        return Ok(());
+                    }
+                };
+
+                // Belt-and-suspenders: verify the `KeyPackage.verifying_key()`
+                // matches `PublicKeyPackage.verifying_key()`. A mismatch
+                // would mean someone wrote an inconsistent blob — better
+                // to fail loudly here than during aggregate later.
+                if key_package.verifying_key() != public_key_package.verifying_key() {
+                    let err = "UnlockWallet: KeyPackage and PublicKeyPackage disagree on group key".to_string();
+                    error!("{}", err);
+                    let _ = tx.send(Message::WalletUnlockFailed { error: err });
+                    return Ok(());
+                }
+
+                {
+                    let mut state = app_state.lock().await;
+                    state.key_package = Some(key_package);
+                    state.group_public_key = Some(*public_key_package.verifying_key());
+                    state.public_key_package = Some(public_key_package);
+                    state.current_wallet_id = Some(wallet_id.clone());
+                }
+
+                info!("✅ Wallet '{}' unlocked — ready to sign", wallet_id);
+                let _ = tx.send(Message::WalletUnlocked { wallet_id });
+            }
+
             Command::ReconnectWebSocket => {
                 // One flat script. Each step has a narrow responsibility and
                 // lives in `elm::ws_runtime`:
@@ -1581,7 +1784,7 @@ mod tests {
     fn test_command_creation() {
         let cmd = Command::LoadWallets;
         assert!(matches!(cmd, Command::LoadWallets));
-        
+
         let cmd = Command::StartDKG {
             config: WalletConfig {
                 name: "Test".to_string(),
@@ -1591,5 +1794,71 @@ mod tests {
             }
         };
         assert!(matches!(cmd, Command::StartDKG { .. }));
+    }
+
+    /// Round-trip a (KeyPackage, PublicKeyPackage) produced by a real
+    /// FROST DKG through `encode_keystore_blob` + `decode_keystore_blob`
+    /// and assert the deserialized key package's identifier + group
+    /// verifying key match. Uses `trusted_dealer_keygen` to get real
+    /// packages in-process without running a network DKG.
+    #[test]
+    fn encode_decode_keystore_blob_round_trips() {
+        use frost_secp256k1::{
+            keys::{
+                generate_with_dealer, IdentifierList, KeyPackage as KP,
+                PublicKeyPackage as PKP,
+            },
+            rand_core::OsRng,
+            Identifier, Secp256K1Sha256,
+        };
+        let mut rng = OsRng;
+        let (secret_shares, pubkey_package): (
+            std::collections::BTreeMap<Identifier, _>,
+            PKP,
+        ) = generate_with_dealer(3, 2, IdentifierList::Default, &mut rng)
+            .expect("trusted-dealer keygen");
+
+        let (id, secret_share) = secret_shares.iter().next().unwrap();
+        let key_package: KP =
+            secret_share.clone().try_into().expect("share → KeyPackage");
+
+        let blob = encode_keystore_blob::<Secp256K1Sha256>(&key_package, &pubkey_package)
+            .expect("encode");
+
+        let (kp_back, pkp_back) =
+            decode_keystore_blob::<Secp256K1Sha256>(&blob).expect("decode");
+
+        assert_eq!(
+            kp_back.identifier(),
+            key_package.identifier(),
+            "identifier must survive round-trip"
+        );
+        assert_eq!(
+            pkp_back.verifying_key(),
+            pubkey_package.verifying_key(),
+            "group verifying key must survive round-trip"
+        );
+        assert_eq!(id, kp_back.identifier());
+    }
+
+    /// A garbage-byte blob must produce a descriptive Err, not a panic —
+    /// this is the path that fires on a wrong-password decrypt (the
+    /// plaintext that comes out is noise).
+    #[test]
+    fn decode_keystore_blob_handles_truncation_gracefully() {
+        let truncated: Vec<u8> = vec![0xff, 0xff, 0xff, 0xff, 0x00]; // claims 4GB but has 1 byte
+        let result = decode_keystore_blob::<frost_secp256k1::Secp256K1Sha256>(&truncated);
+        assert!(result.is_err(), "truncated blob must surface an Err");
+        let msg = result.unwrap_err();
+        assert!(
+            msg.contains("truncated") || msg.contains("deserialize"),
+            "error must describe the failure; got {msg:?}"
+        );
+    }
+
+    #[test]
+    fn decode_keystore_blob_rejects_empty_input() {
+        let result = decode_keystore_blob::<frost_secp256k1::Secp256K1Sha256>(&[]);
+        assert!(result.is_err(), "empty input must fail");
     }
 }

@@ -55,7 +55,25 @@ impl WalletList {
             self.selected = self.wallets.len() - 1;
         }
     }
-    
+
+    /// Sync the selected row from model state at mount time. The
+    /// source of truth lives in `Model.ui_state.selected_indices`;
+    /// ScrollUp/ScrollDown in the app loop mutate it, and this
+    /// setter is how the mounted component learns about it. Without
+    /// this wiring arrow keys would fire, mutate the model, and the
+    /// component would render stale `self.selected = 0`.
+    pub fn set_selected(&mut self, index: usize) {
+        let max = self.wallets.len().saturating_sub(1);
+        self.selected = index.min(max);
+        if self.selected < self.scroll_offset {
+            self.scroll_offset = self.selected;
+        }
+        let visible_height = 10;
+        if self.selected >= self.scroll_offset + visible_height {
+            self.scroll_offset = self.selected + 1 - visible_height;
+        }
+    }
+
     fn move_up(&mut self) {
         if self.selected > 0 {
             self.selected -= 1;
@@ -142,13 +160,36 @@ impl Component for WalletList {
                     };
                     
                     let prefix = if is_selected { "► " } else { "  " };
+                    // Disambiguate wallets visually: show a longer
+                    // session_id slice (was 12 → truncated at
+                    // `wallet-dkg_X`, 13 chars), add a group-key
+                    // prefix (first 10 hex chars), and the creation
+                    // date. Two wallets from the same minute on the
+                    // same device will still differ by group key.
+                    let sid = if wallet.session_id.len() > 24 {
+                        format!("{}…", &wallet.session_id[..23])
+                    } else {
+                        wallet.session_id.clone()
+                    };
+                    let key_prefix = wallet
+                        .group_public_key
+                        .chars()
+                        .take(10)
+                        .collect::<String>();
+                    let created = wallet
+                        .created_at
+                        .split('T')
+                        .next()
+                        .unwrap_or(&wallet.created_at);
                     let text = format!(
-                        "{}{} ({}/{}) - {}",
+                        "{}{}  {}/{} {}  key:{}  {}",
                         prefix,
-                        wallet.session_id.chars().take(12).collect::<String>(),
+                        sid,
                         wallet.threshold,
                         wallet.total_participants,
-                        wallet.curve_type
+                        wallet.curve_type,
+                        key_prefix,
+                        created,
                     );
                     
                     ListItem::new(text).style(style)

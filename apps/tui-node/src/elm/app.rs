@@ -142,8 +142,20 @@ where
             Screen::ManageWallets => {
                 let mut wallet_list = WalletList::new();
                 wallet_list.set_wallets(self.model.wallet_state.wallets.clone());
-                
-                self.app.mount(
+                // Re-apply the row selection from model state so
+                // ScrollUp/ScrollDown mutations (which update
+                // `selected_indices[WalletList]`) are reflected after
+                // the remount triggered by those same messages.
+                let selected = self
+                    .model
+                    .ui_state
+                    .selected_indices
+                    .get(&crate::elm::model::ComponentId::WalletList)
+                    .copied()
+                    .unwrap_or(0);
+                wallet_list.set_selected(selected);
+
+                self.app.remount(
                     Id::WalletList,
                     Box::new(wallet_list),
                     vec![]

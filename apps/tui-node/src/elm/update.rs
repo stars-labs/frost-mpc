@@ -1743,11 +1743,27 @@ pub fn update(model: &mut Model, msg: Message) -> Option<Command> {
                     let current_idx = model.ui_state.selected_indices
                         .entry(crate::elm::model::ComponentId::JoinSession)
                         .or_insert(0);
-                    
+
                     if *current_idx > 0 {
                         *current_idx = current_idx.saturating_sub(1);
                     }
                     info!("JoinSession selection moved up to: {}", current_idx);
+                }
+                Screen::ManageWallets => {
+                    // Wallet list navigation — previously routed through the
+                    // generic `_ =>` arm that only bumped `scroll_position`,
+                    // which WalletList doesn't read. The component's `selected`
+                    // is re-applied from this map at mount time via
+                    // `WalletList::set_selected`.
+                    let current_idx = model
+                        .ui_state
+                        .selected_indices
+                        .entry(crate::elm::model::ComponentId::WalletList)
+                        .or_insert(0);
+                    if *current_idx > 0 {
+                        *current_idx -= 1;
+                    }
+                    info!("WalletList selection moved up to: {}", current_idx);
                 }
                 _ => {
                     model.ui_state.scroll_position = model.ui_state.scroll_position.saturating_sub(1);
@@ -1755,7 +1771,7 @@ pub fn update(model: &mut Model, msg: Message) -> Option<Command> {
             }
             None
         }
-        
+
         Message::ScrollDown => {
             info!("⬇️ ScrollDown: current screen = {:?}", model.current_screen);
             // Update selected index based on current screen
@@ -1846,10 +1862,25 @@ pub fn update(model: &mut Model, msg: Message) -> Option<Command> {
                     let current_idx = model.ui_state.selected_indices
                         .entry(crate::elm::model::ComponentId::JoinSession)
                         .or_insert(0);
-                    
+
                     // We don't know the actual count here, just increment
                     *current_idx += 1;
                     info!("JoinSession selection moved down to: {}", current_idx);
+                }
+                Screen::ManageWallets => {
+                    let wallet_count = model.wallet_state.wallets.len();
+                    if wallet_count == 0 {
+                        return None;
+                    }
+                    let current_idx = model
+                        .ui_state
+                        .selected_indices
+                        .entry(crate::elm::model::ComponentId::WalletList)
+                        .or_insert(0);
+                    if *current_idx + 1 < wallet_count {
+                        *current_idx += 1;
+                    }
+                    info!("WalletList selection moved down to: {}", current_idx);
                 }
                 _ => {
                     model.ui_state.scroll_position = model.ui_state.scroll_position.saturating_add(1);
@@ -1857,7 +1888,7 @@ pub fn update(model: &mut Model, msg: Message) -> Option<Command> {
             }
             None
         }
-        
+
         Message::ScrollLeft => {
             info!("⬅️ ScrollLeft: current screen = {:?}", model.current_screen);
             match model.current_screen {

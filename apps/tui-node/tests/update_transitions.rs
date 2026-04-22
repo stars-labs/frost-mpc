@@ -1923,3 +1923,159 @@ fn dkg_finalized_handles_truncated_group_key_gracefully() {
     let _ = update(&mut model, short_key_msg);
     // If we got here without panicking, the min() guard worked.
 }
+
+// -----------------------------------------------------------------
+// ManageWallets keyboard nav: arrows must move the WalletList cursor,
+// and Enter must sign the wallet at that cursor. Before the wiring
+// landed, arrows fell through the generic ScrollUp/Down arm, which
+// only bumped `scroll_position` — WalletList never saw the change
+// and Enter always fired on index 0.
+// -----------------------------------------------------------------
+#[test]
+fn scroll_down_on_manage_wallets_advances_wallet_list_selection() {
+    use tui_node::elm::model::ComponentId;
+    use tui_node::keystore::WalletMetadata;
+
+    let mut model = fresh_model();
+    model.current_screen = Screen::ManageWallets;
+    model.wallet_state.wallets = vec![
+        WalletMetadata::new(
+            "w1".into(),
+            "d".into(),
+            "secp256k1".into(),
+            2,
+            3,
+            1,
+            "aa".into(),
+        ),
+        WalletMetadata::new(
+            "w2".into(),
+            "d".into(),
+            "secp256k1".into(),
+            2,
+            3,
+            1,
+            "bb".into(),
+        ),
+    ];
+
+    assert!(model
+        .ui_state
+        .selected_indices
+        .get(&ComponentId::WalletList)
+        .is_none());
+
+    let _ = update(&mut model, Message::ScrollDown);
+    assert_eq!(
+        model.ui_state.selected_indices.get(&ComponentId::WalletList),
+        Some(&1),
+        "ScrollDown should advance WalletList cursor"
+    );
+
+    // Second ScrollDown must clamp to last wallet (no wrap-around
+    // is intentional — users expect arrow-down-at-bottom to stop).
+    let _ = update(&mut model, Message::ScrollDown);
+    assert_eq!(
+        model.ui_state.selected_indices.get(&ComponentId::WalletList),
+        Some(&1),
+        "ScrollDown past end must clamp to last index"
+    );
+
+    let _ = update(&mut model, Message::ScrollUp);
+    assert_eq!(
+        model.ui_state.selected_indices.get(&ComponentId::WalletList),
+        Some(&0),
+        "ScrollUp should move WalletList cursor toward top"
+    );
+
+    // ScrollUp at 0 must not underflow
+    let _ = update(&mut model, Message::ScrollUp);
+    assert_eq!(
+        model.ui_state.selected_indices.get(&ComponentId::WalletList),
+        Some(&0),
+    );
+}
+
+/// Enter on ManageWallets must sign the wallet at the CURRENT cursor,
+/// not always wallet[0]. Regression guard for "arrow keys didn't work,
+/// Enter always signed the first wallet".
+#[test]
+fn select_item_on_manage_wallets_uses_selected_indices_for_target() {
+    use tui_node::elm::model::ComponentId;
+    use tui_node::keystore::WalletMetadata;
+
+    let mut model = fresh_model();
+    model.current_screen = Screen::ManageWallets;
+    model.wallet_state.wallets = vec![
+        WalletMetadata::new(
+            "wallet-first".into(),
+            "d".into(),
+            "secp256k1".into(),
+            2,
+            3,
+            1,
+            "aa".into(),
+        ),
+        WalletMetadata::new(
+            "wallet-second".into(),
+            "d".into(),
+            "secp256k1".into(),
+            2,
+            3,
+            1,
+            "bb".into(),
+        ),
+    ];
+
+    // Simulate one ScrollDown (cursor → wallet-second).
+    let _ = update(&mut model, Message::ScrollDown);
+    assert_eq!(
+        model.ui_state.selected_indices.get(&ComponentId::WalletList),
+        Some(&1),
+    );
+
+    // Enter → SelectItem index is ignored by the handler; it reads
+    // selected_indices[WalletList]. Index arg here is a placeholder
+    // to mirror what app.rs sends.
+    let _ = update(&mut model, Message::SelectItem { index: 1 });
+
+    match &model.current_screen {
+        Screen::SignTransaction { wallet_id } => {
+            assert_eq!(
+                wallet_id, "wallet-second",
+                "Enter on ManageWallets must target the highlighted row, not wallet[0]"
+            );
+        }
+        other => panic!("expected SignTransaction after Enter on ManageWallets, got {:?}", other),
+    }
+    assert_eq!(
+        model.selected_wallet.as_deref(),
+        Some("wallet-second"),
+        "selected_wallet must be populated before entering SignTransaction"
+    );
+}
+
+/// ScrollUp/Down on ManageWallets with NO wallets must be a safe no-op.
+/// Guards against an underflow or panic when the list is empty (e.g.
+/// cold-start before any DKG).
+#[test]
+fn scroll_on_manage_wallets_with_no_wallets_is_noop() {
+    use tui_node::elm::model::ComponentId;
+
+    let mut model = fresh_model();
+    model.current_screen = Screen::ManageWallets;
+    assert!(model.wallet_state.wallets.is_empty());
+
+    let _ = update(&mut model, Message::ScrollDown);
+    let _ = update(&mut model, Message::ScrollUp);
+    let _ = update(&mut model, Message::ScrollDown);
+
+    let idx = model
+        .ui_state
+        .selected_indices
+        .get(&ComponentId::WalletList)
+        .copied();
+    // Either None (never inserted) or Some(0) are both acceptable;
+    // the invariant is "no panic, no invalid index".
+    assert!(idx == None || idx == Some(0));
+}

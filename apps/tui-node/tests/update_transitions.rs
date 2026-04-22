@@ -832,6 +832,60 @@ fn dkg_key_generated_without_keystore_path_does_not_dispatch_finalize() {
 }
 
 #[test]
+fn dkg_key_generated_derives_wallet_name_idempotently_per_session() {
+    // Regression guard for the cross-node identifier mismatch bug.
+    // Every participant must derive the SAME wallet_name from the
+    // SAME session_id regardless of the wire ordering of
+    // session.participants (which differs per node — each node adds
+    // itself to the end). This pins the derivation formula so a future
+    // refactor can't accidentally start basing the name on, say,
+    // `session.participants[0]`.
+    use tui_node::SessionInfo;
+    use tui_node::elm::command::Command;
+    use tui_node::protocal::signal::SessionType;
+
+    fn run_with_participants(order: Vec<&str>, self_id: &str) -> String {
+        let mut model = fresh_model();
+        model.wallet_state.pending_password = Some("pw12345678".to_string());
+        model.wallet_state.keystore_path = "/tmp/k".to_string();
+        model.current_screen = Screen::DKGProgress {
+            session_id: "dkg_abcd1234rest".to_string(),
+        };
+        model.device_id = self_id.to_string();
+        model.active_session = Some(SessionInfo {
+            session_id: "dkg_abcd1234rest".to_string(),
+            proposer_id: "mpc-1".to_string(),
+            total: 3,
+            threshold: 2,
+            participants: order.iter().map(|s| s.to_string()).collect(),
+            session_type: SessionType::DKG,
+            curve_type: "unified".to_string(),
+            coordination_type: "online".to_string(),
+        });
+        let cmd = update(&mut model, sample_dkg_key_generated_msg());
+
+        fn find_name(c: &Command) -> Option<String> {
+            match c {
+                Command::FinalizeWalletFromDkg { wallet_name, .. } => Some(wallet_name.clone()),
+                Command::Batch(v) => v.iter().find_map(find_name),
+                _ => None,
+            }
+        }
+        cmd.as_ref().and_then(find_name).expect("finalize expected")
+    }
+
+    let name_1 = run_with_participants(vec!["mpc-2", "mpc-3", "mpc-1"], "mpc-1");
+    let name_2 = run_with_participants(vec!["mpc-1", "mpc-3", "mpc-2"], "mpc-2");
+    let name_3 = run_with_participants(vec!["mpc-1", "mpc-2", "mpc-3"], "mpc-3");
+
+    assert_eq!(name_1, "wallet-dkg_abcd", "mpc-1 name");
+    assert_eq!(name_2, "wallet-dkg_abcd", "mpc-2 name");
+    assert_eq!(name_3, "wallet-dkg_abcd", "mpc-3 name");
+    assert_eq!(name_1, name_2);
+    assert_eq!(name_2, name_3);
+}
+
+#[test]
 fn dkg_finalized_handles_truncated_group_key_gracefully() {
     // Defensive: even a short hex string shouldn't panic the truncation slice.
     // Production keys are always 66 chars but the handler must not trust that.

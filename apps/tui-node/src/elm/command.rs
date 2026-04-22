@@ -1342,10 +1342,17 @@ impl Command {
                         }
                     };
 
-                    // `position + 1` because FROST identifiers are 1-based and the
-                    // keystore expects a 1-based participant index too.
-                    let participant_index = match session
-                        .participants
+                    // Canonical (sorted) order — this is what
+                    // `protocal::dkg::canonical_identifier` uses to derive
+                    // each node's FROST `Identifier`, so the keystore's
+                    // `participant_index` needs to match. Using the raw
+                    // `session.participants` order was a subtle bug: each
+                    // node ends up seeing itself at position 2 of the wire
+                    // ordering, so every single participant stored
+                    // `participant_index = 3`.
+                    let mut sorted = session.participants.clone();
+                    sorted.sort();
+                    let participant_index = match sorted
                         .iter()
                         .position(|p| p == &state.device_id)
                     {

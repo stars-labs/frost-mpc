@@ -266,7 +266,7 @@ fn joiner_on_password_prompt() -> tui_node::elm::Model {
         threshold: 2,
         participants: vec!["mpc-1".to_string(), "mpc-2".to_string(), "mpc-3".to_string()],
         session_type: SessionType::DKG,
-        curve_type: "unified".to_string(),
+        curve_type: "secp256k1".to_string(),
         coordination_type: "online".to_string(),
     });
     model
@@ -706,6 +706,43 @@ fn dkg_finalized_stashes_completed_wallet_info() {
     );
 }
 
+// -----------------------------------------------------------------
+// Stage 5: curve_type sourced from Model (no more "unified")
+// -----------------------------------------------------------------
+
+#[test]
+fn creator_create_wallet_announces_real_curve_from_model() {
+    // The `Message::CreateWallet` handler stamps `curve_type` onto
+    // `active_session` so joiners can see what we're running. Stage 5
+    // moved that from the `"unified"` literal to
+    // `model.wallet_state.curve_type`. Test-level fresh_model uses the
+    // default empty-str curve type (there's no `C` wired through the
+    // pure Model); set it explicitly and assert it propagates.
+    use tui_node::elm::message::Message;
+    use tui_node::elm::model::{WalletConfig, WalletMode};
+
+    let mut model = fresh_model();
+    model.wallet_state.curve_type = "secp256k1";
+
+    let cfg = WalletConfig {
+        name: "stage5-session".to_string(),
+        threshold: 2,
+        total_participants: 3,
+        mode: WalletMode::Online,
+    };
+    let _ = update(&mut model, Message::CreateWallet { config: cfg });
+
+    let session = model
+        .active_session
+        .as_ref()
+        .expect("CreateWallet must populate active_session");
+    assert_eq!(
+        session.curve_type, "secp256k1",
+        "active_session.curve_type must come from model.wallet_state.curve_type \
+         — not the old 'unified' literal"
+    );
+}
+
 #[test]
 fn navigate_home_clears_last_finalized_wallet() {
     // If the user runs DKG a second time, the first wallet's snapshot
@@ -775,7 +812,7 @@ fn fixture_ready_to_finalize() -> tui_node::elm::Model {
         threshold: 2,
         participants: vec!["mpc-1".to_string(), "mpc-2".to_string(), "mpc-3".to_string()],
         session_type: SessionType::DKG,
-        curve_type: "unified".to_string(),
+        curve_type: "secp256k1".to_string(),
         coordination_type: "online".to_string(),
     });
     model
@@ -930,7 +967,7 @@ fn dkg_key_generated_derives_wallet_name_idempotently_per_session() {
             threshold: 2,
             participants: order.iter().map(|s| s.to_string()).collect(),
             session_type: SessionType::DKG,
-            curve_type: "unified".to_string(),
+            curve_type: "secp256k1".to_string(),
             coordination_type: "online".to_string(),
         });
         let cmd = update(&mut model, sample_dkg_key_generated_msg());

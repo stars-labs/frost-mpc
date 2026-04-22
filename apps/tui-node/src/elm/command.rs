@@ -129,10 +129,16 @@ pub(crate) fn parse_session_info(
         .and_then(|v| v.as_str())
         .unwrap_or("unknown")
         .to_string();
+    // Fallback when a wire message omits `curve_type` (protocol
+    // violation by the announcer, or a legacy frame pre-dating the Stage-5
+    // sweep). Default to `"secp256k1"` — the only curve this TUI binary
+    // actually runs — rather than the useless `"unified"` placeholder
+    // which `CurveType::from_string` rejects downstream. An incoming
+    // valid announce will override this default anyway.
     let curve_type = session_info
         .get("curve_type")
         .and_then(|v| v.as_str())
-        .unwrap_or("unified")
+        .unwrap_or("secp256k1")
         .to_string();
     let coordination_type = session_info
         .get("coordination_type")
@@ -372,6 +378,12 @@ impl Command {
                     };
 
                     // Announce the session through the shared channel.
+                    // `curve_type` comes from the ciphersuite type witness
+                    // via `CurveIdentifier`, so joiners learn the real curve
+                    // from the announce rather than the legacy "unified"
+                    // placeholder.
+                    let announced_curve =
+                        <C as crate::utils::curve_traits::CurveIdentifier>::curve_type();
                     let session_info = serde_json::json!({
                         "session_id": session_id.clone(),
                         "total": config_clone.total_participants,
@@ -379,7 +391,7 @@ impl Command {
                         "session_type": "dkg",
                         "proposer_id": device_id.clone(),
                         "participants": [device_id.clone()],
-                        "curve_type": "unified",
+                        "curve_type": announced_curve,
                         "coordination_type": "Network",
                     });
                     let announce = webrtc_signal_server::ClientMsg::AnnounceSession {
@@ -401,7 +413,8 @@ impl Command {
                         Err(e) => error!("Serialize AnnounceSession failed: {}", e),
                     }
 
-                    // Record session state.
+                    // Record session state with the real curve — same
+                    // source of truth as the announcement above.
                     {
                         let mut state = app_state.lock().await;
                         state.session = Some(crate::protocal::signal::SessionInfo {
@@ -411,7 +424,7 @@ impl Command {
                             threshold: config_clone.threshold,
                             total: config_clone.total_participants,
                             session_type: crate::protocal::signal::SessionType::DKG,
-                            curve_type: "unified".to_string(),
+                            curve_type: announced_curve.to_string(),
                             coordination_type: "Network".to_string(),
                         });
                     }

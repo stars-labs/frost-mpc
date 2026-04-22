@@ -57,52 +57,15 @@ fn canonical_identifier<C: Ciphersuite>(
     Identifier::<C>::try_from(one_based).ok()
 }
 
-// Removed insecure derive_group_key function - now using real FROST DKG output
-
-/// Dynamic DKG handler that uses the correct curve based on session configuration
-pub async fn handle_trigger_dkg_round1_dynamic(
-    state_secp256k1: Option<Arc<Mutex<AppState<frost_secp256k1::Secp256K1Sha256>>>>,
-    state_ed25519: Option<Arc<Mutex<AppState<frost_ed25519::Ed25519Sha512>>>>,
-    self_device_id: String,
-    curve_type: crate::elm::model::CurveType,
-) {
-    info!("🎯 Starting dynamic DKG with curve: {:?}", curve_type);
-
-    match curve_type {
-        crate::elm::model::CurveType::Secp256k1 => {
-            if let Some(state) = state_secp256k1 {
-                info!("📈 Using Secp256k1 curve for DKG");
-                let internal_tx = {
-                    let guard = state.lock().await;
-                    guard.websocket_internal_cmd_tx.clone()
-                }.unwrap_or_else(|| {
-                    let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
-                    tx
-                });
-
-                handle_trigger_dkg_round1(state, self_device_id, internal_tx).await;
-            } else {
-                error!("❌ Secp256k1 state not available!");
-            }
-        }
-        crate::elm::model::CurveType::Ed25519 => {
-            if let Some(state) = state_ed25519 {
-                info!("🔑 Using Ed25519 curve for DKG");
-                let internal_tx = {
-                    let guard = state.lock().await;
-                    guard.websocket_internal_cmd_tx.clone()
-                }.unwrap_or_else(|| {
-                    let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
-                    tx
-                });
-
-                handle_trigger_dkg_round1(state, self_device_id, internal_tx).await;
-            } else {
-                error!("❌ Ed25519 state not available!");
-            }
-        }
-    }
-}
+// Removed insecure derive_group_key function - now using real FROST DKG output.
+//
+// `handle_trigger_dkg_round1_dynamic` used to live here as a dispatch helper
+// that branched on `CurveType` and forwarded to the generic
+// `handle_trigger_dkg_round1<C>`. Stage 5 of the wallet-persistence plan
+// removed it: now that session announcements carry the real curve name,
+// the creator/joiner type witness `C` is resolved at the binary boundary
+// (in `mpc-wallet-tui.rs`) rather than at each DKG entry point, and the
+// dynamic helper had no remaining callers.
 
 /// Start DKG Round 1 - Real FROST implementation
 pub async fn handle_trigger_dkg_round1<C>(

@@ -163,7 +163,7 @@ Deferred (follow-ups, not blockers for Stage 4):
 - Grep: `grep -rn '"unified"' apps/tui-node/src/` returns 0 results
 - Log check: 3-node DKG run produces no `Unknown curve type` warnings
 
-**Status**: Not Started
+**Status**: Complete. Both success criteria pass: no non-comment `"unified"` literals in `apps/tui-node/src/`, and a 3-node DKG smoke produced `"curve_type":"secp256k1"` on the wire with zero `Unknown curve type` warnings. Wallet files stored with `curve_type=secp256k1`. `handle_trigger_dkg_round1_dynamic` deleted; implementation uses `model.wallet_state.curve_type` (seeded from `C::curve_type()` at `ElmApp::new`).
 
 ---
 

@@ -62,8 +62,14 @@ where
         // Create message channels
         let (message_tx, message_rx) = tokio::sync::mpsc::unbounded_channel();
         
-        // Initialize model
-        let model = Model::new(device_id);
+        // Initialize model. We seed `wallet_state.curve_type` here because
+        // `update()` is plain-data (no generic `C`) — every update-layer
+        // site that used to emit `"unified"` now reads this instead, which
+        // keeps the session's stored curve in sync with the ciphersuite
+        // actually running.
+        let mut model = Model::new(device_id);
+        model.wallet_state.curve_type =
+            <C as crate::utils::curve_traits::CurveIdentifier>::curve_type();
         
         // Initialize terminal (adapter directly, no bridge in tuirealm 4.0)
         let mut terminal = CrosstermTerminalAdapter::new()?;

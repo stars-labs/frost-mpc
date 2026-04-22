@@ -135,6 +135,14 @@ pub struct WalletState {
     /// the UI layer has no access to that. Cleared on next
     /// `NavigateHome` so stale data doesn't bleed into a later flow.
     pub last_finalized_wallet: Option<CompletedWalletInfo>,
+    /// The FROST ciphersuite this binary is running — `"secp256k1"` or
+    /// `"ed25519"`. The Elm `update()` function is plain data (no
+    /// generic `C: Ciphersuite`), so it can't call `C::curve_type()`
+    /// itself. `ElmApp::new<C>` sets this once at boot, and every
+    /// update-layer site that used to hardcode `"unified"` now reads
+    /// from here instead — keeps session announcements honest about
+    /// what curve is actually running.
+    pub curve_type: &'static str,
 }
 
 /// Snapshot of the data the `WalletComplete` screen needs to render.

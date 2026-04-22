@@ -333,7 +333,9 @@ pub fn update(model: &mut Model, msg: Message) -> Option<Command> {
             let participants = vec![model.device_id.clone()];
             info!("Added current device as participant: {}", model.device_id);
             
-            // Create active session with placeholder session ID
+            // Create active session with placeholder session ID.
+            // `curve_type` comes from the Model's boot-time snapshot of
+            // `C::curve_type()` — no more "unified" placeholder.
             model.active_session = Some(SessionInfo {
                 session_id: temp_session_id.clone(),
                 proposer_id: model.device_id.clone(),
@@ -341,7 +343,7 @@ pub fn update(model: &mut Model, msg: Message) -> Option<Command> {
                 threshold: config.threshold,
                 participants: participants.clone(),
                 session_type: SessionType::DKG,
-                curve_type: "unified".to_string(),
+                curve_type: model.wallet_state.curve_type.to_string(),
                 coordination_type: "online".to_string(),
             });
             

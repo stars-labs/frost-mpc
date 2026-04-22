@@ -61,7 +61,24 @@ pub enum Command {
     ProcessDKGRound2 { from_device: String, package_bytes: Vec<u8> },
     JoinDKG { session_id: String },
     CancelDKG,
-    
+    /// Encrypt the just-produced FROST key share with `password` and
+    /// persist it to the keystore, then emit `Message::DKGFinalized`.
+    /// Consumes the cleartext password — the update-layer handler that
+    /// dispatches this command must also clear
+    /// `Model.wallet_state.pending_password` so we don't keep the
+    /// password in two places.
+    ///
+    /// `keystore_path` and `wallet_name` are passed in rather than read
+    /// off AppState because (a) the password is already a constructor
+    /// parameter so we're committed to "pure input" anyway, and (b) the
+    /// writable `Keystore` is constructed fresh inside the executor —
+    /// `AppState.keystore` only stores a read-only `Arc<Keystore>`.
+    FinalizeWalletFromDkg {
+        password: String,
+        keystore_path: String,
+        wallet_name: String,
+    },
+
     // Signing operations
     StartSigning { request: SigningRequest },
     ApproveSignature { request_id: String },
@@ -1249,14 +1266,207 @@ impl Command {
             
             Command::DeleteWallet { wallet_id } => {
                 info!("Deleting wallet: {}", wallet_id);
-                
+
                 // TODO: Implement wallet deletion in keystore
                 // For now, just send an error message
-                let _ = tx.send(Message::Error { 
-                    message: "Wallet deletion not yet implemented".to_string() 
+                let _ = tx.send(Message::Error {
+                    message: "Wallet deletion not yet implemented".to_string()
                 });
             }
-            
+
+            Command::FinalizeWalletFromDkg { password, keystore_path, wallet_name } => {
+                // Runs right after `Message::DKGKeyGenerated`. Pulls the
+                // FROST output from AppState, serializes the key share,
+                // encrypts it with `password`, and writes the wallet file.
+                //
+                // `password` is taken by value (not borrow) specifically so
+                // the Drop at the end of this arm is the last place the
+                // cleartext exists in-process. The update handler that
+                // dispatched us has already cleared
+                // `wallet_state.pending_password`.
+                info!("Finalizing wallet '{}' from DKG output", wallet_name);
+
+                // ---- 1. Pull what we need out of AppState in one lock acquisition.
+                let (
+                    device_id,
+                    curve_type_str,
+                    threshold,
+                    total_participants,
+                    participant_index,
+                    key_share_data,
+                    group_pubkey_hex,
+                    addresses,
+                ) = {
+                    let state = app_state.lock().await;
+
+                    let Some(session) = state.session.as_ref() else {
+                        let err = "FinalizeWalletFromDkg: no active session on AppState".to_string();
+                        error!("{}", err);
+                        let _ = tx.send(Message::DKGFailed { error: err });
+                        return Ok(());
+                    };
+
+                    let Some(key_package) = state.key_package.as_ref() else {
+                        let err = "FinalizeWalletFromDkg: AppState has no key_package — DKG hasn't finished".to_string();
+                        error!("{}", err);
+                        let _ = tx.send(Message::DKGFailed { error: err });
+                        return Ok(());
+                    };
+
+                    let Some(public_key_package) = state.public_key_package.as_ref() else {
+                        let err = "FinalizeWalletFromDkg: AppState has no public_key_package".to_string();
+                        error!("{}", err);
+                        let _ = tx.send(Message::DKGFailed { error: err });
+                        return Ok(());
+                    };
+
+                    let key_share_data = match key_package.serialize() {
+                        Ok(bytes) => bytes,
+                        Err(e) => {
+                            let err = format!("FinalizeWalletFromDkg: KeyPackage::serialize failed: {:?}", e);
+                            error!("{}", err);
+                            let _ = tx.send(Message::DKGFailed { error: err });
+                            return Ok(());
+                        }
+                    };
+
+                    let group_pubkey_bytes = match public_key_package.verifying_key().serialize() {
+                        Ok(bytes) => bytes,
+                        Err(e) => {
+                            let err = format!(
+                                "FinalizeWalletFromDkg: VerifyingKey::serialize failed: {:?}", e
+                            );
+                            error!("{}", err);
+                            let _ = tx.send(Message::DKGFailed { error: err });
+                            return Ok(());
+                        }
+                    };
+
+                    // `position + 1` because FROST identifiers are 1-based and the
+                    // keystore expects a 1-based participant index too.
+                    let participant_index = match session
+                        .participants
+                        .iter()
+                        .position(|p| p == &state.device_id)
+                    {
+                        Some(idx) => (idx as u16) + 1,
+                        None => {
+                            let err = format!(
+                                "FinalizeWalletFromDkg: our device_id '{}' not found in session.participants {:?}",
+                                state.device_id, session.participants
+                            );
+                            error!("{}", err);
+                            let _ = tx.send(Message::DKGFailed { error: err });
+                            return Ok(());
+                        }
+                    };
+
+                    // Curve comes from the type-level witness — not from
+                    // `session.curve_type`, which is still the legacy
+                    // "unified" literal (see Stage 5 of the plan).
+                    let curve_type_str = <C as crate::utils::curve_traits::CurveIdentifier>::curve_type().to_string();
+
+                    let addresses: Vec<(String, String)> = state
+                        .blockchain_addresses
+                        .iter()
+                        .map(|b| (b.blockchain.clone(), b.address.clone()))
+                        .collect();
+
+                    (
+                        state.device_id.clone(),
+                        curve_type_str,
+                        session.threshold,
+                        session.total,
+                        participant_index,
+                        key_share_data,
+                        hex::encode(&group_pubkey_bytes),
+                        addresses,
+                    )
+                };
+
+                // ---- 2. Write the wallet file via a fresh Keystore instance.
+                // We deliberately don't reuse `state.keystore` (it's
+                // `Arc<Keystore>` — read-only); instead we construct one
+                // against the same `base_path` for the write, and later
+                // re-hydrate the shared Arc so `Command::LoadWallets`
+                // sees the new entry.
+                use crate::keystore::Keystore;
+
+                let mut ks = match Keystore::new(&keystore_path, &device_id) {
+                    Ok(ks) => ks,
+                    Err(e) => {
+                        let err = format!(
+                            "FinalizeWalletFromDkg: Keystore::new({}, {}) failed: {}",
+                            keystore_path, device_id, e
+                        );
+                        error!("{}", err);
+                        let _ = tx.send(Message::DKGFailed { error: err });
+                        return Ok(());
+                    }
+                };
+
+                let wallet_id = match ks.create_wallet_multi_chain(
+                    &wallet_name,
+                    &curve_type_str,
+                    Vec::new(),          // blockchains: ignored by keystore (derived from group_pubkey)
+                    threshold,
+                    total_participants,
+                    &group_pubkey_hex,
+                    &key_share_data,
+                    &password,
+                    Vec::new(),          // tags (deprecated)
+                    None,                // description (deprecated)
+                    participant_index,
+                ) {
+                    Ok(id) => id,
+                    Err(e) => {
+                        let err = format!(
+                            "FinalizeWalletFromDkg: create_wallet_multi_chain failed: {}",
+                            e
+                        );
+                        error!("{}", err);
+                        let _ = tx.send(Message::DKGFailed { error: err });
+                        return Ok(());
+                    }
+                };
+
+                // ---- 3. Drop cleartext password by shadowing; the plaintext
+                // is no longer reachable after this block.
+                drop(password);
+
+                // ---- 4. Re-hydrate the shared read-only keystore so the UI's
+                // next `LoadWallets` picks up the new wallet. We could
+                // instead mutate the existing one via Arc::get_mut, but
+                // `Arc::get_mut` returns None as soon as anyone else holds
+                // a clone (and the Model does). `Keystore::new` rescans
+                // all files, so the new instance is authoritative.
+                match Keystore::new(&keystore_path, &device_id) {
+                    Ok(fresh) => {
+                        let mut state = app_state.lock().await;
+                        state.keystore = Some(std::sync::Arc::new(fresh));
+                    }
+                    Err(e) => warn!(
+                        "FinalizeWalletFromDkg: re-hydrating Keystore after write failed: {} \
+                         (wallet file was still written OK; next LoadWallets will retry)",
+                        e
+                    ),
+                }
+
+                info!(
+                    "✅ Wallet '{}' persisted (group={}…, addresses={})",
+                    wallet_id,
+                    &group_pubkey_hex[..16.min(group_pubkey_hex.len())],
+                    addresses.len()
+                );
+
+                let _ = tx.send(Message::DKGFinalized {
+                    wallet_id,
+                    group_pubkey_hex,
+                    curve_type: curve_type_str,
+                    addresses,
+                });
+            }
+
             Command::ReconnectWebSocket => {
                 // One flat script. Each step has a narrow responsibility and
                 // lives in `elm::ws_runtime`:

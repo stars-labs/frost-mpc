@@ -715,6 +715,60 @@ pub fn update(model: &mut Model, msg: Message) -> Option<Command> {
             }
         }
 
+        // Fires after the keystore file has been written (see
+        // `Command::FinalizeWalletFromDkg`). Responsible for terminal
+        // cleanup only — navigation to the WalletComplete screen is still
+        // a Stage 3 concern, so for now we just drop the UI back to the
+        // MainMenu and stage a `LoadWallets` refresh so the new wallet
+        // appears in the list. Stage 4 wires up the automatic trigger
+        // from `DKGKeyGenerated`; today this handler only fires when a
+        // downstream (or test) explicitly dispatches the message.
+        Message::DKGFinalized {
+            wallet_id,
+            group_pubkey_hex,
+            curve_type,
+            addresses,
+        } => {
+            info!(
+                "✅ Wallet finalized: id='{}' curve={} group={}… addresses={}",
+                wallet_id,
+                curve_type,
+                &group_pubkey_hex[..16.min(group_pubkey_hex.len())],
+                addresses.len()
+            );
+
+            // Belt-and-suspenders: the Command consumed `password` already,
+            // but there's no harm in clearing `pending_password` here too —
+            // the update layer is the source of truth for Model state and
+            // this guarantees the field is None before any future screen
+            // reads it.
+            model.wallet_state.pending_password = None;
+            model.wallet_state.creating_wallet = None;
+            model.wallet_state.dkg_in_progress = false;
+
+            model.ui_state.notifications.push(Notification {
+                id: Uuid::new_v4().to_string(),
+                text: format!(
+                    "✅ Wallet '{}' created with {} chain address{}",
+                    wallet_id,
+                    addresses.len(),
+                    if addresses.len() == 1 { "" } else { "es" }
+                ),
+                kind: NotificationKind::Success,
+                timestamp: Utc::now(),
+                dismissible: true,
+            });
+
+            // Stage 3 will replace this with
+            // `model.push_screen(Screen::WalletComplete { wallet_id })`.
+            // For now, land the user on MainMenu so they see the refreshed
+            // wallet list.
+            model.go_home();
+            model.ui_state.focus = crate::elm::model::ComponentId::MainMenu;
+
+            Some(Command::LoadWallets)
+        }
+
         // ============= Network Events =============
         Message::InitiateWebRTCWithParticipants { participants } => {
             info!("Initiating WebRTC connections with {} participants", participants.len());

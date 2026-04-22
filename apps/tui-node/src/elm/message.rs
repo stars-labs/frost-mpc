@@ -98,7 +98,19 @@ pub enum Message {
     ProcessDKGRound1 { from_device: String, package_bytes: Vec<u8> },  // Process received DKG Round 1 package
     ProcessDKGRound2 { from_device: String, package_bytes: Vec<u8> },  // Process received DKG Round 2 package
     DKGKeyGenerated { group_pubkey_hex: String },                      // Final FROST key ready
-    
+    /// Fires after `Command::FinalizeWalletFromDkg` has encrypted the key
+    /// share and written the wallet file to disk. Terminates the DKG flow:
+    /// the update handler clears `pending_password` / `creating_wallet`
+    /// and navigates to `Screen::WalletComplete`. `addresses` is the
+    /// per-chain list the user sees on that screen; deriving them up-front
+    /// rather than lazily keeps the screen itself pure rendering.
+    DKGFinalized {
+        wallet_id: String,
+        group_pubkey_hex: String,
+        curve_type: String,
+        addresses: Vec<(String, String)>, // (chain_id, address)
+    },
+
     // Signing operations
     InitiateSigning { request: SigningRequest },
     SigningRequestsLoaded { requests: Vec<PendingSigningRequest> },

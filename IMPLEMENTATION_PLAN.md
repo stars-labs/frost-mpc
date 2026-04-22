@@ -35,7 +35,12 @@
 - Unit: `update()` with `Message::SubmitPassword { value: "short" }` returns `Message::PasswordValidationError` and does NOT transition screen
 - Unit: `update()` with valid password sets `pending_password = Some(…)` and pushes `Screen::DKGProgress`
 
-**Status**: Not Started
+**Status**: Complete (delivered across 1.1 → 1.3-rework; see commits dd76d5e, e2c5a4e, c1ffa05, fa7632d, 5f274cb).
+Notes for future reference:
+- `PasswordPurpose` enum was not needed — creator vs. joiner is inferred at `Message::SubmitPassword` from `active_session` (populated on the joiner path by `AcceptSession`) vs. `creating_wallet` (populated on the creator path by `ThresholdConfig`).
+- Draft input state (password/confirm/focus/error) lives on `Model.wallet_state`, not inside the component, because `app.rs::handle_key_event` bypasses tuirealm's per-component `on()` and routes keys through Messages.
+- Draft is wiped on every exit (Esc / go_home / PopScreen / successful submit). The component renders bullets from lengths — no cleartext in the component.
+- Error surface is inline on the screen (not a modal); any typing clears the stale error.
 
 ---
 

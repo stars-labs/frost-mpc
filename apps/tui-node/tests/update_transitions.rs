@@ -570,3 +570,124 @@ fn navigate_home_from_password_prompt_wipes_draft() {
     update(&mut model, Message::NavigateHome);
     assert_eq!(model.wallet_state.password_draft, "");
 }
+
+// -----------------------------------------------------------------
+// DKGFinalized — Stage 2 terminal handler
+// -----------------------------------------------------------------
+
+fn finalized_fixture_model() -> tui_node::elm::Model {
+    use tui_node::elm::model::{CreateWalletState, WalletConfig, WalletMode};
+    let mut model = fresh_model();
+    model.wallet_state.dkg_in_progress = true;
+    model.wallet_state.pending_password = Some("should-be-cleared".to_string());
+    model.wallet_state.creating_wallet = Some(CreateWalletState {
+        mode: Some(WalletMode::Online),
+        template: None,
+        custom_config: Some(WalletConfig {
+            name: "finalized-test".to_string(),
+            threshold: 2,
+            total_participants: 3,
+            mode: WalletMode::Online,
+        }),
+    });
+    model.current_screen = Screen::DKGProgress {
+        session_id: "dkg-done".to_string(),
+    };
+    model
+}
+
+fn sample_dkg_finalized_msg() -> Message {
+    Message::DKGFinalized {
+        wallet_id: "finalized-test".to_string(),
+        group_pubkey_hex:
+            "021de2d69979f0a03ea413e7ed6a32ad02111b90d1f03793649157d3e4ee952143".to_string(),
+        curve_type: "secp256k1".to_string(),
+        addresses: vec![
+            ("ethereum".to_string(), "0xabc123".to_string()),
+            ("bitcoin".to_string(), "bc1qxyz".to_string()),
+        ],
+    }
+}
+
+#[test]
+fn dkg_finalized_clears_pending_password_and_creating_wallet() {
+    let mut model = finalized_fixture_model();
+
+    let _ = update(&mut model, sample_dkg_finalized_msg());
+
+    assert!(
+        model.wallet_state.pending_password.is_none(),
+        "DKGFinalized must zero out pending_password — cleartext password \
+         must not outlive the keystore write"
+    );
+    assert!(
+        model.wallet_state.creating_wallet.is_none(),
+        "DKGFinalized must clear creating_wallet — the flow is done"
+    );
+    assert!(
+        !model.wallet_state.dkg_in_progress,
+        "DKGFinalized must flip dkg_in_progress false so a next flow can start"
+    );
+}
+
+#[test]
+fn dkg_finalized_navigates_home_and_dispatches_load_wallets() {
+    // Stage 2 ships with go_home as a placeholder for the WalletComplete
+    // nav (that arrives in Stage 3). The LoadWallets command is how the
+    // MainMenu picks up the newly-persisted wallet, so assert both.
+    let mut model = finalized_fixture_model();
+
+    let cmd = update(&mut model, sample_dkg_finalized_msg());
+
+    assert!(
+        matches!(model.current_screen, Screen::MainMenu),
+        "Stage 2 lands the user on MainMenu; got {:?}",
+        model.current_screen
+    );
+    assert!(
+        matches!(cmd, Some(Command::LoadWallets)),
+        "DKGFinalized must dispatch LoadWallets so the wallet count \
+         refreshes; got {:?}",
+        cmd
+    );
+}
+
+#[test]
+fn dkg_finalized_pushes_success_notification_with_wallet_id() {
+    let mut model = finalized_fixture_model();
+    let before = model.ui_state.notifications.len();
+
+    let _ = update(&mut model, sample_dkg_finalized_msg());
+
+    assert_eq!(
+        model.ui_state.notifications.len(),
+        before + 1,
+        "exactly one success notification should be pushed"
+    );
+    let notif = model.ui_state.notifications.last().unwrap();
+    assert!(
+        notif.text.contains("finalized-test"),
+        "notification should include the wallet id; got {:?}",
+        notif.text
+    );
+    assert!(
+        notif.text.contains("2"),
+        "notification should include the address count; got {:?}",
+        notif.text
+    );
+}
+
+#[test]
+fn dkg_finalized_handles_truncated_group_key_gracefully() {
+    // Defensive: even a short hex string shouldn't panic the truncation slice.
+    // Production keys are always 66 chars but the handler must not trust that.
+    let mut model = finalized_fixture_model();
+    let short_key_msg = Message::DKGFinalized {
+        wallet_id: "w".to_string(),
+        group_pubkey_hex: "ab".to_string(),
+        curve_type: "secp256k1".to_string(),
+        addresses: vec![],
+    };
+    let _ = update(&mut model, short_key_msg);
+    // If we got here without panicking, the min() guard worked.
+}

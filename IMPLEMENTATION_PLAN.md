@@ -1,176 +1,186 @@
-# Phase A — DKG → Usable Wallet (Persist, Display, Navigate)
+# Phase C — FROST Threshold Signing on an Existing Wallet
 
-**Purpose**: After `Message::DKGKeyGenerated` fires, turn the in-memory `KeyPackage` into a persisted wallet the user can see on every restart, with all chain addresses visible on a dedicated completion screen. No signing yet — that's Phase C.
+**Purpose**: After Phase A, every participant has a persisted key share on disk. Phase C lets the user actually *use* that share: pick a wallet, enter the password, submit a message/transaction, coordinate FROST sign rounds across threshold-many participants, and see the resulting signature.
 
 **Non-goals this phase**:
-- Running ed25519 + secp256k1 concurrently (follow-up #2 stays deferred)
-- FROST signing round1/round2 (Phase C)
-- Recovering from partial-failure DKG (use the existing `DkgState::Failed` surface; don't re-architect)
+- Transaction construction for specific chains (ETH RLP, Solana msg-v0, BTC PSBT). Phase C signs a raw byte slice and returns a signature — chain-specific wrapping is a Phase D concern.
+- Fee estimation, nonce management, gas, broadcast. This phase **does not touch the network** past the MPC mesh.
+- Running ed25519 + secp256k1 concurrently (deferred follow-up; this phase uses whichever curve the wallet was generated with).
+- Signing-request approval queue UX (the plan's `pending_signing_requests` list). We do synchronous "sign now" in one ceremony; approval-queue is Phase E.
+
+**Architecture reminder**: the TUI binary is generic over `C: Ciphersuite` at type level, resolved to `Secp256K1Sha256` at `mpc-wallet-tui.rs`. Multi-curve would require two binary instances or a runtime dispatch — out of scope.
 
 **Remove this file** once all 5 stages are `Complete`.
 
 ---
 
-## Stage 1: Collect a wallet password from the user
+## Stage 1: Keystore hydration — load `KeyPackage<C>` back from disk
 
-**Goal**: Both the creator path (`CreateWallet → ThresholdConfig → …`) and the joiner path (`JoinSession → accept`) land on a `PasswordPrompt` screen that captures a password before DKG starts. Password lives in `Model.wallet_state.pending_password: Option<String>` — cleared after encryption.
+**Goal**: A new `Command::UnlockWallet { wallet_id, password }` reads the encrypted wallet file, decrypts it with the password, deserializes into a `KeyPackage<C>` + `PublicKeyPackage<C>`, and writes them onto `AppState` so the signing layer has everything FROST needs. Emits `Message::WalletUnlocked { wallet_id }` on success, `Message::WalletUnlockFailed { error }` on decrypt/deserialize failure.
 
-**Rationale for password-per-device**: `keystore::create_wallet_multi_chain` encrypts each node's share locally with AES-256-GCM (PBKDF2). Each node needs its own password; they do NOT need to match across nodes (the group public key is cleartext, only the share is secret).
-
-**Success Criteria**:
-- New `Screen::PasswordPrompt { purpose: PasswordPurpose }` where `PasswordPurpose` is `CreateWallet` or `JoinWallet(session_id)`
-- Navigation: creator flow goes `…Config → PasswordPrompt → DKGProgress`; joiner flow goes `AcceptSession → PasswordPrompt → DKGProgress`
-- Password validation: min 8 chars, confirm field matches, non-empty — show inline error, don't advance until valid
-- Escape from PasswordPrompt cancels the wallet-creation flow and returns to MainMenu (no DKG triggered, no session announced)
-
-**Files touched** (estimate):
-- `apps/tui-node/src/elm/model.rs` — add `pending_password: Option<String>` to `WalletState`; new `Screen::PasswordPrompt`; new `ComponentId::PasswordPrompt`
-- `apps/tui-node/src/elm/message.rs` — `Message::SubmitPassword { value }`, `Message::PasswordValidationError`
-- `apps/tui-node/src/elm/update.rs` — handler for `SubmitPassword`, transitions
-- `apps/tui-node/src/elm/components/` — new `password_prompt.rs` (input + confirm + error label, reuse existing input-field pattern from `create_wallet.rs`)
-- `apps/tui-node/src/elm/app.rs` — mount branch for `Screen::PasswordPrompt`
-
-**Tests**:
-- Manual e2e: start 3 nodes, create wallet with password "test1234", verify all 3 prompt for password independently and advance to DKGProgress only after submit
-- Unit: `update()` with `Message::SubmitPassword { value: "short" }` returns `Message::PasswordValidationError` and does NOT transition screen
-- Unit: `update()` with valid password sets `pending_password = Some(…)` and pushes `Screen::DKGProgress`
-
-**Status**: Complete (delivered across 1.1 → 1.3-rework; see commits dd76d5e, e2c5a4e, c1ffa05, fa7632d, 5f274cb).
-Notes for future reference:
-- `PasswordPurpose` enum was not needed — creator vs. joiner is inferred at `Message::SubmitPassword` from `active_session` (populated on the joiner path by `AcceptSession`) vs. `creating_wallet` (populated on the creator path by `ThresholdConfig`).
-- Draft input state (password/confirm/focus/error) lives on `Model.wallet_state`, not inside the component, because `app.rs::handle_key_event` bypasses tuirealm's per-component `on()` and routes keys through Messages.
-- Draft is wiped on every exit (Esc / go_home / PopScreen / successful submit). The component renders bullets from lengths — no cleartext in the component.
-- Error surface is inline on the screen (not a modal); any typing clears the stale error.
-
----
-
-## Stage 2: Persist DKG result to keystore
-
-**Goal**: A new `Command::FinalizeWalletFromDkg` that reads the DKG output from `AppState<C>` and writes an encrypted wallet file using the pending password. Emits `Message::DKGFinalized { wallet_id, group_pubkey_hex, addresses }` on success, `Message::DKGFailed` on error.
+**Rationale**: the DKG flow populates AppState from live FROST output. A signing ceremony that starts from a cold wallet needs the same state repopulated from disk — otherwise every signing Command would have to re-implement the keystore load, and the cleartext `KeyPackage` would leak through too many call sites.
 
 **Success Criteria**:
-- Command reads `app_state.lock()` → pulls `key_package`, `public_key_package`, `blockchain_addresses`, `current_wallet_id`
-- Serializes `key_package` via `frost-core` serialize → passes bytes to `Keystore::create_wallet_multi_chain` (exists at `keystore/storage.rs:123`)
-- Wallet file written to `{keystore_path}/{device_id}/{curve_type}/{wallet_id}.json` — follows existing v2 format (PBKDF2 + AES-GCM)
-- Password cleared from `model.wallet_state.pending_password` after Command dispatches (security hygiene: don't keep it sitting in memory)
-- Metadata includes: `wallet_id`, `curve_type` (now the real "secp256k1" not "unified" — depends on Stage 5 but we can pass `C::curve_type()` directly here)
+- Command takes `&mut Keystore` path (fresh construction, same pattern as Stage A.2 for write)
+- `Keystore::load_wallet_file(wallet_id, password)` returns `Vec<u8>` (exists at `keystore/storage.rs:242`). That byte stream is the FROST `KeyPackage<C>` serialization produced by Stage A.2's `.serialize()`. Use `KeyPackage::<C>::deserialize(&bytes)` to round-trip.
+- `PublicKeyPackage<C>` is NOT in the decrypted bytes — only the private share is encrypted per-device. But we need it for signing. **Decision needed**: either (a) serialize both into the key share blob when we write, (b) re-derive the pubkey package from `KeyPackage.verifying_shares()` + `KeyPackage.verifying_key()`, or (c) store it cleartext alongside the wallet file. `(b)` is the clean answer — FROST exposes `PublicKeyPackage::new(verifying_shares, verifying_key)` and we already have both on `KeyPackage`.
+
+  *Update during implementation if (b) turns out not to work — both `(a)` and `(c)` are reasonable fallbacks.*
+- AppState fields populated: `key_package`, `public_key_package`, `current_wallet_id` (same three Stage A.2 used on the write side)
+- Wrong password → `Message::WalletUnlockFailed { error: "wrong password" }`. No panic.
 
 **Files touched**:
-- `apps/tui-node/src/elm/command.rs` — new `Command::FinalizeWalletFromDkg` variant + executor
-- `apps/tui-node/src/elm/message.rs` — `Message::DKGFinalized { wallet_id, group_pubkey_hex, addresses: Vec<(String, String)> }` (chain_id, address pairs)
-- `apps/tui-node/src/protocal/dkg.rs` — expose `key_package().serialize()` helper if needed (likely not; AppState already stores it)
-- `apps/tui-node/src/core/wallet_manager.rs` — delete the stub `save_dkg_result` (lines 229-249) or leave it as-is and ignore; Command calls `Keystore` directly
+- `apps/tui-node/src/elm/message.rs` — `WalletUnlocked { wallet_id }`, `WalletUnlockFailed { error }`
+- `apps/tui-node/src/elm/command.rs` — `UnlockWallet { wallet_id, password, keystore_path }` (same shape as `FinalizeWalletFromDkg`)
+- `apps/tui-node/src/elm/update.rs` — handlers for both Messages (stash wallet_id, push notification)
+- Possibly `apps/tui-node/src/keystore/storage.rs` — thin helper `load_and_deserialize<C>(id, password) -> Result<(KeyPackage<C>, PublicKeyPackage<C>)>` to keep the deserialize plumbing in one place
 
 **Tests**:
-- Integration: run 3-node DKG end-to-end, verify a file appears at `{keystore}/mpc-1/secp256k1/wallet-xxxxxxxx.json` on each node
-- Negative: force `Keystore::create_wallet_multi_chain` to fail (e.g. pre-create the wallet file so the "already exists" branch triggers), verify `Message::DKGFailed` fires with the right error text
-- Unit: mock `AppState` with populated `key_package`, confirm `Command::FinalizeWalletFromDkg` dispatches `DKGFinalized` with the expected `group_pubkey_hex`
-
-**Status**: Complete (commits cf7022c, af45b48, 9668c02).
-Notes for future reference:
-- `Keystore::create_wallet_multi_chain` ignores its `_blockchains: Vec<BlockchainInfo>` parameter — addresses are re-derived on demand from `metadata.group_public_key + curve_type`, so the wallet metadata file itself only carries the group key. The `Message::DKGFinalized` carries addresses for UI convenience (Stage 3 will consume them).
-- Writable `Keystore` is constructed locally in the Command rather than mutating the `Arc<Keystore>` in `AppState` — post-write, we rehydrate the shared Arc by calling `Keystore::new` again, which rescans the directory. `Arc::get_mut` doesn't work because the Model holds a second clone.
-- `participant_index` must use the canonical (sorted-lexicographic) ordering of `session.participants`, matching `protocal::dkg::canonical_identifier`. The wire ordering puts each node's self-id at the end, which meant every node stored `participant_index = 3` until the canonical-sort fix.
-
----
-
-## Stage 3: WalletComplete screen — show group key + all chain addresses
-
-**Goal**: `Screen::WalletComplete { wallet_id }` actually renders. Shows the wallet name, group verifying key (copy-to-clipboard), and every blockchain address that was derived. Has a "Done" button that navigates home.
-
-**Success Criteria**:
-- `app.rs` has a `Screen::WalletComplete { ref wallet_id } => { … }` branch that mounts a new component
-- New `WalletCompleteComponent` renders:
-  - Wallet ID at top
-  - Group verifying key in monospace, prefixed `Group PubKey:`, clipboard icon → `Copy` action
-  - Addresses list, one row per chain: `[icon] Ethereum   0x1234…abcd   [Copy]`
-  - Rows pulled from `model.wallet_state.wallets.iter().find(|w| w.id == wallet_id).addresses` (requires Stage 2 to have populated these)
-  - "Done" button at bottom → `Message::Navigate(Screen::MainMenu)` via `model.go_home()`
-- Keyboard: `Tab`/`Shift-Tab` moves focus between rows, `Enter` copies focused row, `Esc` = Done
-- Works even if only secp256k1 chains succeeded (ed25519 warnings tolerable in this phase)
-
-**Files touched**:
-- `apps/tui-node/src/elm/components/wallet_complete.rs` — new component (~200 lines, pattern off `dkg_progress.rs`)
-- `apps/tui-node/src/elm/components/mod.rs` — `pub mod wallet_complete; pub use wallet_complete::WalletCompleteComponent;`
-- `apps/tui-node/src/elm/app.rs` — add mount branch, add `Id::WalletComplete` to the `Id` enum if it has one
-- `apps/tui-node/src/elm/model.rs` — ensure `WalletMetadata` (or whatever backs the list) has the `addresses: Vec<BlockchainInfo>` field populated from Stage 2's keystore write
-
-**Tests**:
-- Manual: after DKG + finalize, all 3 nodes land on WalletComplete showing the same group key and the same address list (one per secp256k1 chain)
-- Accessibility smoke: Tab cycles focus, Copy actually writes to system clipboard (via `arboard` — already a dep)
-
-**Status**: Core shipped. Minimum-viable screen renders wallet_id, group verifying key, and the full address list from `wallet_state.last_finalized_wallet`. Enter/Esc both dismiss to MainMenu. Smoke-verified on 3 nodes with matching group key + 4 EVM addresses.
-Deferred (follow-ups, not blockers for Stage 4):
-- Clipboard copy via `arboard` on focused row
-- Tab/Shift-Tab focus ring (all rows currently share the same style)
-- ed25519-curve address derivation (currently renders the "(none derived for this curve)" hint — correct under the current blockchain_config)
-
----
-
-## Stage 4: Wire up the end-to-end flow
-
-**Goal**: The `DKGKeyGenerated → FinalizeWalletFromDkg → DKGFinalized → WalletComplete` chain fires automatically with no user interaction. User sees: 100% progress → ~1.5s pause → WalletComplete with addresses → press Done → MainMenu showing new wallet.
-
-**Success Criteria**:
-- `Message::DKGKeyGenerated` handler (update.rs):
-  1. Sets `dkg_round = Complete` (already done)
-  2. Pushes success notification (already done)
-  3. Returns `Command::Batch([SendMessage(ForceRemount), ScheduleMessage { delay_ms: 1500, Box::new(SendMessage(FinalizeWalletFromDkg)) }])`
-- `Message::DKGFinalized` handler:
-  1. Clears `pending_password` (belt-and-suspenders; Stage 2 also clears)
-  2. Clears `creating_wallet` and `dkg_in_progress`
-  3. Navigates to `Screen::WalletComplete { wallet_id }`
-  4. Returns `Command::LoadWallets` so the MainMenu count updates
-- `Message::DKGFailed` handler navigates back to ThresholdConfig or ManageWallets with the error modal so user can retry (existing logic, verify it handles the new failure paths)
-- MainMenu's "Sign Transaction" menu item becomes visible once `model.wallet_state.wallets.len() > 0` (existing logic; Stage 2 must write the file, Stage 4's `LoadWallets` must re-read it)
-
-**Files touched**:
-- `apps/tui-node/src/elm/update.rs` — `Message::DKGKeyGenerated` + new `Message::DKGFinalized` handlers
-- Whatever `Message::Navigate` path sits behind `Screen::WalletComplete`
-
-**Tests**:
-- E2E: run 3 nodes, complete DKG, verify all 3 land on WalletComplete without user action
-- E2E: press Done on one node, verify MainMenu shows the new wallet with count incremented
-- E2E restart: kill and restart `mpc-1`, verify wallet is still listed (Stage 2's file must be readable by `Keystore::list_wallets`)
+- Write a wallet via existing keystore API, read it back via the new Command, assert the deserialized `KeyPackage.identifier()` matches what was written
+- Wrong password → `WalletUnlockFailed` (no panic)
+- Unknown wallet_id → `WalletUnlockFailed` with "not found"
 
 **Status**: Not Started
 
 ---
 
-## Stage 5: Replace `"unified"` curve label with the real curve name
+## Stage 2: Protocol layer — `protocal/signing.rs`
 
-**Goal**: Stop pretending the session runs both curves. Every place that currently hardcodes `"unified"` gets the actual curve from `C::curve_type()` (secp256k1 for the TUI). Removes a whole class of subtle bugs (the one that caused `Unknown curve type: unified` warnings in follow-up #1 was only the most visible).
+**Goal**: Mirror the structure of `protocal/dkg.rs` for signing. Three entry points:
+- `handle_start_signing<C>(state, message: Vec<u8>)` — the coordinator-side ceremony kickoff; runs Round 1 locally, broadcasts commitments
+- `process_signing_round1<C>(state, from, commitment_bytes)` — accumulate peer commitments, trigger Round 2 when threshold reached
+- `process_signing_round2<C>(state, from, share_bytes)` — accumulate signature shares, run aggregate once threshold reached, emit final signature
+
+Based on the working reference at `packages/@mpc-wallet/frost-core/examples/unified_dkg.rs:125–227`.
 
 **Success Criteria**:
-- `elm/update.rs:171` `curve_type: "unified".to_string()` → `C::curve_type().to_string()` (or propagate from signals — see note)
-- `elm/command.rs:118, 360, 392` — same replacements
-- `SessionInfo::curve_type` field now always reflects the curve actually running at the protocol layer
-- No more `warn!("Could not generate X address: Unknown curve type: unified")` lines in logs after Stage 5 ships
-- Removed or deprecated: `protocal::dkg::handle_trigger_dkg_round1_dynamic` (dead code once we don't branch on "unified")
-
-**Note on threading**: `Model::update` doesn't see `C` directly (it's plain data, no generic). Options:
-  (a) Store curve label on the Model at startup (`model.curve_type: String` set by `ElmApp::new<C>` when constructing the Model)
-  (b) Pass it through via a constant like `const CURVE: &str = "secp256k1"` in the main binary — ugly but honest
-  
-  Recommendation: (a). One-line change to model init, every update handler reads `model.curve_type` instead of hardcoding.
+- `frost_core::round1::commit(key_package.signing_share(), rng)` produces `(SigningNonces, SigningCommitments)` — stash nonces on AppState, broadcast commitments
+- Round 1 complete when `state.frost_commitments.len() >= threshold` (note: **threshold**, not total — signing only requires threshold-many participants)
+- `SigningPackage::new(commitments, &message)` + `round2::sign(signing_package, nonces, key_package)` produces `SignatureShare`
+- Round 2 complete when `state.frost_signature_shares.len() >= threshold`
+- `aggregate(signing_package, &shares, pubkey_package)` returns the final `Signature<C>`. Serialize via `.serialize()` → hex for the UI.
+- All error surfaces transition `signing_state = SigningState::Failed(reason)` rather than panic (same defensive pattern we used across the DKG layer)
+- Uses the same `canonical_identifier::<C>` helper from `dkg.rs` so identifiers are consistent across DKG and signing ceremonies
 
 **Files touched**:
-- `apps/tui-node/src/elm/model.rs` — add `curve_type: &'static str` field (default secp256k1)
-- `apps/tui-node/src/elm/update.rs`, `apps/tui-node/src/elm/command.rs` — replace literal `"unified"` (3 sites)
-- `apps/tui-node/src/protocal/dkg.rs` — delete `handle_trigger_dkg_round1_dynamic` (now unused)
+- `apps/tui-node/src/protocal/signing.rs` (NEW, ~500 lines following the `dkg.rs` template)
+- `apps/tui-node/src/protocal/mod.rs` — `pub mod signing;`
 
 **Tests**:
-- Grep: `grep -rn '"unified"' apps/tui-node/src/` returns 0 results
-- Log check: 3-node DKG run produces no `Unknown curve type` warnings
+- **Integration**: an all-in-one test that (a) does a 3-of-3 DKG in-memory, (b) feeds the resulting KeyPackages into `handle_start_signing` + the two `process_*` entry points across 3 simulated peers, (c) asserts the aggregated signature verifies under the group public key. This is a big test but worth it — if it passes we've exercised the whole protocol without needing the UI layer.
+- Unit: `handle_start_signing` with missing `key_package` → `signing_state = Failed("no key_package")`
 
-**Status**: Complete. Both success criteria pass: no non-comment `"unified"` literals in `apps/tui-node/src/`, and a 3-node DKG smoke produced `"curve_type":"secp256k1"` on the wire with zero `Unknown curve type` warnings. Wallet files stored with `curve_type=secp256k1`. `handle_trigger_dkg_round1_dynamic` deleted; implementation uses `model.wallet_state.curve_type` (seeded from `C::curve_type()` at `ElmApp::new`).
+**Status**: Not Started
+
+---
+
+## Stage 3: SignTransaction screen — pick message, unlock, kick off
+
+**Goal**: The user navigates `MainMenu → Manage Wallets → select wallet → Sign`, enters their password (if the wallet isn't already unlocked this session), enters the message bytes (hex or ASCII toggle), and submits. Two new screens + reuse of `PasswordPrompt`.
+
+**Success Criteria**:
+- `Screen::WalletDetail` gains a "Sign Transaction" action button (the screen already exists, just needs the new row)
+- `Screen::SignTransaction { wallet_id }` renders:
+  - Wallet header (id + short group pubkey)
+  - Input field for the message to sign (single-line for now; multi-line comes with Phase D)
+  - Hex/ASCII toggle so users can paste either
+  - "Sign" button at the bottom
+- Enter on "Sign" → push `Screen::PasswordPrompt` (reuse Stage A.1's screen) → on submit, route to `Message::InitiateSigning { message_bytes, wallet_id, password }`
+- The InitiateSigning handler:
+  1. Dispatches `Command::UnlockWallet { wallet_id, password, keystore_path }` (Stage C.1)
+  2. Once `WalletUnlocked` fires, dispatches `Command::StartSigning { message_bytes }`
+- `Command::StartSigning` → announces the signing session on the wire (like `Command::StartDKG` does for DKG) AND kicks off `handle_start_signing`
+
+**Files touched**:
+- `apps/tui-node/src/elm/components/sign_transaction.rs` (NEW, ~250 lines, pattern off `create_wallet.rs`)
+- `apps/tui-node/src/elm/components/mod.rs` — register + export
+- `apps/tui-node/src/elm/components/wallet_detail.rs` — add the "Sign" action row
+- `apps/tui-node/src/elm/app.rs` — mount branch, render routing, keyboard arm for the new screen
+- `apps/tui-node/src/elm/update.rs` — handlers for `InitiateSigning`, `WalletUnlocked`
+- `apps/tui-node/src/elm/model.rs` — `Model.signing_request: Option<SigningRequestDraft>` carrying `{ wallet_id, message_bytes, input_mode: Hex|Ascii }` while the user fills it in
+
+**Tests**:
+- Transition: `InitiateSigning` with a mock Model state produces the expected Command sequence (UnlockWallet → StartSigning)
+- Render: the component shows the wallet id, message input field, hex/ASCII toggle, and Sign button
+- Input validation: empty message → inline error, hex-mode with non-hex chars → inline error
+
+**Status**: Not Started
+
+---
+
+## Stage 4: Joiner side — accept signing session, run rounds
+
+**Goal**: Joiners see an incoming signing session in the JoinSession → Signing tab, accept it, enter their password, and run the signing ceremony. The component already exists (`join_session.rs`); we need to wire the signing-tab path end-to-end.
+
+**Success Criteria**:
+- Creator's `Command::StartSigning` broadcasts an `AnnounceSession { session_type: "signing", ... }` over the signal server — existing code in `Command::StartDKG` at `command.rs:375` is the template
+- Signal server / primary reader routes `SessionType::Signing` announcements into `Message::SessionDiscovered { session }` (may already work; verify)
+- On `JoinSession`'s Signing tab, pressing Enter on a row routes to `PasswordPrompt` → on submit, dispatches `Command::UnlockWallet` followed by `Command::JoinSigning { session_id, message_bytes }`
+- `Command::JoinSigning` mirrors `Command::JoinDKG`: record the session on AppState, ensure data-channel mesh is up, then call `handle_start_signing` (same entry point as the creator — the function is symmetric in FROST signing, unlike DKG)
+- SigningProgress screen shows round status + mesh status (reuse `DKGProgressComponent`'s participant-list rendering if practical)
+
+**Files touched**:
+- `apps/tui-node/src/elm/command.rs` — new `Command::StartSigning`, `Command::JoinSigning` executors
+- `apps/tui-node/src/elm/update.rs` — joiner-side `InitiateSigning` via the JoinSession tab
+- `apps/tui-node/src/elm/components/signing_progress.rs` (NEW, maybe just shells DKGProgress rendering — TBD)
+- `apps/tui-node/src/elm/app.rs` — mount branch for `Screen::SigningProgress`
+- `apps/tui-node/src/protocal/signal.rs` — verify SessionType::Signing parse path (may just work)
+
+**Tests**:
+- Integration: 3-node smoke where mpc-1 creates+signs, mpc-2 & mpc-3 join. Assert all 3 logs contain "Signature aggregated" and the signature bytes match across nodes.
+- Unit: `Command::JoinSigning` with missing `active_session` → `SigningFailed`
+
+**Status**: Not Started
+
+---
+
+## Stage 5: End-to-end wiring + SignatureComplete screen
+
+**Goal**: Once `handle_start_signing`'s `aggregate` step produces a signature, the whole flow needs to terminate on a visible SignatureComplete screen, LoadWallets refresh, and a success notification.
+
+**Success Criteria**:
+- `Message::SigningComplete { request_id, signature: Vec<u8> }` handler:
+  1. Clears `signing_state` back to `Idle`
+  2. Clears `pending_password` (if UnlockWallet used it)
+  3. Stashes a `CompletedSignatureInfo { wallet_id, message_bytes, signature_hex, verified: bool }` on Model — parallel to `CompletedWalletInfo` from Phase A
+  4. Navigates `push_screen(Screen::SignatureComplete { signature })`
+  5. Pushes a success notification
+- New `SignatureCompleteComponent` renders:
+  - Wallet id, group pubkey (short)
+  - Message (hex or ASCII depending on mode)
+  - Signature hex (copyable — full hex block)
+  - "Verified: yes/no" (run `verifying_key.verify(&message, &signature)` as a sanity check — if it fails we definitely shouldn't show the signature as valid)
+  - Enter / Esc → `NavigateBack` to MainMenu
+- `Message::SigningFailed { request_id, error }` navigates back to WalletDetail with the error modal
+
+**Files touched**:
+- `apps/tui-node/src/elm/components/signature_complete.rs` (NEW, pattern off `wallet_complete.rs`)
+- `apps/tui-node/src/elm/model.rs` — `CompletedSignatureInfo`, `WalletState.last_finalized_signature`
+- `apps/tui-node/src/elm/update.rs` — `SigningComplete` + `SigningFailed` handlers
+- `apps/tui-node/src/elm/app.rs` — mount + keyboard for SignatureComplete
+- Possibly `apps/tui-node/src/elm/components/wallet_detail.rs` — pop the user back to Detail after SignatureComplete, showing the updated "last sign timestamp"
+
+**Tests**:
+- Transition: `SigningComplete` pushes SignatureComplete + stashes info + clears signing_state
+- Render: component shows signature hex, verified status, message preview
+- E2E smoke: 3 nodes sign a fixed test message (`"hello world"`), assert SignatureComplete renders on all three with the same signature hex and `Verified: yes`
+
+**Status**: Not Started
 
 ---
 
 ## Execution order
 
-Stages 1 → 2 → 3 → 4 → 5. Stage 4 depends on 1-3 all landing. Stage 5 is independent of 1-4 technically, but better last so we don't churn the curve-type code while also adding new screens.
+C.1 → C.2 → C.3 → C.4 → C.5. C.1 and C.2 are parallel-safe (different files), but C.2 is more work and has more risk, so tackle C.1 first to unblock the downstream UI work.
 
-Ship each stage as its own commit. Each commit compiles + passes `cargo check -p tui-node` + doesn't break the existing 3-node DKG flow.
+Each stage ships as its own commit (or small set). Every commit must pass `cargo check -p tui-node` + the existing 89-test suite. The 3-node DKG smoke must keep passing after every commit.
 
-After Stage 5 is complete and merged, **delete this file**.
+After Stage 5 is green, **delete this file**.
+
+---
+
+## Open questions
+
+1. **Session acceptance UX** — does the creator wait for `threshold - 1` joiners to accept before kicking off Round 1, or does it proceed the instant anyone is available? DKG required all N; signing only needs threshold-many. **Proposal**: wait for threshold-many acceptances with a 60s timeout, then either proceed or fail. Re-examine at Stage C.4.
+2. **Message input format** — single-line text is fine for a demo but real transactions are multi-KB blobs. Phase D will need a "paste raw bytes" or "load from file" path. Don't over-scope Phase C.
+3. **Hot-loaded `KeyPackage` lifetime** — once a wallet is unlocked, how long does its `KeyPackage` stay in memory? Until process exit? Until an idle timer? **Proposal**: keep until explicit re-lock or process exit for this phase; auto-lock timer is a Phase E chore.

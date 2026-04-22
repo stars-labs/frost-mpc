@@ -62,11 +62,14 @@ fn render_dkg_progress_with_round(round: DKGRound) -> String {
 }
 
 fn assert_contains(haystack: &str, needle: &str, context: &str) {
+    // Char-based slice so the error preview doesn't panic on
+    // multi-byte boundaries (rendered UI is heavy with emoji + box
+    // drawing).
+    let preview: String = haystack.chars().take(400).collect();
     assert!(
         haystack.contains(needle),
         "{context}: expected rendered UI to contain {needle:?}\n\
-         --- rendered (first 800 chars) ---\n{}",
-        &haystack[..haystack.len().min(800)]
+         --- rendered (first 400 chars) ---\n{preview}"
     );
 }
 
@@ -118,6 +121,48 @@ fn renders_complete_at_100_percent() {
         &rendered,
         "DKG complete",
         "Complete must render a user-visible 'done' caption",
+    );
+}
+
+#[test]
+fn dkg_progress_renders_dkg_label_by_default() {
+    let rendered = render_dkg_progress_with_round(DKGRound::Round1);
+    assert_contains(
+        &rendered,
+        "DKG Progress",
+        "default ceremony_label must produce DKG title",
+    );
+    assert!(
+        !rendered.contains("Signing Progress"),
+        "must not leak signing label into a DKG render"
+    );
+}
+
+#[test]
+fn dkg_progress_renders_signing_label_after_override() {
+    // Signing-flow mount overrides with ceremony_label so the shared
+    // component doesn't mislabel a signing ceremony as a DKG run.
+    // Match on "Signing Progress" alone (dropping the emoji prefix)
+    // because emoji + variation-selector expand differently across
+    // terminal fonts.
+    let backend = TestBackend::new(120, 40);
+    let mut terminal = Terminal::new(backend).expect("TestBackend");
+    let mut c = DKGProgressComponent::new("sign-01".to_string(), 3, 2);
+    c.set_ceremony_label("🖊️  Signing");
+    c.set_round(DKGRound::Round1);
+    c.set_websocket_connected(true);
+    terminal
+        .draw(|f| c.view(f, f.area()))
+        .expect("TestBackend draw");
+    let rendered = buffer_to_string(terminal.backend().buffer());
+    assert_contains(
+        &rendered,
+        "Signing Progress",
+        "ceremony_label override must produce the signing title",
+    );
+    assert!(
+        !rendered.contains("DKG Progress"),
+        "signing mount must NOT have the DKG title"
     );
 }
 

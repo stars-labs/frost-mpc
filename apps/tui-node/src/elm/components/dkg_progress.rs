@@ -56,6 +56,11 @@ pub struct DKGProgressComponent {
     websocket_connected: bool, // Track WebSocket connection status
     mesh_ready_count: usize,  // Track how many participants are mesh-ready
     all_data_channels_open: bool, // Track if all data channels are open
+    /// What ceremony this progress bar is tracking — used in the
+    /// title line. `"🔐 DKG"` for a DKG run, `"🖊️  Signing"` for a
+    /// signing ceremony. Reuses the same layout + participant mesh
+    /// rendering without a separate component file.
+    ceremony_label: &'static str,
 }
 
 impl Default for DKGProgressComponent {
@@ -80,7 +85,16 @@ impl DKGProgressComponent {
             websocket_connected: false, // Default to disconnected
             mesh_ready_count: 0,
             all_data_channels_open: false,
+            ceremony_label: "🔐 DKG",
         }
+    }
+
+    /// Override the default DKG label for this mount — used by the
+    /// signing flow's mount site so the title reads
+    /// `🖊️  Signing Progress - Online Mode` instead of the
+    /// ceremony-mismatched `🔐 DKG Progress`.
+    pub fn set_ceremony_label(&mut self, label: &'static str) {
+        self.ceremony_label = label;
     }
     
     /// Set WebSocket connection status
@@ -267,9 +281,10 @@ impl Component for DKGProgressComponent {
             return;
         }
         
-        // Main container
+        // Main container — title reflects the ceremony (DKG or signing).
+        let title_text = format!(" {} Progress - Online Mode ", self.ceremony_label);
         let block = Block::default()
-            .title(" 🔐 DKG Progress - Online Mode ")
+            .title(title_text)
             .title_style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))
             .borders(Borders::ALL)
             .border_type(BorderType::Rounded)

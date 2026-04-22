@@ -458,14 +458,19 @@ where
                 self.app.active(&Id::SignatureComplete)?;
             }
             Screen::SigningProgress { ref request_id } => {
-                // Phase C.4: reuse DKGProgressComponent for now — it
-                // already renders the participant mesh + a round
-                // indicator, which is exactly the view we want during
-                // signing. The round label stays at Initialization →
-                // Round1 since signing has its own phases (commit /
-                // share / aggregate) but the DKGRound enum doesn't
-                // model those. A dedicated SigningProgress component
-                // is a Phase D polish task.
+                // Reuse DKGProgressComponent — it already renders the
+                // participant mesh + a round indicator, which is
+                // exactly the view we want during signing. Override
+                // the title via `set_ceremony_label` so it reads
+                // "🖊️  Signing Progress" instead of "🔐 DKG Progress";
+                // without this override, users running a post-DKG
+                // signing ceremony see a confusing "DKG" label.
+                //
+                // The round label stays at the inherited DKGRound
+                // because signing has its own stages (commit / share /
+                // aggregate) which the enum doesn't model — showing
+                // them would need a separate component. That's a
+                // Phase D polish task.
                 let (total_participants, threshold) = self
                     .model
                     .active_session
@@ -478,6 +483,7 @@ where
                     total_participants,
                     threshold,
                 );
+                progress.set_ceremony_label("🖊️  Signing");
                 progress.set_round(self.model.wallet_state.dkg_round.clone());
                 progress.set_websocket_connected(self.model.network_state.connected);
                 if let Some(ref session) = self.model.active_session {

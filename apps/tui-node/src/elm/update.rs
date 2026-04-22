@@ -603,37 +603,58 @@ pub fn update(model: &mut Model, msg: Message) -> Option<Command> {
 
         // Generic clipboard copy — reused by WalletComplete /
         // SignatureComplete / anywhere else a single hero string is
-        // worth grabbing with one keypress. Same arboard pattern as
-        // DKGProgress's Copy Session ID. Failure falls back to a
-        // warning notification that still contains the text so users
-        // on systems without clipboard support can read + retype.
+        // worth grabbing with one keypress.
+        //
+        // Why the thread: on Linux X11, `arboard::Clipboard::set_text`
+        // establishes this process as the X selection owner and then
+        // blocks until something claims the selection (or X times out).
+        // Calling it inline from the Elm update loop froze the whole
+        // TUI for tens of seconds during full-flow testing. Spawning
+        // a `std::thread` keeps the event loop responsive: the thread
+        // holds the `Clipboard` handle open for a few seconds so
+        // Wayland / X11 clipboard managers have time to latch the
+        // contents, then drops it.
+        //
+        // Notification is pushed *optimistically* — we don't know from
+        // inside the update loop whether the set succeeded. Better UX
+        // than silence; the user will re-press `C` if they notice the
+        // paste didn't work.
         Message::CopyToClipboard { text, label } => {
-            let (kind, notification_text) = match arboard::Clipboard::new()
-                .and_then(|mut c| c.set_text(text.clone()))
-            {
-                Ok(()) => (
-                    NotificationKind::Success,
-                    format!("📋 Copied {} to clipboard", label),
-                ),
-                Err(e) => {
-                    warn!("Clipboard copy failed: {}", e);
-                    // Truncate very long text in the fallback so the
-                    // notification stays readable.
-                    let preview = if text.len() > 80 {
-                        format!("{}…", &text[..80])
-                    } else {
-                        text.clone()
-                    };
-                    (
-                        NotificationKind::Warning,
-                        format!("Couldn't access clipboard ({}). {}: {}", e, label, preview),
-                    )
-                }
+            // Build the notification text up front (while we still own
+            // `text` + `label`) so the thread below can take everything
+            // else by move without fighting the borrow checker.
+            let preview = if text.len() > 80 {
+                format!("{}…", &text[..80])
+            } else {
+                text.clone()
             };
+            let notif_text = format!("📋 Copied {}: {}", label, preview);
+            let log_label = label.clone();
+            let log_len = text.len();
+
+            std::thread::spawn(move || {
+                match arboard::Clipboard::new().and_then(|mut c| {
+                    c.set_text(text)?;
+                    // Hold the Clipboard handle alive long enough for a
+                    // clipboard manager to grab the content. Two seconds
+                    // is generous for interactive use and imperceptible
+                    // from the user's side.
+                    std::thread::sleep(std::time::Duration::from_secs(2));
+                    Ok(())
+                }) {
+                    Ok(()) => {
+                        info!("Clipboard set: {} ({} bytes)", log_label, log_len);
+                    }
+                    Err(e) => {
+                        warn!("Clipboard set failed ({}): {}", log_label, e);
+                    }
+                }
+            });
+
             model.ui_state.notifications.push(Notification {
                 id: Uuid::new_v4().to_string(),
-                text: notification_text,
-                kind,
+                text: notif_text,
+                kind: NotificationKind::Success,
                 timestamp: Utc::now(),
                 dismissible: true,
             });
@@ -2044,40 +2065,20 @@ pub fn update(model: &mut Model, msg: Message) -> Option<Command> {
                         info!("DKGProgress: Cancel DKG selected");
                         Some(Command::SendMessage(Message::CancelDKG))
                     } else {
-                        // Copy Session ID — actually place the string on the
-                        // system clipboard (not just a toast), so the user can
-                        // paste it into another TUI / chat client to invite
-                        // the other participants. Previously this was a
-                        // notification-only stub and the user saw nothing
-                        // happen in their clipboard.
+                        // Copy Session ID — delegate to the shared
+                        // `Message::CopyToClipboard` path so we get the
+                        // background-thread handling that keeps the
+                        // event loop responsive (see that handler for
+                        // the rationale). Previously this was an
+                        // inline arboard call and blocked the whole
+                        // TUI for up to 47 seconds on X11.
                         if let Some(ref session) = model.active_session {
                             let session_id = session.session_id.clone();
                             info!("DKGProgress: Copy Session ID: {}", session_id);
-                            let (kind, text) = match arboard::Clipboard::new()
-                                .and_then(|mut c| c.set_text(session_id.clone()))
-                            {
-                                Ok(()) => (
-                                    NotificationKind::Success,
-                                    format!("📋 Copied Session ID to clipboard: {}", session_id),
-                                ),
-                                Err(e) => {
-                                    warn!("Clipboard copy failed: {}", e);
-                                    (
-                                        NotificationKind::Warning,
-                                        format!(
-                                            "Couldn't access clipboard ({}). Session ID: {}",
-                                            e, session_id
-                                        ),
-                                    )
-                                }
-                            };
-                            model.ui_state.notifications.push(Notification {
-                                id: Uuid::new_v4().to_string(),
-                                text,
-                                kind,
-                                timestamp: Utc::now(),
-                                dismissible: true,
-                            });
+                            return Some(Command::SendMessage(Message::CopyToClipboard {
+                                text: session_id,
+                                label: "session ID".to_string(),
+                            }));
                         }
                         None
                     }

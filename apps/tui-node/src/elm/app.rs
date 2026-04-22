@@ -512,16 +512,20 @@ where
             }
         }
         
-        // Always mount modal and notification components (they control their own visibility)
-        self.app.mount(
-            Id::Modal,
-            Box::new(ModalComponent::default()),
-            vec![]
-        )?;
-        
+        // Always mount modal and notification components (they control
+        // their own visibility). `set_from_model` populates each with
+        // the current Model state so their `view()` renders the live
+        // data — without this step both would draw empty even though
+        // the Model had pending toasts / modal.
+        let mut modal_component = ModalComponent::default();
+        modal_component.set_from_model(&self.model);
+        self.app.mount(Id::Modal, Box::new(modal_component), vec![])?;
+
+        let mut notification_bar = NotificationBar::default();
+        notification_bar.set_from_model(&self.model);
         self.app.mount(
             Id::NotificationBar,
-            Box::new(NotificationBar::default()),
+            Box::new(notification_bar),
             vec![]
         )?;
         
@@ -993,6 +997,31 @@ where
     /// Render the UI
     fn render(&mut self) -> anyhow::Result<()> {
         debug!("🎨 Rendering UI - Current screen: {:?}", self.model.current_screen);
+
+        // Dynamic overlays (notifications, modals) are populated at mount
+        // time but their source-of-truth is `Model.ui_state.*`, which
+        // can change without triggering a full screen remount. Refresh
+        // both slots here so a newly-pushed toast or modal is visible
+        // on the very next frame instead of waiting for the next
+        // unrelated remount.
+        //
+        // IMPORTANT: use `remount` not `mount`. `mount` errors out
+        // silently if the component is already mounted (returns
+        // `ApplicationError::AlreadyMounted`) — a silent failure that
+        // cost us a full round of debugging. `remount` is the
+        // idempotent-replacement variant.
+        let mut fresh_modal = ModalComponent::default();
+        fresh_modal.set_from_model(&self.model);
+        let _ = self
+            .app
+            .remount(Id::Modal, Box::new(fresh_modal), vec![]);
+
+        let mut fresh_notifs = NotificationBar::default();
+        fresh_notifs.set_from_model(&self.model);
+        let _ = self
+            .app
+            .remount(Id::NotificationBar, Box::new(fresh_notifs), vec![]);
+
         self.terminal.raw_mut().draw(|f| {
             // Create main layout
             let chunks = Layout::default()

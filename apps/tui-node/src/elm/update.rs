@@ -708,10 +708,80 @@ pub fn update(model: &mut Model, msg: Message) -> Option<Command> {
                 timestamp: Utc::now(),
                 dismissible: true,
             });
-            if matches!(model.current_screen, Screen::DKGProgress { .. }) {
+
+            // Auto-trigger the keystore persistence step. The password was
+            // collected on `PasswordPrompt` and stashed on
+            // `wallet_state.pending_password`; we hand it off to the Command
+            // by value and immediately clear the Model-side copy so the
+            // cleartext lives in exactly one place (the in-flight Command
+            // arm) before being dropped. If the password is missing, we
+            // log loudly but keep the UI responsive — this shouldn't
+            // happen because both entry edges into `DKGProgress` come
+            // through `Message::SubmitPassword`, but a panic here would
+            // brick an otherwise-successful DKG.
+            let finalize_cmd: Option<Command> = {
+                let password = model.wallet_state.pending_password.take();
+                let keystore_path = model.wallet_state.keystore_path.clone();
+
+                // Wallet name is derived from the session so every participant
+                // ends up with the same identifier — required for cross-device
+                // signing coordination later. Same formula as `dkg.rs:661`
+                // uses to seed `current_wallet_id`.
+                let wallet_name = model
+                    .active_session
+                    .as_ref()
+                    .map(|s| format!("wallet-{}", &s.session_id[..8.min(s.session_id.len())]));
+
+                match (password, wallet_name) {
+                    (Some(password), Some(wallet_name)) if !keystore_path.is_empty() => {
+                        info!(
+                            "Auto-dispatching FinalizeWalletFromDkg (keystore={}, name={})",
+                            keystore_path, wallet_name
+                        );
+                        Some(Command::FinalizeWalletFromDkg {
+                            password,
+                            keystore_path,
+                            wallet_name,
+                        })
+                    }
+                    (None, _) => {
+                        warn!(
+                            "DKGKeyGenerated with no pending_password — DKG produced a key \
+                             but we have no password to encrypt it with. This usually means \
+                             the user reached DKGProgress via a path that bypassed \
+                             PasswordPrompt; the key share is in memory but won't be \
+                             persisted this session."
+                        );
+                        None
+                    }
+                    (_, None) => {
+                        warn!(
+                            "DKGKeyGenerated with no active_session — cannot derive wallet \
+                             name. Key share not persisted."
+                        );
+                        None
+                    }
+                    _ => {
+                        warn!(
+                            "DKGKeyGenerated with empty keystore_path — Model was never \
+                             initialised with a keystore location. Key share not persisted."
+                        );
+                        None
+                    }
+                }
+            };
+
+            let remount_cmd = if matches!(model.current_screen, Screen::DKGProgress { .. }) {
                 Some(Command::SendMessage(Message::ForceRemount))
             } else {
                 None
+            };
+
+            match (finalize_cmd, remount_cmd) {
+                (Some(fin), Some(rem)) => Some(Command::Batch(vec![rem, fin])),
+                (Some(fin), None) => Some(fin),
+                (None, Some(rem)) => Some(rem),
+                (None, None) => None,
             }
         }
 

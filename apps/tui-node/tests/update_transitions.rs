@@ -677,6 +677,160 @@ fn dkg_finalized_pushes_success_notification_with_wallet_id() {
     );
 }
 
+// -----------------------------------------------------------------
+// Auto-trigger: DKGKeyGenerated → FinalizeWalletFromDkg
+// -----------------------------------------------------------------
+//
+// `DKGKeyGenerated` is emitted by the async Command executor the
+// moment FROST part3 finishes. The update handler must hand the
+// cleartext password off to `Command::FinalizeWalletFromDkg` *and*
+// clear it from the Model so the plaintext lives in only one place.
+
+fn fixture_ready_to_finalize() -> tui_node::elm::Model {
+    use tui_node::SessionInfo;
+    use tui_node::protocal::signal::SessionType;
+    let mut model = fresh_model();
+    model.wallet_state.pending_password = Some("hunter2abc".to_string());
+    model.wallet_state.keystore_path = "/tmp/keystore-unittest".to_string();
+    model.wallet_state.dkg_round = DKGRound::Round2;
+    model.wallet_state.dkg_in_progress = true;
+    model.current_screen = Screen::DKGProgress {
+        session_id: "dkg-abc12345-more".to_string(),
+    };
+    model.active_session = Some(SessionInfo {
+        session_id: "dkg-abc12345-more".to_string(),
+        proposer_id: "mpc-1".to_string(),
+        total: 3,
+        threshold: 2,
+        participants: vec!["mpc-1".to_string(), "mpc-2".to_string(), "mpc-3".to_string()],
+        session_type: SessionType::DKG,
+        curve_type: "unified".to_string(),
+        coordination_type: "online".to_string(),
+    });
+    model
+}
+
+fn sample_dkg_key_generated_msg() -> Message {
+    Message::DKGKeyGenerated {
+        group_pubkey_hex:
+            "021de2d69979f0a03ea413e7ed6a32ad02111b90d1f03793649157d3e4ee952143".to_string(),
+    }
+}
+
+#[test]
+fn dkg_key_generated_auto_dispatches_finalize_with_correct_fields() {
+    use tui_node::elm::command::Command;
+    let mut model = fixture_ready_to_finalize();
+
+    let cmd = update(&mut model, sample_dkg_key_generated_msg());
+
+    // Extract the FinalizeWalletFromDkg inside whatever wrapping the
+    // handler chose (Batch or bare).
+    fn find_finalize(cmd: &Command) -> Option<(String, String, String)> {
+        match cmd {
+            Command::FinalizeWalletFromDkg {
+                password,
+                keystore_path,
+                wallet_name,
+            } => Some((password.clone(), keystore_path.clone(), wallet_name.clone())),
+            Command::Batch(children) => children.iter().find_map(find_finalize),
+            _ => None,
+        }
+    }
+
+    let (password, keystore_path, wallet_name) = cmd
+        .as_ref()
+        .and_then(find_finalize)
+        .expect("expected FinalizeWalletFromDkg (bare or inside Batch) in the command");
+
+    assert_eq!(password, "hunter2abc", "password must be passed through to the Command verbatim");
+    assert_eq!(keystore_path, "/tmp/keystore-unittest");
+    assert_eq!(
+        wallet_name, "wallet-dkg-abc1",
+        "wallet_name must be derived as `wallet-{{first 8 chars of session_id}}` so every \
+         participant ends up with the same identifier"
+    );
+}
+
+#[test]
+fn dkg_key_generated_clears_pending_password_from_model() {
+    // Security invariant: the Command now owns the plaintext; the Model's
+    // copy must be None so it can't be read a second time. This is what
+    // stops a later-dispatched handler (or a logging slip) from seeing
+    // the password after it's been handed off.
+    let mut model = fixture_ready_to_finalize();
+    let _ = update(&mut model, sample_dkg_key_generated_msg());
+    assert!(
+        model.wallet_state.pending_password.is_none(),
+        "pending_password must be taken (not cloned) so plaintext lives in one place only"
+    );
+}
+
+#[test]
+fn dkg_key_generated_still_emits_force_remount_on_progress_screen() {
+    use tui_node::elm::command::Command;
+    let mut model = fixture_ready_to_finalize();
+    let cmd = update(&mut model, sample_dkg_key_generated_msg());
+
+    fn has_force_remount(cmd: &Command) -> bool {
+        match cmd {
+            Command::SendMessage(Message::ForceRemount) => true,
+            Command::Batch(children) => children.iter().any(has_force_remount),
+            _ => false,
+        }
+    }
+    assert!(
+        cmd.as_ref().map_or(false, has_force_remount),
+        "ForceRemount must still be dispatched so the 100% Complete state is visible to the user"
+    );
+}
+
+#[test]
+fn dkg_key_generated_without_password_logs_and_does_not_dispatch_finalize() {
+    // If the user somehow reached DKGProgress without going through
+    // PasswordPrompt (bug upstream), we must NOT panic, and we must NOT
+    // dispatch a FinalizeWalletFromDkg with an empty string for a
+    // password — that would produce an unreadable wallet file.
+    use tui_node::elm::command::Command;
+    let mut model = fixture_ready_to_finalize();
+    model.wallet_state.pending_password = None;
+
+    let cmd = update(&mut model, sample_dkg_key_generated_msg());
+
+    fn has_finalize(cmd: &Command) -> bool {
+        match cmd {
+            Command::FinalizeWalletFromDkg { .. } => true,
+            Command::Batch(children) => children.iter().any(has_finalize),
+            _ => false,
+        }
+    }
+    assert!(
+        !cmd.as_ref().map_or(false, has_finalize),
+        "finalize must not run when pending_password is None"
+    );
+}
+
+#[test]
+fn dkg_key_generated_without_keystore_path_does_not_dispatch_finalize() {
+    use tui_node::elm::command::Command;
+    let mut model = fixture_ready_to_finalize();
+    model.wallet_state.keystore_path = "".to_string();
+
+    let cmd = update(&mut model, sample_dkg_key_generated_msg());
+
+    fn has_finalize(cmd: &Command) -> bool {
+        match cmd {
+            Command::FinalizeWalletFromDkg { .. } => true,
+            Command::Batch(children) => children.iter().any(has_finalize),
+            _ => false,
+        }
+    }
+    assert!(
+        !cmd.as_ref().map_or(false, has_finalize),
+        "finalize must not run when keystore_path is empty (Model wasn't initialised properly)"
+    );
+}
+
 #[test]
 fn dkg_finalized_handles_truncated_group_key_gracefully() {
     // Defensive: even a short hex string shouldn't panic the truncation slice.

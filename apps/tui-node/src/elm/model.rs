@@ -188,6 +188,37 @@ pub struct WalletState {
     /// `None`). An explicit lock-wallet action would clear this too;
     /// we don't have one today.
     pub wallet_unlocked_id: Option<String>,
+    /// Short-lived "user hit Enter on SignTransaction, awaiting
+    /// confirmation modal" staging area. SignSubmit computes the
+    /// hash + the warm/cold branch decision and stashes it here;
+    /// ConfirmSigningRequest executes the real dispatch;
+    /// CancelSigningRequest clears it and dismisses the modal. The
+    /// window is one render frame typically, but storing on Model
+    /// (rather than inside Message::Confirm's boxed payload) avoids
+    /// threading Vec<u8> through the modal plumbing.
+    pub pending_sign_preview: Option<PendingSignPreview>,
+}
+
+/// Ephemeral snapshot of a signing request that's awaiting user
+/// confirmation in the creator-side Modal::Confirm. Written by
+/// `Message::SignSubmit`, consumed by `Message::ConfirmSigningRequest`,
+/// cleared by `Message::CancelSigningRequest`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PendingSignPreview {
+    /// Wallet that owns the key share; the confirm step routes
+    /// through this wallet's unlock state.
+    pub wallet_id: String,
+    /// The bytes FROST will actually sign. For secp256k1 this is the
+    /// 32-byte EIP-191 hash; for ed25519 it's the raw message.
+    pub bytes_to_sign: Vec<u8>,
+    /// The user-typed message (pre-hash), kept so SignatureComplete
+    /// can render both "what the user typed" and "what was signed".
+    /// `None` for ed25519 / raw-bytes paths where they're the same.
+    pub raw_message: Option<Vec<u8>>,
+    /// `true` = the wallet is already unlocked (warm path, dispatch
+    /// InitiateSigning on confirm); `false` = cold path, route
+    /// through PasswordPrompt on confirm.
+    pub warm: bool,
 }
 
 /// Snapshot of the data the `WalletComplete` screen needs to render.

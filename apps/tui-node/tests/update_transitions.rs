@@ -790,11 +790,14 @@ fn sign_submit_on_empty_draft_warns_and_returns_none() {
 
 #[test]
 fn sign_submit_dispatches_initiate_signing_and_clears_draft() {
-    // Warm-session SignSubmit: the wallet IS unlocked, so this goes
-    // directly to InitiateSigning without a password roundtrip. The
-    // cold-start path has its own test
+    // Warm-session SignSubmit: the wallet IS unlocked. After Stage 3
+    // (confirmation modal) SignSubmit no longer dispatches directly —
+    // it stashes a preview and opens a Modal::Confirm whose on_confirm
+    // is ConfirmSigningRequest. That second message is what actually
+    // dispatches InitiateSigning. The cold-start path has its own test
     // (`sign_submit_when_wallet_not_unlocked_routes_to_password_prompt`).
     use tui_node::elm::command::Command;
+    use tui_node::elm::model::Modal;
     let mut model = fresh_model();
     model.current_screen = Screen::SignTransaction {
         wallet_id: "wallet-test".to_string(),
@@ -805,15 +808,34 @@ fn sign_submit_dispatches_initiate_signing_and_clears_draft() {
         update(&mut model, Message::SignTypeChar(c));
     }
 
+    // Step 1: SignSubmit opens the confirmation modal; no Command
+    // dispatched yet, draft intact for the preview.
     let cmd = update(&mut model, Message::SignSubmit);
+    assert!(cmd.is_none(), "SignSubmit no longer dispatches directly — modal first");
+    assert!(
+        matches!(model.ui_state.modal, Some(Modal::Confirm { .. })),
+        "SignSubmit must stage a confirm modal; got {:?}",
+        model.ui_state.modal
+    );
+    let preview = model
+        .wallet_state
+        .pending_sign_preview
+        .as_ref()
+        .expect("preview must be stashed for ConfirmSigningRequest");
+    assert!(preview.warm, "warm path must be flagged");
+    assert_eq!(preview.wallet_id, "wallet-test");
+    assert_eq!(
+        preview.bytes_to_sign,
+        tui_node::utils::eth_helper::eip191_hash(b"Sign this"),
+    );
 
+    // Step 2: ConfirmSigningRequest dispatches InitiateSigning with
+    // the same payload the modal previewed.
+    let cmd = update(&mut model, Message::ConfirmSigningRequest);
     match cmd {
         Some(Command::SendMessage(Message::InitiateSigning { request })) => {
             assert_eq!(request.wallet_id, "wallet-test");
             assert_eq!(request.chain, "secp256k1");
-            // secp256k1 signs the EIP-191 hash, not the raw bytes —
-            // so `transaction_data` is 32 bytes, not `b"Sign this"`.
-            // Cross-check against the canonical helper.
             assert_eq!(
                 request.transaction_data,
                 tui_node::utils::eth_helper::eip191_hash(b"Sign this"),
@@ -827,12 +849,14 @@ fn sign_submit_dispatches_initiate_signing_and_clears_draft() {
             );
         }
         other => panic!(
-            "SignSubmit must dispatch SendMessage(InitiateSigning); got {:?}",
+            "ConfirmSigningRequest must dispatch SendMessage(InitiateSigning); got {:?}",
             other
         ),
     }
-    // Draft cleared so the sign button can't double-fire
+    // After confirm: draft cleared, preview drained, modal closed.
     assert_eq!(model.wallet_state.sign_message_draft, "");
+    assert!(model.wallet_state.pending_sign_preview.is_none());
+    assert!(model.ui_state.modal.is_none());
 }
 
 #[test]
@@ -1043,7 +1067,9 @@ fn navigate_home_clears_last_completed_signature() {
 #[test]
 fn sign_submit_when_wallet_unlocked_dispatches_initiate_signing_directly() {
     // Warm session: DKG just ran, wallet_unlocked_id matches the
-    // target wallet → no password roundtrip needed.
+    // target wallet → no password roundtrip needed. After Stage 3
+    // the flow is SignSubmit → modal → ConfirmSigningRequest →
+    // InitiateSigning; assert the warm shortcut survives the split.
     use tui_node::elm::command::Command;
     let mut model = fresh_model();
     model.current_screen = Screen::SignTransaction {
@@ -1055,6 +1081,12 @@ fn sign_submit_when_wallet_unlocked_dispatches_initiate_signing_directly() {
         update(&mut model, Message::SignTypeChar(c));
     }
     let cmd = update(&mut model, Message::SignSubmit);
+    assert!(cmd.is_none(), "modal opens first, no Command yet");
+    assert!(
+        model.wallet_state.pending_sign_preview.as_ref().unwrap().warm,
+        "warm path must be recognised in the preview"
+    );
+    let cmd = update(&mut model, Message::ConfirmSigningRequest);
     match cmd {
         Some(Command::SendMessage(Message::InitiateSigning { request })) => {
             assert_eq!(request.wallet_id, "w-warm");
@@ -1066,7 +1098,7 @@ fn sign_submit_when_wallet_unlocked_dispatches_initiate_signing_directly() {
             assert_eq!(request.raw_message.as_deref(), Some(b"hi".as_ref()));
         }
         other => panic!(
-            "warm-session SignSubmit must dispatch InitiateSigning directly; got {:?}",
+            "warm-session ConfirmSigningRequest must dispatch InitiateSigning; got {:?}",
             other
         ),
     }
@@ -1095,18 +1127,28 @@ fn sign_submit_when_wallet_not_unlocked_routes_to_password_prompt() {
         update(&mut model, Message::SignTypeChar(c));
     }
     let cmd = update(&mut model, Message::SignSubmit);
+    assert!(cmd.is_none(), "modal gate — no Command yet");
+    assert!(
+        !model.wallet_state.pending_sign_preview.as_ref().unwrap().warm,
+        "cold path must be flagged so ConfirmSigningRequest routes to password"
+    );
+    // Cold path: pending_sign_* fields only populate AFTER the user
+    // confirms. Until then, just the preview is staged.
+    assert!(model.wallet_state.pending_sign_message.is_none());
+
+    // Now confirm — this is what actually pushes PasswordPrompt.
+    let cmd = update(&mut model, Message::ConfirmSigningRequest);
     assert!(
         cmd.is_none(),
-        "cold SignSubmit routes through navigation, no Command dispatched at this step"
+        "cold ConfirmSigningRequest routes through navigation, no Command at this step"
     );
     assert!(
         matches!(model.current_screen, Screen::PasswordPrompt),
-        "cold SignSubmit must push PasswordPrompt; got {:?}",
+        "cold ConfirmSigningRequest must push PasswordPrompt; got {:?}",
         model.current_screen
     );
     // Message + wallet_id stashed for the WalletUnlocked handler to
-    // consume; session_id left None — that's the creator-cold-start
-    // flag as distinct from the joiner path.
+    // consume; session_id left None — creator-cold-start flag.
     assert_eq!(
         model.wallet_state.pending_sign_message.as_deref(),
         Some(b"msg".as_ref())
@@ -1121,6 +1163,8 @@ fn sign_submit_when_wallet_not_unlocked_routes_to_password_prompt() {
     );
     // Draft cleared so the user doesn't accidentally re-submit.
     assert_eq!(model.wallet_state.sign_message_draft, "");
+    // Preview drained.
+    assert!(model.wallet_state.pending_sign_preview.is_none());
 }
 
 #[test]
@@ -1364,18 +1408,23 @@ fn full_chain_failed_sign_then_fresh_dkg_does_not_misroute() {
     for c in "hello".chars() {
         update(&mut model, Message::SignTypeChar(c));
     }
+    // Stage 3: SignSubmit opens confirmation modal first, not
+    // PasswordPrompt. ConfirmSigningRequest is what pushes to prompt
+    // on the cold path.
     let sign_cmd = update(&mut model, Message::SignSubmit);
+    assert!(sign_cmd.is_none(), "SignSubmit only stages the modal");
+    let confirm_cmd = update(&mut model, Message::ConfirmSigningRequest);
     assert!(
-        matches!(sign_cmd, None),
-        "cold SignSubmit routes via nav push, no command"
+        matches!(confirm_cmd, None),
+        "cold ConfirmSigningRequest routes via nav push, no command"
     );
     assert!(
         matches!(model.current_screen, Screen::PasswordPrompt),
-        "cold SignSubmit pushes PasswordPrompt"
+        "cold confirm pushes PasswordPrompt"
     );
     assert!(
         model.wallet_state.pending_sign_message.is_some(),
-        "cold SignSubmit stashes the hash-to-sign"
+        "cold confirm stashes the hash-to-sign"
     );
 
     // --- Step 2: user types WRONG password, UnlockWallet fails ---
@@ -2208,6 +2257,151 @@ fn review_signing_request_navigates_to_join_session_signing_tab() {
         model.ui_state.modal.is_none(),
         "must clear the triggering modal"
     );
+}
+
+// -----------------------------------------------------------------
+// Stage 3: creator-side confirmation modal before FROST broadcast.
+// SignSubmit now opens a Modal::Confirm instead of dispatching
+// directly; Confirm/Cancel messages drive the real transition.
+// -----------------------------------------------------------------
+
+#[test]
+fn sign_submit_stages_modal_with_message_preview_and_hash() {
+    use tui_node::elm::model::Modal;
+    use tui_node::keystore::WalletMetadata;
+
+    let mut model = fresh_model();
+    model.current_screen = Screen::SignTransaction {
+        wallet_id: "wallet-preview".to_string(),
+    };
+    model.wallet_state.curve_type = "secp256k1";
+    model.wallet_state.wallet_unlocked_id = Some("wallet-preview".to_string());
+    // Wallet metadata populates the threshold line in the preview body.
+    model.wallet_state.wallets = vec![WalletMetadata::new(
+        "wallet-preview".into(),
+        "d".into(),
+        "secp256k1".into(),
+        2,
+        3,
+        1,
+        "abcd".into(),
+    )];
+    for c in "pay bob 1 ETH".chars() {
+        update(&mut model, Message::SignTypeChar(c));
+    }
+
+    let _ = update(&mut model, Message::SignSubmit);
+
+    match &model.ui_state.modal {
+        Some(Modal::Confirm { title, message, .. }) => {
+            assert!(title.contains("Confirm"));
+            assert!(
+                message.contains("pay bob 1 ETH"),
+                "modal must show the user-typed message; got: {}",
+                message
+            );
+            assert!(
+                message.contains("EIP-191"),
+                "secp256k1 modal must label the hash as EIP-191"
+            );
+            assert!(
+                message.contains("2-of-3"),
+                "modal must show the wallet threshold"
+            );
+        }
+        other => panic!("expected Modal::Confirm, got {:?}", other),
+    }
+    // Draft preserved until confirm so cancel can go back to editing.
+    assert_eq!(model.wallet_state.sign_message_draft, "pay bob 1 ETH");
+}
+
+#[test]
+fn cancel_signing_request_clears_preview_and_keeps_draft() {
+    let mut model = fresh_model();
+    model.current_screen = Screen::SignTransaction {
+        wallet_id: "w".to_string(),
+    };
+    model.wallet_state.curve_type = "secp256k1";
+    model.wallet_state.wallet_unlocked_id = Some("w".to_string());
+    for c in "keep me".chars() {
+        update(&mut model, Message::SignTypeChar(c));
+    }
+    let _ = update(&mut model, Message::SignSubmit);
+    assert!(model.wallet_state.pending_sign_preview.is_some());
+
+    let cmd = update(&mut model, Message::CancelSigningRequest);
+
+    assert!(cmd.is_none());
+    assert!(model.ui_state.modal.is_none());
+    assert!(model.wallet_state.pending_sign_preview.is_none());
+    // Draft preserved so the user can edit and resubmit.
+    assert_eq!(
+        model.wallet_state.sign_message_draft, "keep me",
+        "cancel must NOT wipe the user's typed message"
+    );
+    // Nothing dispatched to the network.
+    assert!(model.wallet_state.pending_sign_message.is_none());
+}
+
+#[test]
+fn double_confirm_signing_request_is_a_safe_noop() {
+    // take()-semantics on the preview — a stuck-key or fast-clicker
+    // cannot cause two InitiateSigning dispatches.
+    use tui_node::elm::command::Command;
+
+    let mut model = fresh_model();
+    model.current_screen = Screen::SignTransaction {
+        wallet_id: "w2".to_string(),
+    };
+    model.wallet_state.curve_type = "secp256k1";
+    model.wallet_state.wallet_unlocked_id = Some("w2".to_string());
+    for c in "once".chars() {
+        update(&mut model, Message::SignTypeChar(c));
+    }
+    let _ = update(&mut model, Message::SignSubmit);
+
+    let first = update(&mut model, Message::ConfirmSigningRequest);
+    assert!(
+        matches!(first, Some(Command::SendMessage(Message::InitiateSigning { .. }))),
+        "first confirm must dispatch"
+    );
+
+    let second = update(&mut model, Message::ConfirmSigningRequest);
+    assert!(
+        second.is_none(),
+        "second confirm must be a no-op; got {:?}",
+        second
+    );
+    assert!(model.wallet_state.pending_sign_preview.is_none());
+}
+
+#[test]
+fn sign_submit_preview_for_ed25519_omits_eip191_line() {
+    // ed25519 signs the message bytes directly — no hash-then-sign —
+    // so the modal should NOT advertise an EIP-191 hash line.
+    use tui_node::elm::model::Modal;
+
+    let mut model = fresh_model();
+    model.current_screen = Screen::SignTransaction {
+        wallet_id: "w-sol".to_string(),
+    };
+    model.wallet_state.curve_type = "ed25519";
+    model.wallet_state.wallet_unlocked_id = Some("w-sol".to_string());
+    for c in "solmsg".chars() {
+        update(&mut model, Message::SignTypeChar(c));
+    }
+    let _ = update(&mut model, Message::SignSubmit);
+    match &model.ui_state.modal {
+        Some(Modal::Confirm { message, .. }) => {
+            assert!(
+                !message.contains("EIP-191"),
+                "ed25519 modal must NOT say EIP-191; got: {}",
+                message
+            );
+            assert!(message.contains("solmsg"));
+        }
+        other => panic!("expected Modal::Confirm, got {:?}", other),
+    }
 }
 
 #[test]

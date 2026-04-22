@@ -4,7 +4,7 @@
 //! model and a message, and returns an updated model along with optional commands
 //! to execute side effects.
 
-use crate::elm::model::{Model, Screen, Modal, Notification, NotificationKind, ConnectionStatus, Operation, ProgressInfo, WalletConfig, WalletMode, CreateWalletState};
+use crate::elm::model::{Model, Screen, Modal, Notification, NotificationKind, ConnectionStatus, Operation, ProgressInfo, WalletConfig, WalletMode, CreateWalletState, PendingSignPreview};
 use crate::elm::message::{Message, DKGRound};
 use crate::elm::command::Command;
 use crate::protocal::signal::{SessionInfo, SessionType};
@@ -805,58 +805,87 @@ pub fn update(model: &mut Model, msg: Message) -> Option<Command> {
                 (raw_message_bytes.clone(), None)
             };
 
-            // Clear the draft so the user can't accidentally re-submit
-            // the same message twice if they hit Enter repeatedly.
+            let warm = model.wallet_state.wallet_unlocked_id.as_deref() == Some(&wallet_id);
+
+            // Stage 3: instead of firing the signing flow immediately,
+            // stash the computed request in `pending_sign_preview` and
+            // surface a confirmation modal. FROST signatures are
+            // broadcast-then-irrevocable — a tap-Enter-once-too-many on
+            // SignTransaction shouldn't silently announce to the mesh.
+            // Build a UTF-8 / hex preview for the body. Chars + hash
+            // are already computed above so the modal shows exactly
+            // what will be signed.
+            let preview_body = preview_lines(
+                &wallet_id,
+                curve,
+                &bytes_to_sign,
+                raw_for_display.as_deref(),
+                &model.wallet_state.wallets,
+            );
+
+            model.wallet_state.pending_sign_preview = Some(PendingSignPreview {
+                wallet_id,
+                bytes_to_sign,
+                raw_message: raw_for_display,
+                warm,
+            });
+            model.ui_state.modal = Some(Modal::Confirm {
+                title: "📝 Confirm Signing Request".to_string(),
+                message: preview_body,
+                on_confirm: Box::new(Message::ConfirmSigningRequest),
+                on_cancel: Box::new(Message::CancelSigningRequest),
+            });
+            None
+        }
+
+        Message::ConfirmSigningRequest => {
+            // Take() the preview so a double-fire can't dispatch twice.
+            let preview = match model.wallet_state.pending_sign_preview.take() {
+                Some(p) => p,
+                None => {
+                    warn!("ConfirmSigningRequest without a pending preview — dropped");
+                    return None;
+                }
+            };
+            // Tear the modal down now that the decision's been made;
+            // the remaining flow (modal in cold path is the
+            // PasswordPrompt screen itself) doesn't expect this one.
+            model.ui_state.modal = None;
+
+            // Clear the draft so an extra Enter doesn't re-trigger the
+            // exact same submit. Keep pending_raw_message populated for
+            // SignatureComplete's "what I typed vs what was signed" row.
             model.wallet_state.clear_sign_draft();
+            model.wallet_state.pending_raw_message = preview.raw_message.clone();
 
-            // Warm path: `wallet_unlocked_id` matches this wallet, so
-            // AppState.key_package is live — dispatch InitiateSigning
-            // directly. No password roundtrip needed.
-            //
-            // Cold path: either the user restarted the binary after a
-            // DKG, or they're signing with a wallet they've never
-            // unlocked this session. Stash the request on the Model
-            // and route through PasswordPrompt → UnlockWallet → back
-            // into this flow via the `WalletUnlocked` handler (which
-            // checks for a pending_sign_message without a
-            // pending_sign_session_id and dispatches InitiateSigning).
-            // Stash the user-facing message on Model so SigningComplete
-            // can show both "what I typed" and "what was signed"
-            // (the EIP-191 hash). Warm + cold paths both populate this.
-            model.wallet_state.pending_raw_message = raw_for_display.clone();
-
-            if model.wallet_state.wallet_unlocked_id.as_deref() == Some(&wallet_id) {
+            if preview.warm {
                 let request = crate::elm::message::SigningRequest {
-                    wallet_id,
-                    transaction_data: bytes_to_sign,
+                    wallet_id: preview.wallet_id,
+                    transaction_data: preview.bytes_to_sign,
                     chain: model.wallet_state.curve_type.to_string(),
                     metadata: None,
-                    raw_message: raw_for_display,
+                    raw_message: preview.raw_message,
                 };
                 Some(Command::SendMessage(Message::InitiateSigning { request }))
             } else {
                 info!(
-                    "SignSubmit: wallet '{}' not unlocked — routing through PasswordPrompt",
-                    wallet_id
+                    "ConfirmSigningRequest: wallet '{}' not unlocked — routing through PasswordPrompt",
+                    preview.wallet_id
                 );
-                // Stash the hash-to-sign (EIP-191 for secp256k1). The
-                // cold-path WalletUnlocked handler reuses this as
-                // `transaction_data` directly — no second hashing.
-                // raw_for_display isn't threaded through the cold
-                // path yet (a small Model-field cost); cold-started
-                // SignatureComplete will show the hash hex without
-                // the user-facing message preview. Warm path has
-                // both.
-                model.wallet_state.pending_sign_message = Some(bytes_to_sign);
-                model.wallet_state.pending_sign_wallet_id = Some(wallet_id);
-                // Leave pending_sign_session_id as None — that's the
-                // flag WalletUnlocked uses to distinguish creator
-                // cold-start from joiner accept.
+                model.wallet_state.pending_sign_message = Some(preview.bytes_to_sign);
+                model.wallet_state.pending_sign_wallet_id = Some(preview.wallet_id);
                 model.wallet_state.pending_sign_session_id = None;
                 model.push_screen(Screen::PasswordPrompt);
                 model.ui_state.focus = crate::elm::model::ComponentId::PasswordPrompt;
                 None
             }
+        }
+
+        Message::CancelSigningRequest => {
+            info!("CancelSigningRequest: dismissing preview modal, keeping draft");
+            model.wallet_state.pending_sign_preview = None;
+            model.ui_state.modal = None;
+            None
         }
 
         // Phase C.1: signing-time keystore hydration results. These are
@@ -2656,6 +2685,75 @@ pub fn update(model: &mut Model, msg: Message) -> Option<Command> {
             None
         }
     }
+}
+
+/// Render the multi-line body for the creator-side Confirm-Signing
+/// modal. Shows the user-typed message (UTF-8 preview), the bytes
+/// FROST will actually sign (EIP-191 hash for secp256k1, same as raw
+/// for ed25519), and the wallet's threshold so the user knows how
+/// many co-signers are being recruited.
+fn preview_lines(
+    wallet_id: &str,
+    curve: &str,
+    bytes_to_sign: &[u8],
+    raw_message: Option<&[u8]>,
+    wallets: &[crate::keystore::WalletMetadata],
+) -> String {
+    let (threshold, total) = wallets
+        .iter()
+        .find(|w| w.session_id == wallet_id)
+        .map(|w| (w.threshold, w.total_participants))
+        .unwrap_or((0, 0));
+
+    let user_message_line = match raw_message {
+        Some(bytes) => match std::str::from_utf8(bytes) {
+            Ok(s) if s.chars().all(|c| !c.is_control() || c == '\n') => {
+                let truncated: String = s.chars().take(80).collect();
+                if truncated.chars().count() < s.chars().count() {
+                    format!("Message: \"{}…\"", truncated)
+                } else {
+                    format!("Message: \"{}\"", s)
+                }
+            }
+            _ => format!("Message bytes ({}): 0x{}", bytes.len(), hex::encode(bytes)),
+        },
+        // ed25519 / raw-bytes signing: what FROST signs IS what the
+        // user typed. Show a single line instead of two identical ones.
+        None => match std::str::from_utf8(bytes_to_sign) {
+            Ok(s) if s.chars().all(|c| !c.is_control() || c == '\n') => {
+                format!("Message: \"{}\"", s)
+            }
+            _ => format!("Bytes ({}): 0x{}", bytes_to_sign.len(), hex::encode(bytes_to_sign)),
+        },
+    };
+
+    let hash_line = if curve == "secp256k1" {
+        // For secp256k1 we sign the EIP-191 hash; the user should see
+        // what hash will actually go on-chain via ecrecover.
+        format!("Hash (EIP-191): 0x{}", hex::encode(bytes_to_sign))
+    } else {
+        String::new()
+    };
+
+    let threshold_line = if total > 0 {
+        format!("Threshold: {}-of-{}", threshold, total)
+    } else {
+        String::new()
+    };
+
+    let mut lines: Vec<String> = Vec::with_capacity(7);
+    lines.push(format!("Wallet: {}", wallet_id));
+    if !threshold_line.is_empty() {
+        lines.push(threshold_line);
+    }
+    lines.push(String::new()); // spacer
+    lines.push(user_message_line);
+    if !hash_line.is_empty() {
+        lines.push(hash_line);
+    }
+    lines.push(String::new());
+    lines.push("Broadcast this signing request to the network?".to_string());
+    lines.join("\n")
 }
 
 #[cfg(test)]

@@ -177,6 +177,17 @@ pub enum Message {
     /// SignatureComplete; today we stay on the screen and rely on the
     /// protocol-layer notifications).
     SignSubmit,
+    /// Creator clicked Confirm on the signing-request preview modal.
+    /// Reads `Model.wallet_state.pending_sign_preview` and executes the
+    /// warm (dispatch InitiateSigning) or cold (route through
+    /// PasswordPrompt) branch. `SignSubmit` does all the hash
+    /// computation; this is just the "go" step. Splitting them gives
+    /// the user a final preview + back-out before the FROST broadcast.
+    ConfirmSigningRequest,
+    /// Creator clicked Cancel on the preview modal. Clears the preview
+    /// and the modal. The draft on `sign_message_draft` is intentionally
+    /// kept so the user can edit and resubmit without retyping.
+    CancelSigningRequest,
     /// Generic "copy this text to the system clipboard" — reused by the
     /// WalletComplete / SignatureComplete success screens so the user
     /// can grab the group pubkey / signature hex with a single keypress.

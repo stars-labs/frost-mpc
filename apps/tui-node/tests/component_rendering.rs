@@ -232,6 +232,11 @@ fn wallet_complete_renders_wallet_id_and_group_key() {
     assert_contains(&rendered, "bitcoin", "bitcoin row must render");
     assert_contains(&rendered, "bc1qWALLET", "bitcoin address must render");
     assert_contains(&rendered, "Enter = Done", "the Enter hint must render");
+    assert_contains(
+        &rendered,
+        "C = Copy",
+        "the copy-to-clipboard hint must render so users know how to grab the key",
+    );
 }
 
 #[test]

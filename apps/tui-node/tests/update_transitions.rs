@@ -970,6 +970,38 @@ fn signing_failed_surfaces_error_modal_and_clears_pending_state() {
 }
 
 #[test]
+fn copy_to_clipboard_emits_notification() {
+    // End-to-end test of the clipboard copy flow. We can't inspect the
+    // real system clipboard from a unit test, but we can assert that
+    // the handler pushes a notification in either direction (success
+    // in terminals with X11/Wayland/macOS pasteboard, warning in CI
+    // where arboard has no display). Both paths MUST push something
+    // so the user always gets feedback on their keypress.
+    let mut model = fresh_model();
+    let before = model.ui_state.notifications.len();
+    let cmd = update(
+        &mut model,
+        Message::CopyToClipboard {
+            text: "deadbeef".to_string(),
+            label: "test-label".to_string(),
+        },
+    );
+    assert!(cmd.is_none(), "copy-to-clipboard is a terminal message");
+    assert_eq!(
+        model.ui_state.notifications.len(),
+        before + 1,
+        "copy-to-clipboard must push a notification"
+    );
+    let notif = model.ui_state.notifications.last().unwrap();
+    assert!(
+        notif.text.contains("test-label"),
+        "notification must mention the label so the user knows what was \
+         (or wasn't) copied; got {:?}",
+        notif.text
+    );
+}
+
+#[test]
 fn navigate_home_clears_last_completed_signature() {
     use tui_node::elm::model::CompletedSignatureInfo;
     let mut model = fresh_model();

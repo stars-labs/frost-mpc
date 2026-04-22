@@ -601,6 +601,45 @@ pub fn update(model: &mut Model, msg: Message) -> Option<Command> {
             None
         }
 
+        // Generic clipboard copy — reused by WalletComplete /
+        // SignatureComplete / anywhere else a single hero string is
+        // worth grabbing with one keypress. Same arboard pattern as
+        // DKGProgress's Copy Session ID. Failure falls back to a
+        // warning notification that still contains the text so users
+        // on systems without clipboard support can read + retype.
+        Message::CopyToClipboard { text, label } => {
+            let (kind, notification_text) = match arboard::Clipboard::new()
+                .and_then(|mut c| c.set_text(text.clone()))
+            {
+                Ok(()) => (
+                    NotificationKind::Success,
+                    format!("📋 Copied {} to clipboard", label),
+                ),
+                Err(e) => {
+                    warn!("Clipboard copy failed: {}", e);
+                    // Truncate very long text in the fallback so the
+                    // notification stays readable.
+                    let preview = if text.len() > 80 {
+                        format!("{}…", &text[..80])
+                    } else {
+                        text.clone()
+                    };
+                    (
+                        NotificationKind::Warning,
+                        format!("Couldn't access clipboard ({}). {}: {}", e, label, preview),
+                    )
+                }
+            };
+            model.ui_state.notifications.push(Notification {
+                id: Uuid::new_v4().to_string(),
+                text: notification_text,
+                kind,
+                timestamp: Utc::now(),
+                dismissible: true,
+            });
+            None
+        }
+
         // ----- SignTransaction screen input (Phase C.3) -----
         Message::SignTypeChar(c) => {
             model.wallet_state.sign_message_draft.push(c);

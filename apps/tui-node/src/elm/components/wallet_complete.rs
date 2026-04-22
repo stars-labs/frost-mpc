@@ -150,9 +150,10 @@ impl Component for WalletCompleteComponent {
         }
 
         // ---- Hints row ----
-        let hints = Paragraph::new("Enter = Done    Esc = Done    Ctrl-C = Quit")
-            .alignment(Alignment::Center)
-            .style(Style::default().fg(Color::DarkGray));
+        let hints =
+            Paragraph::new("Enter = Done    Esc = Done    C = Copy group key    Ctrl-C = Quit")
+                .alignment(Alignment::Center)
+                .style(Style::default().fg(Color::DarkGray));
         frame.render_widget(hints, rows[5]);
     }
 

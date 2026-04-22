@@ -851,6 +851,19 @@ where
                     info!("✅ WalletComplete Enter → NavigateBack → MainMenu");
                     return Some(Message::NavigateBack);
                 }
+                // `c` / `C` → copy the group pubkey hex to the system
+                // clipboard. Some terminals don't forward mouse highlight
+                // to a selectable clipboard, so a keyboard shortcut is
+                // the only reliable way to grab this value.
+                KeyCode::Char('c') | KeyCode::Char('C') => {
+                    if let Some(ref info) = self.model.wallet_state.last_finalized_wallet {
+                        return Some(Message::CopyToClipboard {
+                            text: info.group_pubkey_hex.clone(),
+                            label: "group verifying key".to_string(),
+                        });
+                    }
+                    return None;
+                }
                 _ => return None,
             }
         }
@@ -862,6 +875,16 @@ where
                 KeyCode::Enter => {
                     info!("✅ SignatureComplete Enter → NavigateBack → MainMenu");
                     return Some(Message::NavigateBack);
+                }
+                // `c` / `C` → copy the hex-encoded FROST signature.
+                KeyCode::Char('c') | KeyCode::Char('C') => {
+                    if let Some(ref info) = self.model.wallet_state.last_completed_signature {
+                        return Some(Message::CopyToClipboard {
+                            text: hex::encode(&info.signature),
+                            label: "FROST signature".to_string(),
+                        });
+                    }
+                    return None;
                 }
                 _ => return None,
             }

@@ -166,6 +166,11 @@ pub enum Message {
     /// SignatureComplete; today we stay on the screen and rely on the
     /// protocol-layer notifications).
     SignSubmit,
+    /// Generic "copy this text to the system clipboard" — reused by the
+    /// WalletComplete / SignatureComplete success screens so the user
+    /// can grab the group pubkey / signature hex with a single keypress.
+    /// `label` describes what was copied (used in the notification).
+    CopyToClipboard { text: String, label: String },
     
     // Network events
     WebSocketConnected,

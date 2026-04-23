@@ -55,28 +55,7 @@ cargo run --bin mpc-wallet-tui -- --signal-server ws://localhost:9000 --device-i
 cargo run --bin mpc-wallet-tui -- --signal-server ws://localhost:9000 --device-id mpc-3
 ```
 
-**Note:** The current main binary has compilation issues. Use the stub binary for testing deployment:
-```bash
-cargo run --bin mpc-wallet-stub-simple -- --signal-server ws://localhost:9000 --device-id mpc-1
-```
-
-### Method 2: Docker Deployment
-
-```bash
-# Build and start all services
-docker-compose up --build
-
-# Start in background
-docker-compose up -d --build
-
-# View logs
-docker-compose logs -f
-
-# Stop services
-docker-compose down
-```
-
-### Method 3: SystemD Production Deployment
+### Method 2: SystemD Production Deployment
 
 **1. Install Binaries:**
 ```bash
@@ -141,15 +120,6 @@ Environment variables:
 MONITOR_INTERVAL=30 ./scripts/monitor-cluster.sh
 ```
 
-### Docker Health Checks
-```bash
-# Check container health
-docker-compose ps
-
-# View health check logs
-docker inspect mpc-node-1 | jq '.[0].State.Health'
-```
-
 ### SystemD Health Checks
 ```bash
 # Check all services
@@ -160,25 +130,17 @@ journalctl -u mpc-signal-server -f
 journalctl -u mpc-wallet-node@mpc-1 -f
 ```
 
-## Current Status and Known Issues
+## Current Status
 
-### ✅ Working Components
-- **Signal Server**: Compiles and runs successfully
-- **WebSocket Communication**: Signal server provides WebRTC coordination
-- **Docker Configuration**: Multi-service setup with health checks
-- **SystemD Services**: Production-ready service definitions
-- **Monitoring Scripts**: Health checks and continuous monitoring
-- **Build Scripts**: Automated build and deployment scripts
+### Working Components
+- **Signal Server**: compiles and runs cleanly
+- **Main TUI Binary** (`mpc-wallet-tui`): full DKG + threshold signing, all 174 unit/integration tests pass
+- **SystemD Services**: production-ready service definitions
+- **Monitoring Scripts**: health checks + continuous monitoring
+- **Build Scripts**: `./scripts/build-*.sh`, `./scripts/launch-3node-cluster.sh`
 
-### ⚠️ Known Issues
-- **Main TUI Binary**: Has 81 compilation errors due to complex FROST DKG implementation
-- **DKG Implementation**: Temporarily stubbed for deployment testing
-- **WebRTC P2P**: Complex networking code needs fixes for full functionality
-
-### 🔧 Workarounds
-- **Stub Binary**: `mpc-wallet-stub-simple` provides deployment testing capability
-- **Signal Server**: Fully functional for WebRTC signaling
-- **Infrastructure**: Complete deployment pipeline ready for when main binary is fixed
+### Not currently supported
+- **Docker deployment**: the `Dockerfile` + `docker-compose.yml` that used to live at `apps/tui-node/` were written for a pre-monorepo, pre-edition-2024 layout (Rust 1.75, single-crate `COPY Cargo.lock`). They were removed rather than carried as broken examples. Reintroducing Docker deployment would need a Dockerfile at the workspace root with `FROM rust:1.85+` and a proper multi-stage build that includes every workspace member crate.
 
 ## Testing the Deployment
 
@@ -194,13 +156,9 @@ curl -v http://localhost:9000/health
 curl --include --no-buffer --header "Connection: Upgrade" --header "Upgrade: websocket" --header "Sec-WebSocket-Key: SGVsbG8sIHdvcmxkIQ==" --header "Sec-WebSocket-Version: 13" http://localhost:9000/
 ```
 
-### Test Stub Node
+### Test a Single Node
 ```bash
-# If main binary works:
-cargo run --bin mpc-wallet-tui -- --signal-server ws://localhost:9000 --device-id test-node
-
-# If using stub:
-cargo run --bin mpc-wallet-stub-simple -- --signal-server ws://localhost:9000 --device-id test-node
+cargo run --bin mpc-wallet-tui -p tui-node -- --signal-server ws://localhost:9000 --device-id test-node
 ```
 
 ### Test Full Cluster

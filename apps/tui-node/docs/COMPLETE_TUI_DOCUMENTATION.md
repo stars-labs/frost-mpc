@@ -489,17 +489,20 @@ export MPC_WEBSOCKET_URL=wss://your-server.com
 
 ### Docker Deployment
 
-```dockerfile
-FROM rust:1.75-slim as builder
-WORKDIR /app
-COPY . .
-RUN cargo build --release --bin mpc-wallet-tui
+Docker packaging isn't currently shipped. The `Dockerfile` that used
+to live at `apps/tui-node/Dockerfile` was written for a pre-monorepo,
+pre-edition-2024 layout (Rust 1.75, single-crate \`COPY Cargo.lock\`)
+and doesn't build against the current workspace. A working
+Dockerfile would need:
 
-FROM debian:bookworm-slim
-RUN apt-get update && apt-get install -y ca-certificates
-COPY --from=builder /app/target/release/mpc-wallet-tui /usr/local/bin/
-ENTRYPOINT ["mpc-wallet-tui"]
-```
+- `FROM rust:1.85-slim` (edition 2024 requires 1.85+)
+- Placement at the monorepo root, not under apps/tui-node/
+- A multi-stage build that copies every workspace member crate so
+  cargo can resolve the full dep graph, then builds just the TUI
+  binary: `cargo build --release --bin mpc-wallet-tui -p tui-node`
+
+See `apps/tui-node/docs/DEPLOYMENT_GUIDE.md` for the currently-
+supported deployment paths (systemd + launch scripts).
 
 ---
 

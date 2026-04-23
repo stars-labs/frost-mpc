@@ -96,14 +96,10 @@ for i in {1..30}; do
     sleep 1
 done
 
-# Determine which binary to use
 TUI_BINARY_PATH="$PROJECT_ROOT/target/release/mpc-wallet-tui"
 if [ ! -f "$TUI_BINARY_PATH" ]; then
-    TUI_BINARY_PATH="$PROJECT_ROOT/target/release/mpc-wallet-stub"
-fi
-
-if [ ! -f "$TUI_BINARY_PATH" ]; then
-    echo "Error: No TUI binary found. Build failed."
+    echo "Error: TUI binary not found at $TUI_BINARY_PATH." >&2
+    echo "Run ./scripts/build-tui-node.sh first." >&2
     exit 1
 fi
 

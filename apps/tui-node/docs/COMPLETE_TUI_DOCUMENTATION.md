@@ -618,24 +618,41 @@ definition in source; the extension-doc architecture summary
 
 ### Keystore API
 
-Real shape from `src/keystore/storage.rs`:
+Real shape from `src/keystore/storage.rs` (verified against
+current source):
 
 ```rust
 impl Keystore {
-    pub fn new<P: AsRef<Path>>(base_path: P, device_id: &str) -> io::Result<Self>;
-    pub fn save_wallet(&mut self, metadata: WalletMetadata,
-                       key_share: &[u8], password: &str) -> Result<()>;
-    pub fn load_wallet(&self, wallet_id: &str, password: &str) -> Result<Vec<u8>>;
-    pub fn list_wallets(&self) -> &[WalletMetadata];
-    pub fn remove_wallet(&mut self, wallet_id: &str) -> Result<()>;
+    pub fn new(base_path: impl AsRef<Path>, device_name: &str)
+        -> Result<Self>;
+
+    // Accessors
+    pub fn device_id(&self) -> &str;
+    pub fn list_wallets(&self) -> Vec<&WalletMetadata>;
+    pub fn get_wallet(&self, wallet_id: &str) -> Option<&WalletMetadata>;
+    pub fn get_this_device(&self) -> Option<DeviceInfo>;
+
+    // Create
+    pub fn create_wallet(&mut self, /* … */) -> Result<String>;
+    pub fn create_wallet_multi_chain(&mut self, /* … */) -> Result<String>;
+
+    // Load the decrypted key-share bytes for a stored wallet
+    pub fn load_wallet_file(&self, wallet_id: &str, password: &str)
+        -> Result<Vec<u8>>;
 }
 ```
 
-No `get_wallet(&str) -> Option<&Wallet>` — there's no `Wallet`
-type; encrypted key shares stay on disk and are decrypted on demand
-via `load_wallet(password)`. Earlier drafts of this section showed
-a generic wallet-management interface that didn't match the
-actual split-file keystore.
+Notes:
+
+- `get_wallet` returns `Option<&WalletMetadata>` — NOT
+  `Option<&Wallet>`; there's no `Wallet` struct in the codebase.
+- The method reading encrypted key-share bytes is
+  `load_wallet_file(wallet_id, password) -> Result<Vec<u8>>`, not
+  `load_wallet` as earlier drafts of this sketch claimed.
+- `save_wallet` / `remove_wallet` do NOT exist as named methods;
+  wallet creation goes through `create_wallet` /
+  `create_wallet_multi_chain`, which serialize metadata + the
+  encrypted share to disk in one pass.
 
 ### FROST Protocol API
 

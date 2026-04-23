@@ -337,10 +337,11 @@ Secure storage for cryptographic materials. Real types live in
 `src/keystore/`:
 
 ```rust
-// src/keystore/storage.rs
+// src/keystore/storage.rs:17
 pub struct Keystore {
     base_path: PathBuf,        // ~/.frost_keystore
-    device_id: String,
+    device_id: String,         // derived from device_name passed to new()
+    device_name: String,       // same value as device_id today
     wallet_cache: Vec<WalletMetadata>,
 }
 ```
@@ -396,16 +397,26 @@ the `Keystore` struct talks to the filesystem directly via
 `FileSystemBackend / MemoryBackend / RemoteBackend` implementations;
 none exist in source (grep: zero hits).
 
-Real persistence surface is a handful of `Keystore` methods:
+Real persistence surface is a handful of `Keystore` methods
+(verified against `src/keystore/storage.rs`):
 
-- `Keystore::new(base_path, device_id)` — opens (or creates)
-  the per-device directory tree
-- `Keystore::save_wallet(metadata, key_share, password)` —
-  writes the `.json` + encrypted `.dat` pair
-- `Keystore::load_wallet(wallet_id, password)` — reads both
-  and decrypts the share
-- `Keystore::list_wallets()` — scans the cached metadata
-- `Keystore::remove_wallet(wallet_id)` — deletes both files
+- `Keystore::new(base_path, device_name) -> Result<Self>` —
+  opens (or creates) the per-device directory tree
+- `Keystore::create_wallet(…)` / `create_wallet_multi_chain(…)` —
+  serialize metadata + the encrypted share to disk in one pass,
+  returning the new wallet_id
+- `Keystore::load_wallet_file(wallet_id, password) -> Result<Vec<u8>>` —
+  reads the `.dat` file and decrypts the share back to raw bytes
+- `Keystore::list_wallets() -> Vec<&WalletMetadata>` — scans the
+  cached metadata
+- `Keystore::get_wallet(wallet_id) -> Option<&WalletMetadata>` —
+  metadata-only lookup (no decryption)
+
+Earlier drafts of this list invented `save_wallet` / `load_wallet`
+/ `remove_wallet` method names that don't exist — wallet writes
+go through `create_wallet` / `create_wallet_multi_chain`, reads
+through `load_wallet_file`. No delete method is exposed on the
+public API today.
 
 ## Security Architecture
 

@@ -530,6 +530,3 @@ pub fn decrypt_from_extension(
 }
 
 
-#[cfg(test)]
-
-mod tests { #[test] fn test_placeholder() { assert!(true); } }

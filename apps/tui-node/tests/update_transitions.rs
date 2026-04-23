@@ -1415,7 +1415,7 @@ fn full_chain_failed_sign_then_fresh_dkg_does_not_misroute() {
     assert!(sign_cmd.is_none(), "SignSubmit only stages the modal");
     let confirm_cmd = update(&mut model, Message::ConfirmSigningRequest);
     assert!(
-        matches!(confirm_cmd, None),
+        confirm_cmd.is_none(),
         "cold ConfirmSigningRequest routes via nav push, no command"
     );
     assert!(
@@ -1852,7 +1852,7 @@ fn dkg_key_generated_still_emits_force_remount_on_progress_screen() {
         }
     }
     assert!(
-        cmd.as_ref().map_or(false, has_force_remount),
+        cmd.as_ref().is_some_and(has_force_remount),
         "ForceRemount must still be dispatched so the 100% Complete state is visible to the user"
     );
 }
@@ -1877,7 +1877,7 @@ fn dkg_key_generated_without_password_logs_and_does_not_dispatch_finalize() {
         }
     }
     assert!(
-        !cmd.as_ref().map_or(false, has_finalize),
+        !cmd.as_ref().is_some_and(has_finalize),
         "finalize must not run when pending_password is None"
     );
 }
@@ -1898,7 +1898,7 @@ fn dkg_key_generated_without_keystore_path_does_not_dispatch_finalize() {
         }
     }
     assert!(
-        !cmd.as_ref().map_or(false, has_finalize),
+        !cmd.as_ref().is_some_and(has_finalize),
         "finalize must not run when keystore_path is empty (Model wasn't initialised properly)"
     );
 }
@@ -2767,5 +2767,5 @@ fn scroll_on_manage_wallets_with_no_wallets_is_noop() {
         .copied();
     // Either None (never inserted) or Some(0) are both acceptable;
     // the invariant is "no panic, no invalid index".
-    assert!(idx == None || idx == Some(0));
+    assert!(idx.is_none() || idx == Some(0));
 }

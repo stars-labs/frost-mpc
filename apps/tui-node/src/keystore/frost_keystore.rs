@@ -383,15 +383,3 @@ impl FrostKeystoreManager {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    
-    
-    
-    #[test]
-    fn test_keystore_save_and_load() {
-        // This test would require actual FROST key packages
-        // For now, we'll skip the implementation
-        assert!(true);
-    }
-}

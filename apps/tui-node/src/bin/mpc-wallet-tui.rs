@@ -176,7 +176,7 @@ async fn run_elm_tui(device_id: String, signal_server: String, offline: bool) ->
         }
         Err(e) => {
             tracing::error!("❌ TUI error: {}", e);
-            Err(e.into())
+            Err(e)
         }
     }
 }

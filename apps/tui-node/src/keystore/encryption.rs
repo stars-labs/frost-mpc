@@ -173,13 +173,3 @@ pub fn decrypt_data_with_method(encrypted_data: &[u8], password: &str, method: K
     Ok(plaintext)
 }
 
-#[cfg(test)]
-mod tests {
-    
-    
-    #[test]
-    fn test_encryption_placeholder() {
-        // Placeholder test for keystore encryption
-        assert!(true);
-    }
-}

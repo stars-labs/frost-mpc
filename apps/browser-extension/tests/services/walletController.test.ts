@@ -527,10 +527,14 @@ describe('WalletController', () => {
         });
 
         it('should handle all services initialization', () => {
-            // Test that all services are properly initialized
-            expect(walletController.networkService).toBeDefined();
-            expect(walletController.accountService).toBeDefined();
-            expect(walletController.walletClientService).toBeDefined();
+            // Test that all services are properly initialized.
+            // Access-as-any because the service fields are private
+            // on WalletController; this test just probes that the
+            // constructor wired them up (the private modifier is
+            // about external encapsulation, not testability).
+            expect((walletController as any).networkService).toBeDefined();
+            expect((walletController as any).accountService).toBeDefined();
+            expect((walletController as any).walletClientService).toBeDefined();
         });
     });
 });

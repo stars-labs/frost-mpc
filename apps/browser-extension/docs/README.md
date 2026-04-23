@@ -225,6 +225,6 @@ signing architecture"), which is the single source of truth.
 ## Support
 
 For issues and questions:
-- [GitHub Issues](https://github.com/your-org/mpc-wallet/issues)
+- [GitHub Issues](https://github.com/hecoinfo/mpc-wallet/issues)
 - [Discord Community](https://discord.gg/mpc-wallet)
 - [Documentation](../../../docs/)

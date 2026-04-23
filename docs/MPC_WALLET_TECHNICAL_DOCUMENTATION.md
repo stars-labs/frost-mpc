@@ -741,7 +741,7 @@ cargo install cargo-watch
 #### 1. Clone Repository
 
 ```bash
-git clone https://github.com/your-org/mpc-wallet.git
+git clone https://github.com/hecoinfo/mpc-wallet.git
 cd mpc-wallet
 ```
 
@@ -1445,7 +1445,7 @@ The MPC Wallet represents a significant advancement in distributed key managemen
 
 The system's design prioritizes security, scalability, and developer experience, making it suitable for both individual users requiring enhanced security and organizations implementing custody solutions. As the project continues to evolve, the architecture is positioned to adapt to new requirements while maintaining its core security guarantees.
 
-For the latest updates and contributions, visit the project repository at [github.com/your-org/mpc-wallet](https://github.com/your-org/mpc-wallet).
+For the latest updates and contributions, visit the project repository at [github.com/hecoinfo/mpc-wallet](https://github.com/hecoinfo/mpc-wallet).
 
 ---
 

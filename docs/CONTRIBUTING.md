@@ -457,7 +457,7 @@ By contributing to MPC Wallet, you agree that your contributions will be license
 ## Questions?
 
 If you have questions about contributing, please:
-1. Ask in [GitHub Discussions](https://github.com/your-org/mpc-wallet/discussions)
+1. Ask in [GitHub Discussions](https://github.com/hecoinfo/mpc-wallet/discussions)
 2. Join our [Discord](https://discord.gg/mpc-wallet)
 
 ---

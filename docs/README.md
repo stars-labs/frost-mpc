@@ -27,7 +27,7 @@ MPC Wallet enables threshold signatures where private keys are split across mult
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-org/mpc-wallet.git
+git clone https://github.com/hecoinfo/mpc-wallet.git
 cd mpc-wallet
 
 # Install dependencies
@@ -221,7 +221,7 @@ We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) f
 ### Community
 
 - [Discord](https://discord.gg/mpc-wallet) - Join our community
-- [GitHub Issues](https://github.com/your-org/mpc-wallet/issues) - Report bugs
+- [GitHub Issues](https://github.com/hecoinfo/mpc-wallet/issues) - Report bugs
 - [Documentation](https://docs.mpc-wallet.io) - Full documentation
 
 ### Commercial Support
@@ -268,7 +268,7 @@ If you use this software in your research, please cite:
   title = {MPC Wallet: Multi-Party Computation Wallet},
   author = {MPC Wallet Team},
   year = {2025},
-  url = {https://github.com/your-org/mpc-wallet}
+  url = {https://github.com/hecoinfo/mpc-wallet}
 }
 ```
 

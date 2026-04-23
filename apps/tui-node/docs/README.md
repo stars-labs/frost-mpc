@@ -39,7 +39,7 @@ The MPC Wallet Terminal UI (TUI) Node is a professional-grade terminal applicati
 
 ```bash
 # Clone repository
-git clone https://github.com/your-org/mpc-wallet
+git clone https://github.com/hecoinfo/mpc-wallet
 cd mpc-wallet/apps/tui-node
 
 # Build from source
@@ -253,7 +253,7 @@ RUST_LOG=debug mpc-wallet-tui --device-id Device-001
 ## Support
 
 For help and support:
-- [GitHub Issues](https://github.com/your-org/mpc-wallet/issues)
+- [GitHub Issues](https://github.com/hecoinfo/mpc-wallet/issues)
 - [Discord Community](https://discord.gg/mpc-wallet)
 - [Documentation](../../../docs/)
 

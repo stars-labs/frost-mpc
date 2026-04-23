@@ -1,5 +1,5 @@
 import { KeystoreService } from '../../src/services/keystoreService';
-import type { KeyShareData, WalletMetadata, KeystoreBackup } from "@mpc-wallet/types/keystore";
+import type { KeyShareData, ExtensionWalletMetadata, KeystoreBackup } from "@mpc-wallet/types/keystore";
 import { resetStorageData } from '../__mocks__/imports';
 import { resetWxtStorageData } from '../wxt-imports-mock';
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
@@ -124,14 +124,14 @@ describe('KeystoreService', () => {
             created_at: Date.now(),
         };
         
-        const mockMetadata: WalletMetadata = {
+        const mockMetadata: ExtensionWalletMetadata = {
             id: 'wallet-1',
             name: 'Test Wallet',
             blockchain: 'ethereum',
             address: '0x742d35Cc6634C0532925a3b844Bc9e7595f4279',
-            sessionId: 'session-123',
+            session_id: 'session-123',
             isActive: true,
-            hasBackup: false
+            hasBackup: false,
         };
 
         beforeEach(async () => {

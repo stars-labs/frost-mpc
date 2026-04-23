@@ -577,11 +577,15 @@ The hybrid approach combines online coordination with offline key generation for
 If a participant loses their key share, the only currently-shipping
 recovery path is restoring from backup:
 
-- **Restore from backup**: Decrypt an exported keystore file
-  (`.json`+`.dat` pair from `~/.frost_keystore/`, or an extension-format
-  export) with the original password. Works provided the participant
-  kept a copy. The extension/TUI round-trip is test-covered
-  (`extension_compat.rs`).
+- **Restore from backup**: Decrypt an exported keystore file —
+  a single `<wallet_id>.json` per wallet (from
+  `~/.frost_keystore/<device_id>/<curve>/`, or the extension-format
+  export of the same shape) — with the original password. Works
+  provided the participant kept a copy. The extension/TUI
+  round-trip is test-covered (`extension_compat.rs`). Earlier
+  drafts of this bullet described a `.json`+`.dat` pair; no
+  `.dat` file is ever written (see f4fc866 for the broader
+  keystore-layout retraction).
 
 Earlier drafts of this section offered two more recovery methods
 that do NOT exist in source today:
@@ -641,8 +645,13 @@ exist. The only emergency options today are:
 │ • Verify participant identities                    │
 │ • Use offline DKG for high-value                  │
 │ • Regular key share backups                       │
-│ • Periodic share refresh                          │
 └─────────────────────────────────────────────────────┘
+
+(Earlier drafts of this box also listed "Periodic share refresh"
+as a best practice, contradicting the Recovery section above which
+correctly notes that FROST share refresh is not implemented in
+this crate today. Removed — add it back once
+`frost-core::refresh` is actually wired up.)
 ```
 
 ### Attack Vectors and Mitigations

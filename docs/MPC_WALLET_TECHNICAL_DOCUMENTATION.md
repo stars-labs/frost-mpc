@@ -683,27 +683,31 @@ The MPC Wallet is designed to protect against:
 
 ### Prerequisites
 
-#### System Requirements
+- **OS**: Linux, macOS, or Windows (WSL2 for dev on Windows is fine;
+  native Windows builds work via MSVC toolchain)
+- **Rust**: 1.85+ (edition 2024 requirement from the workspace `Cargo.toml`)
+- **Bun**: latest stable
+- **System libs**: Slint's native UI needs the platform's graphics
+  stack. On NixOS you can run `nix develop` for a pre-provisioned
+  shell (see `flake.nix` at the repo root).
 
-- **Operating System**: Linux, macOS, or Windows
-- **Memory**: Minimum 8GB RAM
-- **Storage**: 2GB free space
-- **Network**: Stable internet connection
-
-#### Development Tools
+#### Tooling install
 
 ```bash
 # Rust toolchain
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-rustup target add wasm32-unknown-unknown
+rustup target add wasm32-unknown-unknown  # for core-wasm
 
-# Node.js environment (using Bun)
+# Bun
 curl -fsSL https://bun.sh/install | bash
-
-# Additional tools
-cargo install wasm-pack
-cargo install cargo-watch
 ```
+
+`wasm-pack` is a devDependency of `packages/@mpc-wallet/core-wasm`
+so `bun install` at the repo root pulls it in — no separate
+`cargo install wasm-pack` needed. There is no watch-script
+infrastructure; earlier drafts of this section recommended
+`cargo install cargo-watch`, but no watch targets exist in the
+workspace.
 
 ### Building from Source
 
@@ -799,20 +803,23 @@ cargo test --workspace
 # Run specific test suite
 cargo test -p tui-node
 
-# Run with coverage
-cargo tarpaulin --workspace
+# Coverage: no `cargo tarpaulin` / llvm-cov config ships today —
+# earlier drafts of this doc showed a tarpaulin command that
+# doesn't correspond to anything in the tree.
 ```
 
 #### Integration Tests
 
 ```bash
-# Browser extension tests
+# Browser extension tests (Bun, not npm/Vitest — see docs/testing/TESTING.md)
 cd apps/browser-extension
-bun test
-
-# E2E tests
-bun run test:e2e
+bun test                    # full suite
+bun run test:integration    # just tests/integration
+bun run test:webrtc         # just tests/entrypoints/offscreen/webrtc.*
 ```
+
+No automated full-mesh E2E harness exists yet — see
+`docs/testing/E2E_TEST_IMPLEMENTATION_PLAN.md` for the open plan.
 
 #### Manual Testing
 
@@ -850,8 +857,8 @@ Full deployment guide lives in [`docs/deployment/README.md`](deployment/README.m
   → systemd service behind an HTTPS terminator. Binds `0.0.0.0:9000`;
   reads zero env vars; stateless. No Dockerfile or docker-compose
   ships in-tree today.
-- **Browser extension**: `bun run build:chrome` / `build:firefox`
-  → web-store distribution.
+- **Browser extension**: `bun run build` (defaults to Chrome MV3) or
+  `bun run build:firefox` → web-store distribution.
 - **TUI / native apps**: `cargo build --release` → single static
   binary. No platform installers (`.msi` / `.dmg` / `.AppImage`)
   ship today — earlier drafts of this section referenced WiX /

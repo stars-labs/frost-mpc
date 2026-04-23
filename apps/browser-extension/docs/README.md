@@ -137,14 +137,14 @@ bun test AccountManager
 ### Building for Production
 
 ```bash
-# Build for Chrome
-bun run build:chrome
+# Build for Chrome (default target)
+bun run build
 
 # Build for Firefox
 bun run build:firefox
 
-# Build for all browsers
-bun run build
+# Build for Edge
+bun run build:edge
 ```
 
 ## API Integration

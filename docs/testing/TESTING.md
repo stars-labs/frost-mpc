@@ -53,15 +53,17 @@ bun run test:extension    # -> cd apps/browser-extension && bun test
 From inside `apps/browser-extension/`:
 
 ```bash
-bun test                                   # run full suite
+bun test                                   # full suite
 bun test tests/services/walletClient.test.ts
-bun test --watch                           # watch mode
-bun test --coverage                        # coverage report
+bun run test:watch                         # watch mode
+bun run test:coverage                      # coverage report
+bun run test:unit                          # tests/services + tests/config
+bun run test:integration                   # tests/integration
+bun run test:webrtc                        # tests/entrypoints/offscreen/webrtc.*.test.ts
 ```
 
-No `npm run test:watch`, `test:ui`, `test:coverage`, `test:unit`, or
-`test:integration` script exists in `package.json` — Bun's flag-based
-invocations replace those.
+No `test:e2e` or `test:ui` script exists — earlier drafts of this
+doc mentioned them.
 
 ## Writing tests
 

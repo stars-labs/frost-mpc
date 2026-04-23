@@ -133,15 +133,25 @@ Partition scenarios:
 Result: Correct threshold enforcement
 ```
 
-## 📊 Performance Metrics
+## 📊 Performance Targets
 
-| Metric | Target | Achieved |
-|--------|--------|----------|
-| Mesh establishment | < 1 sec | ✅ 0.9 sec |
-| Disconnection detection | < 5 sec | ✅ 3 sec |
-| Rejoin time | < 10 sec | ✅ 6 sec |
-| Message delivery | > 99% | ✅ 99.5% |
-| Stress test | 100 msg/sec | ✅ 150 msg/sec |
+| Metric | Design target |
+|--------|---------------|
+| Mesh establishment | < 1 sec |
+| Disconnection detection | < 5 sec |
+| Rejoin time | < 10 sec |
+| Message delivery | > 99% |
+| Stress test | 100 msg/sec |
+
+These are design targets, not measured results. Earlier drafts of
+this table had an additional "Achieved" column (`0.9 sec / 3 sec /
+6 sec / 99.5% / 150 msg/sec`) that wasn't backed by any benchmark
+in the repo — no `criterion` harness exists, and
+`examples/webrtc_mesh_e2e_test.rs` prints a configured rate of
+100 msg/sec but doesn't publish throughput assertions. The
+"Achieved" column was fabricated and has been removed. Running a
+real benchmark pass is open future work (see the Performance
+Considerations section of the main architecture doc for context).
 
 ## 🏗️ Architecture
 

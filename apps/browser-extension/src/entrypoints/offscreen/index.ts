@@ -925,47 +925,31 @@ chrome.runtime.onMessage.addListener((message: { type?: string; payload?: any },
             (async () => {
                 try {
                 const chain = payload.chain || "ethereum";
+                void chain; // reserved for future per-chain export variants
                 let keystoreData: string | null = null;
-                
-                // Try to get the keystore from the DKG manager.
-                // Cast — getDkgManager / getDkgInstance are legacy
-                // accessors that predate the current webrtc.ts layout
-                // where frostDkg is a direct field. This path is kept
-                // for backward compat with the exportKeystore handler;
-                // a cleaner replacement would read webRTCManager
-                // frostDkg directly.
-                const dkgManager = (webRTCManager as any).getDkgManager?.();
-                if (dkgManager) {
-                    // Export keystore from WASM
-                    const dkgInstance = dkgManager.getDkgInstance();
-                    if (dkgInstance && typeof dkgInstance.export_keystore === 'function') {
-                        keystoreData = dkgInstance.export_keystore();
-                        console.log("Offscreen: Successfully exported keystore from DKG instance");
+
+                // webRTCManager holds the active FROST instance directly
+                // on .frostDkg (see webrtc.ts:49). Legacy getDkgManager /
+                // getDkgInstance accessors were removed alongside the
+                // dead modular-manager tree; use the direct field.
+                const frost = (webRTCManager as any).frostDkg;
+                if (frost && typeof frost.export_keystore === 'function') {
+                    try {
+                        keystoreData = frost.export_keystore();
+                        console.log("Offscreen: exported keystore from frostDkg");
+                    } catch (e) {
+                        console.error("Offscreen: export_keystore threw:", e);
                     }
                 }
-                
+
                 if (!keystoreData) {
-                    // If no DKG manager, try direct WASM instances
-                    // This handles the case where keystore was imported but DKG wasn't run
-                    const { FrostDkgSecp256k1, FrostDkgEd25519 } = await import("@mpc-wallet/core-wasm");
-                    
-                    // Try both curve types since we don't know which one was imported
-                    let dkgInstance;
-                    if (chain === "ethereum") {
-                        dkgInstance = new FrostDkgSecp256k1();
-                    } else {
-                        dkgInstance = new FrostDkgEd25519();
-                    }
-                    
-                    // Note: This won't work if the keystore wasn't loaded in this session
-                    // In a real implementation, you'd need to reload the keystore first
-                    sendResponse({ 
-                        success: false, 
-                        error: "Keystore export requires an active session. Please ensure the wallet is loaded." 
+                    sendResponse({
+                        success: false,
+                        error: "Keystore export requires an active session. Please ensure the wallet is loaded."
                     });
-                    return false;
+                    return;
                 }
-                
+
                 sendResponse({
                     success: true,
                     keystoreData

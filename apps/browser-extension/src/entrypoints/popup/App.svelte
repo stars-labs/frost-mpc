@@ -75,6 +75,17 @@
     let signatureBanner: SignatureBanner | null = null;
     let signatureCopied = false;
 
+    // Ext-3b: TUI Stage 1 parity (a4c52ca). When a signing-session
+    // broadcast lands with us as a participant, auto-open a review
+    // modal so a user who has the popup open (maybe after opening
+    // it via the Ext-3a notification) sees the request immediately
+    // rather than having to scroll to the invites list. User can
+    // Review → join, or Later → dismiss (stays in invites list,
+    // won't re-pop for this session_id). No auto-modal if we're
+    // the proposer or already in an active ceremony.
+    let incomingSigningInvite: import("@mpc-wallet/types/session").SessionInfo | null = null;
+    let dismissedSigningInvites: Set<string> = new Set();
+
     // Ext-2d-progress: live per-peer roster during an active FROST
     // signing ceremony. Updated by the `signingProgress` event from
     // background every time a commitment or share lands on
@@ -581,6 +592,31 @@
                     sharesReceived: message.sharesReceived ?? [],
                 };
                 break;
+
+            case "sessionAvailable":
+                // Ext-3b: auto-modal for incoming signing invites.
+                // Fires once per new session_available broadcast
+                // from webSocketManager. Gate mirrors SigningNotifier:
+                //   - session_type === "signing"
+                //   - we're in participants
+                //   - we're NOT the proposer
+                //   - we haven't dismissed this session_id already
+                //   - no other modal already open (don't stack)
+                //   - not already in an active ceremony (busy signal)
+                {
+                    const s = message.session as
+                        | import("@mpc-wallet/types/session").SessionInfo
+                        | undefined;
+                    if (!s) break;
+                    if (s.session_type !== "signing") break;
+                    if (s.proposer_id === appState.deviceId) break;
+                    if (!s.participants.includes(appState.deviceId)) break;
+                    if (dismissedSigningInvites.has(s.session_id)) break;
+                    if (incomingSigningInvite) break;
+                    if (appState.sessionInfo) break;
+                    incomingSigningInvite = s;
+                }
+                break;
                 
             case "signatureError":
 //                 console.log("[UI] Processing signatureError:", message);
@@ -693,6 +729,78 @@
     function dismissSignatureBanner() {
         signatureBanner = null;
         signatureCopied = false;
+    }
+
+    // Ext-3b: convert the signing session's hex-encoded message to
+    // a human-readable preview. For ethereum, signing_message_hex
+    // is the EIP-191 hash (opaque 32 bytes) — just show truncated
+    // hex. For solana (ed25519), it's raw UTF-8 bytes we can decode.
+    function signingMessagePreview(
+        hex: string | undefined,
+        blockchain: string | undefined,
+    ): string {
+        if (!hex) return "(empty)";
+        const clean = hex.startsWith("0x") ? hex.slice(2) : hex;
+        if (blockchain === "solana") {
+            try {
+                const bytes = new Uint8Array(
+                    clean.match(/.{1,2}/g)?.map((b) => parseInt(b, 16)) ?? [],
+                );
+                const decoded = new TextDecoder("utf-8", { fatal: true }).decode(
+                    bytes,
+                );
+                return decoded.length > 80
+                    ? `${decoded.slice(0, 79)}…`
+                    : decoded;
+            } catch {
+                /* fall through */
+            }
+        }
+        const prefixed = `0x${clean}`;
+        return prefixed.length > 66
+            ? `${prefixed.slice(0, 34)}…${prefixed.slice(-12)}`
+            : prefixed;
+    }
+
+    async function reviewSigningInvite() {
+        if (!incomingSigningInvite) return;
+        const sessionId = incomingSigningInvite.session_id;
+        // Reuse the existing Join path — joinDkgSession is
+        // generic over session_type; the downstream flow
+        // (sessionReadyForSigning trigger in webSocketManager)
+        // handles the signing ceremony from there.
+        const inv = incomingSigningInvite;
+        incomingSigningInvite = null;
+        try {
+            const response = await chrome.runtime.sendMessage({
+                type: MESSAGE_TYPES.JOIN_DKG_SESSION,
+                session_id: sessionId,
+            });
+            if (!response?.success) {
+                console.warn(
+                    `[UI] Join signing failed: ${response?.error ?? "unknown"}`,
+                );
+                // Re-open modal so user can retry or dismiss.
+                incomingSigningInvite = inv;
+            } else {
+                console.log("[UI] Joined signing session", sessionId);
+            }
+        } catch (e) {
+            console.error("[UI] Join signing exception:", e);
+            incomingSigningInvite = inv;
+        }
+    }
+
+    function laterSigningInvite() {
+        if (!incomingSigningInvite) return;
+        // Remember we dismissed this specific session_id so the
+        // modal doesn't re-pop on subsequent session_available
+        // broadcasts for the same session (status updates).
+        dismissedSigningInvites = new Set([
+            ...dismissedSigningInvites,
+            incomingSigningInvite.session_id,
+        ]);
+        incomingSigningInvite = null;
     }
 
     onMount(async () => {
@@ -1599,6 +1707,90 @@
                             disabled={signing_}
                         >
                             Cancel
+                        </button>
+                    </div>
+                </div>
+            </div>
+        {/if}
+
+        <!-- Ext-3b: TUI Stage 1 auto-modal for incoming signing
+             invites. Pops when a signing session_available broadcast
+             arrives for which we're a listed participant but not
+             proposer. Review → join the ceremony (routes through
+             the existing JOIN_DKG_SESSION path which handles signing
+             too). Later → dismiss this specific session_id; stays
+             in invites list but won't re-pop on status updates. -->
+        {#if incomingSigningInvite}
+            <div
+                class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="incoming-sign-title"
+            >
+                <div class="w-full max-w-md rounded-lg bg-white p-4 shadow-xl">
+                    <h3
+                        id="incoming-sign-title"
+                        class="mb-3 text-sm font-bold text-orange-900"
+                    >
+                        🔏 Signing request from co-signer
+                    </h3>
+                    <dl class="space-y-2 text-xs">
+                        <div>
+                            <dt class="font-semibold text-gray-700">From</dt>
+                            <dd class="break-all font-mono text-gray-900">
+                                {incomingSigningInvite.proposer_id}
+                            </dd>
+                        </div>
+                        <div>
+                            <dt class="font-semibold text-gray-700">Wallet</dt>
+                            <dd class="text-gray-900">
+                                {incomingSigningInvite.wallet_name ?? "(unnamed)"}
+                                <span class="text-gray-500">·</span>
+                                <span class="text-gray-500">
+                                    {incomingSigningInvite.blockchain ?? "?"}
+                                </span>
+                            </dd>
+                        </div>
+                        <div>
+                            <dt class="font-semibold text-gray-700">
+                                Threshold
+                            </dt>
+                            <dd class="text-gray-900">
+                                {incomingSigningInvite.threshold} of
+                                {incomingSigningInvite.total}
+                            </dd>
+                        </div>
+                        <div>
+                            <dt class="font-semibold text-gray-700">Message</dt>
+                            <dd
+                                class="max-h-20 overflow-auto break-all rounded bg-gray-50 p-2 font-mono text-[10px] text-gray-900"
+                            >
+                                {signingMessagePreview(
+                                    incomingSigningInvite.signing_message_hex,
+                                    incomingSigningInvite.blockchain,
+                                )}
+                            </dd>
+                        </div>
+                    </dl>
+                    <p class="mt-3 text-xs text-gray-600">
+                        Joining contributes your FROST share to reach
+                        threshold. The aggregated signature is visible to
+                        all participants.
+                    </p>
+                    <div class="mt-4 flex gap-2">
+                        <button
+                            type="button"
+                            class="flex-1 rounded bg-orange-600 px-3 py-2 text-xs font-medium text-white hover:bg-orange-700"
+                            on:click={reviewSigningInvite}
+                        >
+                            Review + Join
+                        </button>
+                        <button
+                            type="button"
+                            class="rounded border border-gray-300 px-3 py-2 text-xs hover:bg-gray-50"
+                            on:click={laterSigningInvite}
+                        >
+                            Later
                         </button>
                     </div>
                 </div>

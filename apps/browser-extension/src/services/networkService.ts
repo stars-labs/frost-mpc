@@ -348,6 +348,19 @@ class NetworkService {
     }
 
     /**
+     * Collect all configured HTTP RPC URLs for a given network —
+     * flattens default + public lists into a single array. Handy
+     * for UI display / fallback rotation. Returns [] when the
+     * chain has no rpcUrls populated (sketch networks).
+     */
+    public getNetworkRPCUrls(network: Chain): string[] {
+        if (!network.rpcUrls) return [];
+        const defaultHttp = network.rpcUrls.default?.http ?? [];
+        const publicHttp = network.rpcUrls.public?.http ?? [];
+        return [...defaultHttp, ...publicHttp];
+    }
+
+    /**
      * Predicate counterpart to getNetworkByChainId. Cheaper than
      * the full find when the caller only needs a bool (e.g. for
      * validating user input before a setCurrentNetwork call).

@@ -254,7 +254,7 @@ export class KeystoreService {
             key_package: keyShareData.key_package,
             group_public_key: keyShareData.group_public_key,
             session_id: keyShareData.session_id,
-            device_id: keyShareData.deviceId
+            device_id: keyShareData.device_id,
         };
         
         // Encrypt with current extension password (CLI will need to re-encrypt with their password)

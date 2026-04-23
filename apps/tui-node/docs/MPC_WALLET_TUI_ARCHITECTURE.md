@@ -700,29 +700,51 @@ apps/tui-node/src/
 └── lib.rs                       # Re-exports for native-node consumers
 ```
 
-## Appendix C: Security Considerations
+## Appendix C: Security Considerations (aspirational)
 
-### 1. Message Authentication
-- All messages should be signed with device keys
-- Implement message sequence numbers to prevent replay attacks
-- Add timestamp validation to prevent stale message processing
+> **Scope note**: This appendix is a wishlist of hardening work,
+> not a description of currently-implemented controls. See
+> [`architecture/SECURITY.md`](./architecture/SECURITY.md) (rewritten
+> in 89e9054 / 6d7fd5a / 333c97f) for the honest accounting of
+> what actually ships today. Most items below don't exist in
+> source yet — they're listed here so future contributors have a
+> starting point rather than having to rederive the list.
+
+### 1. Message Authentication (NOT implemented)
+- Signing messages with per-device keys — the signal server is
+  currently an unauthenticated relay; DTLS covers transport
+  integrity but there's no app-layer MAC.
+- Sequence numbers + timestamp validation for replay protection —
+  FROST's own per-signing nonce generation prevents signature
+  reuse; no additional message-level replay layer ships.
 
 ### 2. State Validation
-- Validate all state transitions against business rules
-- Implement rollback mechanisms for invalid states
-- Add cryptographic proofs for critical state changes
+- Validate all state transitions against business rules — partially
+  in place via the `DkgState` + `MeshStatus` + `SigningState` enums
+  that guard transitions in `utils/state.rs`. Rollback-on-invalid
+  is NOT implemented (invalid state transitions currently log and
+  continue).
 
 ### 3. Network Security
-- Implement end-to-end encryption for WebRTC channels
-- Use certificate pinning for WebSocket connections
-- Add rate limiting for message processing
+- End-to-end encryption for WebRTC channels — already implemented;
+  WebRTC negotiates DTLS-SRTP by default.
+- Certificate pinning for WebSocket connections — NOT implemented;
+  we trust the system CA store.
+- Rate limiting — NOT implemented.
 
-### 4. Key Management
-- Implement secure key storage with hardware security module support
-- Add key rotation mechanisms
-- Implement secure key backup and recovery
+### 4. Key Management (NOT implemented)
+- HSM support — no PKCS#11 integration anywhere in source (same
+  absent-HSM finding flagged across the cleanup pass: 7febf90 /
+  6d7fd5a / f7e0bad / 0363ad2 / 0214b30 / c48fbf0).
+- Key rotation — FROST share refresh in principle exists but this
+  crate doesn't wire it up.
+- Key backup — real path is keystore export (.json/.dat pair);
+  "backup and recovery" in the fuller sense doesn't ship.
 
-### 5. Audit and Compliance
-- Log all state transitions with timestamps
-- Implement tamper-evident logging
-- Add compliance checks for regulatory requirements
+### 5. Audit and Compliance (NOT implemented)
+- No structured audit log — only `tracing` output. Operators ship
+  logs through their own pipeline.
+- No tamper-evident logging.
+- No compliance framework (SOC 2 / ISO 27001 / GDPR). See
+  SECURITY.md § Compliance Framework (6d7fd5a) for the full "not
+  certified" statement.

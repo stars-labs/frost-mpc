@@ -100,6 +100,18 @@ export type BackgroundToOffscreenMessage = BaseMessage & (
     | { type: 'requestSigning'; signingId: string; transactionData: string; requiredSigners: number }
     | { type: 'requestMessageSignature'; signingId: string; message: string; fromAddress: string }
     | { type: 'requestTransactionSignature'; signingId: string; transactionData: string; fromAddress: string }
+    // Ext-2d-offscreen: signing-ceremony trigger. Fires when a
+    // session reaches threshold (see webSocketManager.maybeTriggerCeremony);
+    // offscreen loads keystore + kicks off FROST round 1.
+    | { type: 'sessionReadyForSigning'; sessionInfo: SessionInfo; blockchain?: "ethereum" | "solana" }
+    // Keystore WASM export: background requests offscreen dump the
+    // serialized keystore JSON after DKG finalize or import, so it
+    // can be encrypted + persisted via KeystoreManager.
+    | { type: 'exportKeystore'; chain?: "ethereum" | "solana" }
+    // Keystore WASM import: background hands offscreen raw keystore
+    // JSON (e.g. from CLI .dat conversion) to load into the FROST
+    // instance before signing.
+    | { type: 'importKeystore'; chain: "ethereum" | "solana"; keystoreData: string }
 );
 
 // --- Offscreen to Background Message Types (Offscreen sends to Background) ---

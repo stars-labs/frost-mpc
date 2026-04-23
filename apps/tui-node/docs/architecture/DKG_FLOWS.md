@@ -49,6 +49,36 @@ time-sensitive; remove that from your checklist.
 
 ### Step-by-Step Process
 
+> **Scope note (UI mocks)**: The ASCII-box "View" mocks in this
+> section are illustrative sketches, not literal renders of the
+> ratatui UI. Specifically, the following elements **are not**
+> drawn by the real components:
+>
+>   - Dropdown widgets (`▼` arrows for Blockchain / Participants /
+>     Threshold)
+>   - "Available Participants" checkbox lists with
+>     per-participant IP addresses (peers are discovered via the
+>     Join Session flow, not a coordinator-side invite; no IPs
+>     are surfaced in the TUI)
+>   - Button rows like `[Start DKG] [Test Connection] [Cancel]`,
+>     `[Accept & Join] [Decline] [View Details]`,
+>     `[View Technical Details] [Pause]`, `[Complete DKG]
+>     [View Shares]`, `[View Wallet] [Create Backup] [Done]` —
+>     ratatui components don't render button widgets; navigation
+>     is keyboard-driven (arrow keys, Enter, Esc)
+>   - "Network Quality: Latency 12ms / Packet Loss 0.0% /
+>     Encryption DTLS 1.3" telemetry — the TUI does NOT measure
+>     per-peer latency/loss; that would need WebRTC stats
+>     collection that isn't wired up
+>   - "Next Steps" cards with "Test wallet with small transaction"
+>     (TUI doesn't construct or broadcast transactions; see
+>     guides/USER_GUIDE.md § Signing Messages → Scope)
+>
+> The narrative flow (Session Initiation → Invitation → Mesh →
+> DKG Round 1/2 → Finalization) matches the real ceremony. Read
+> the mocks for structural intent; don't try to match screenshots
+> against them.
+
 #### 1. Session Initiation
 
 **Coordinator's View:**

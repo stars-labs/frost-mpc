@@ -363,6 +363,38 @@ sequenceDiagram
 
 ## Critical Issues and Fixes
 
+> **Scope note (retraction)**: the four issues below are historical
+> dev-journal-style narratives of problems hit during earlier
+> refactors. Several of the file names and struct-field identifiers
+> cited in the code snippets are NOT present in the current tree —
+> they were either renamed, consolidated, or are outright
+> fabrications that shipped with an earlier draft of this doc.
+> Verifications (`find` / `grep -rn`):
+>
+>   - `mesh_commands.rs` (cited in Issue 1) — **file does not exist**.
+>     The real `pending_mesh_ready_signals` field lives in
+>     `src/utils/appstate_compat.rs:67` as `HashSet<String>`, not
+>     `Vec<String>` (so the snippet's `.push(...)` call wouldn't
+>     compile against the real type).
+>   - `webrtc_offers_in_progress: HashMap<String, Instant>` (cited in
+>     Issue 3) — **field does not exist**. Real
+>     `AppState<C>` has `webrtc_initiation_in_progress: bool` +
+>     `webrtc_initiation_started_at: Option<Instant>` at
+>     `appstate_compat.rs:37-38` and no per-peer offer tracker.
+>   - `is_actively_joining` (cited in Issue 4) — **identifier does
+>     not exist** anywhere in the workspace. `is_rejoin` is real
+>     (`src/protocal/signal.rs:127`, `src/utils/state.rs:266`).
+>
+> The *narratives* (premature DKG start, session-list
+> desynchronization, WebRTC re-entry debouncing, auto-join consent
+> gating) describe real issues that were fixed on main — but the
+> specific code snippets below are illustrative, not literal
+> extracts. Treat this section as a historical record rather than
+> a current API reference. The real debouncing code lives in
+> `src/network/webrtc.rs` (see `webrtc_initiation_*` field uses in
+> that file), and auto-join gating logic lives in the DKG / session
+> handlers rather than a single `should_auto_join` variable.
+
 ### Issue 1: Premature DKG Start Bug
 
 **Problem**: DKG was starting with insufficient participants (2/3 instead of 3/3).

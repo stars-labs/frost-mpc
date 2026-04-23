@@ -124,7 +124,7 @@
         {#if currentChain}
             <span class="chain-icon">{getChainIcon(currentChain.category)}</span>
             <span class="chain-name">{formatChainName(currentChain)}</span>
-            <span class="chain-symbol">({currentChain.nativeCurrency.symbol})</span>
+            <span class="chain-symbol">({currentChain.nativeCurrency?.symbol ?? "?"})</span>
         {:else}
             <span class="select-chain">Select Network</span>
         {/if}

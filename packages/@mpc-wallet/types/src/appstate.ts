@@ -44,6 +44,16 @@ export interface AppState {
    * the account picker. Shape is per-blockchain array of Account.
    */
   accountsUpdated?: any;
+  /** True while background is still booting. Popup uses this to
+   *  show a loading state before initialState arrives. */
+  isInitializing?: boolean;
+  /** Global background error surface. Popup shows this as a
+   *  full-frame banner when set. */
+  globalError?: string;
+  /** Flag indicating background bootstrap finished
+   *  (keystoreStatus fetched, offscreen ready, websocket connected
+   *  or known-down). Popup UI unblocks on this. */
+  setupComplete?: boolean;
   sessionInfo: SessionInfo | null;
   invites: SessionInfo[];
   meshStatus: MeshStatus;

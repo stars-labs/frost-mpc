@@ -249,10 +249,18 @@ impl FrostDkgEd25519 {
     pub fn signing_commit(&mut self) -> Result<String, WasmError> {
         let key_package = self.key_package.as_ref()
             .ok_or_else(|| WasmError::new("Key package not available"))?;
-        
+
         let (nonces, commitments) = Ed25519Curve::generate_signing_commitment(key_package)?;
         self.signing_nonces = Some(nonces);
-        
+
+        // frost-core's round2::sign() (see round2.rs:135) requires the
+        // signer's OWN commitment to be present in the signing_package.
+        // Register ours here so callers can treat add_signing_commitment
+        // as a peer-only operation. Keyed by our identifier, matching
+        // the layout frost-core expects.
+        let own_identifier = Ed25519Curve::identifier_from_u16(self.participant_index)?;
+        self.signing_commitments.insert(own_identifier, commitments.clone());
+
         let commitment_hex = hex::encode(serde_json::to_string(&commitments).unwrap());
         Ok(commitment_hex)
     }
@@ -262,7 +270,7 @@ impl FrostDkgEd25519 {
             .map_err(|e| WasmError::new(&e.to_string()))?;
         let commitment: Ed25519SigningCommitments = serde_json::from_slice(&commitment_json)
             .map_err(|e| WasmError::new(&e.to_string()))?;
-        
+
         let identifier = Ed25519Curve::identifier_from_u16(participant_index)?;
         self.signing_commitments.insert(identifier, commitment);
         Ok(())
@@ -271,16 +279,24 @@ impl FrostDkgEd25519 {
     pub fn sign(&mut self, message_hex: &str) -> Result<String, WasmError> {
         let message = hex::decode(message_hex)
             .map_err(|e| WasmError::new(&e.to_string()))?;
-        
+
         let signing_package = Ed25519Curve::create_signing_package(&self.signing_commitments, &message)?;
-        
+
         let nonces = self.signing_nonces.as_ref()
             .ok_or_else(|| WasmError::new("Signing nonces not available"))?;
         let key_package = self.key_package.as_ref()
             .ok_or_else(|| WasmError::new("Key package not available"))?;
-        
+
         let signature_share = Ed25519Curve::generate_signature_share(&signing_package, nonces, key_package)?;
-        
+
+        // Register our own share so aggregate_signature() sees it in
+        // self.signature_shares alongside peers'. frost-core's aggregate
+        // (see frost-core/src/lib.rs) requires signature_shares to cover
+        // every identifier present in signing_commitments, so omitting
+        // self would immediately fail with UnknownIdentifier.
+        let own_identifier = Ed25519Curve::identifier_from_u16(self.participant_index)?;
+        self.signature_shares.insert(own_identifier, signature_share.clone());
+
         Ok(hex::encode(serde_json::to_string(&signature_share).unwrap()))
     }
 
@@ -539,10 +555,15 @@ impl FrostDkgSecp256k1 {
     pub fn signing_commit(&mut self) -> Result<String, WasmError> {
         let key_package = self.key_package.as_ref()
             .ok_or_else(|| WasmError::new("Key package not available"))?;
-        
+
         let (nonces, commitments) = Secp256k1Curve::generate_signing_commitment(key_package)?;
         self.signing_nonces = Some(nonces);
-        
+
+        // See Ed25519 signing_commit for context: frost-core requires
+        // the signer's own commitment to be in the signing_package.
+        let own_identifier = Secp256k1Curve::identifier_from_u16(self.participant_index)?;
+        self.signing_commitments.insert(own_identifier, commitments.clone());
+
         let commitment_hex = hex::encode(serde_json::to_string(&commitments).unwrap());
         Ok(commitment_hex)
     }
@@ -561,16 +582,21 @@ impl FrostDkgSecp256k1 {
     pub fn sign(&mut self, message_hex: &str) -> Result<String, WasmError> {
         let message = hex::decode(message_hex)
             .map_err(|e| WasmError::new(&e.to_string()))?;
-        
+
         let signing_package = Secp256k1Curve::create_signing_package(&self.signing_commitments, &message)?;
-        
+
         let nonces = self.signing_nonces.as_ref()
             .ok_or_else(|| WasmError::new("Signing nonces not available"))?;
         let key_package = self.key_package.as_ref()
             .ok_or_else(|| WasmError::new("Key package not available"))?;
-        
+
         let signature_share = Secp256k1Curve::generate_signature_share(&signing_package, nonces, key_package)?;
-        
+
+        // See Ed25519 sign() for context — register own share so
+        // aggregate_signature() covers all identifiers.
+        let own_identifier = Secp256k1Curve::identifier_from_u16(self.participant_index)?;
+        self.signature_shares.insert(own_identifier, signature_share.clone());
+
         Ok(hex::encode(serde_json::to_string(&signature_share).unwrap()))
     }
 
@@ -579,7 +605,7 @@ impl FrostDkgSecp256k1 {
             .map_err(|e| WasmError::new(&e.to_string()))?;
         let share: Secp256k1SignatureShare = serde_json::from_slice(&share_json)
             .map_err(|e| WasmError::new(&e.to_string()))?;
-        
+
         let identifier = Secp256k1Curve::identifier_from_u16(participant_index)?;
         self.signature_shares.insert(identifier, share);
         Ok(())

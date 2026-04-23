@@ -153,51 +153,53 @@ The heart of the MPC wallet, implementing the FROST threshold signature scheme.
 
 #### Key Modules
 
-```rust
-// Core protocol structure
-pub mod dkg {
-    // Distributed Key Generation
-    pub struct DKGSession {
-        participants: Vec<Participant>,
-        threshold: u32,
-        round: DKGRound,
-        commitments: HashMap<ParticipantId, Commitment>,
-    }
-}
+Real layout — see `packages/@mpc-wallet/frost-core/src/`:
 
-pub mod signing {
-    // Threshold signing operations
-    pub struct SigningSession {
-        message: Vec<u8>,
-        signers: Vec<SignerId>,
-        nonces: HashMap<SignerId, Nonce>,
-        partial_sigs: HashMap<SignerId, PartialSignature>,
-    }
-}
+```
+lib.rs                   # Re-exports + wiring
+unified_dkg.rs           # Dual-curve DKG (ed25519 + secp256k1 from one root)
+hd_derivation.rs         # BIP-32-style additive derivation (no extra DKG)
+traits.rs                # FrostCurve trait (curve-agnostic ops)
+ed25519.rs               # ed25519 impl (Solana address derivation)
+secp256k1.rs             # secp256k1 impl (Ethereum address derivation)
+keystore.rs              # AES-256-GCM + PBKDF2 encrypted key share I/O
+root_secret.rs           # HKDF from root entropy → per-curve RNGs
+errors.rs                # Typed error variants
 ```
 
+The actual DKG + signing primitives come from upstream
+`frost-core 2.2` / `frost-ed25519 2.2` / `frost-secp256k1 2.2` crates.
+`unified_dkg` wraps them to run both curves simultaneously from a
+single root secret. There is no custom `DKGSession` / `SigningSession`
+struct in this crate — you interact with upstream types.
+
 #### DKG Process Flow
+
+FROST DKG (`dkg::part1` → `part2` → `part3`) runs in two wire rounds
+plus a local finalize step. Once participants complete signaling and
+bring up the WebRTC mesh:
 
 ```
 Participant A          Participant B          Participant C
      │                      │                      │
-     ├──────Round 1────────►├─────────────────────►│
-     │   (Commitments)      │                      │
-     │                      │                      │
-     │◄─────────────────────├◄──────Round 1────────┤
-     │                      │   (Commitments)      │
-     │                      │                      │
-     ├──────Round 2────────►├─────────────────────►│
-     │   (Shares)           │                      │
-     │                      │                      │
-     │◄─────────────────────├◄──────Round 2────────┤
-     │                      │   (Shares)           │
-     │                      │                      │
-     ├──────Round 3────────►├─────────────────────►│
-     │   (Verification)     │                      │
+     │── part1 (commitment + proof-of-knowledge) ───
+     │─ broadcast to every peer ──►
+     │
+     │◄── part1 from B, from C
+     │
+     │── part2 (encrypted per-peer share, unicast) ─
+     │─ A→B share ──►│   │◄── B→A share
+     │─ A→C share ────────────────►│
+     │
+     │── part3 (local finalize: combine received shares
+     │         to derive key_package + group public key) ──
      │                      │                      │
      └──────Complete────────┴──────Complete────────┘
 ```
+
+Rounds don't traverse the signal server — they ride the peer-to-peer
+WebRTC data channels established during setup (see the § Network
+Architecture section).
 
 ### 2. Browser Extension (`apps/browser-extension`)
 
@@ -238,11 +240,25 @@ A Manifest V3 Chrome/Firefox extension providing Web3 wallet functionality.
 
 #### Key Services
 
-1. **AccountService**: Manages wallet accounts and balances
-2. **NetworkService**: Handles blockchain RPC communication
-3. **MessageValidator**: Validates and routes messages between contexts
-4. **WasmService**: Interfaces with FROST WASM module
-5. **WebRTCManager**: Manages P2P connections
+Real service layer (`apps/browser-extension/src/services/`):
+
+1. **AccountService** (`accountService.ts`): Wallet account list,
+   address derivation per curve, active-account selection.
+2. **NetworkService** (`networkService.ts`): EVM chain-ID / RPC
+   endpoint registry (EIP-1193 provider side).
+3. **KeystoreService** / **KeystoreManager** (`keystoreService.ts` /
+   `keystoreManager.ts`): Encrypted share persistence, unlock flow.
+4. **PermissionService** (`permissionService.ts`): Per-origin dApp
+   connection state, request gating.
+5. **WalletController** / **WalletClient** (`walletController.ts` /
+   `walletClient.ts`): High-level orchestration + popup-facing API.
+
+Separately, in the offscreen context:
+
+6. **WebRTCManager** (`src/entrypoints/offscreen/webrtc.ts`): Full-mesh
+   peer connection state + FROST state (`frostDkg`, `signingInfo`,
+   `signingCommitments`, `signingShares`). See CLAUDE.md for the
+   signing pipeline.
 
 ### 3. Terminal UI Application (`apps/tui-node`)
 
@@ -272,22 +288,27 @@ A feature-rich terminal interface for advanced users and automated operations.
 
 #### Component Structure
 
+The TUI is built on the [tui-realm](https://github.com/veeso/tuirealm)
+Elm architecture. The real entry struct is `ElmApp<C>`
+(`apps/tui-node/src/elm/app.rs`), parameterized over a FROST ciphersuite:
+
 ```rust
-pub struct TuiApp {
-    // UI State
-    ui: UIProvider,
-    current_screen: Screen,
-    
-    // Application State
-    state: Arc<Mutex<AppState>>,
-    wallet_manager: WalletManager,
-    session_manager: SessionManager,
-    
-    // Network
-    network: NetworkManager,
-    webrtc_manager: WebRTCManager,
+pub struct ElmApp<C: frost_core::Ciphersuite> {
+    model: Model,                                       // pure app state
+    app: Application<Id, Message, UserEvent>,           // tui-realm app shell
+    terminal: CrosstermTerminalAdapter,                 // render target
+    message_tx: UnboundedSender<Message>,
+    message_rx: UnboundedReceiver<Message>,
+    app_state: Arc<Mutex<AppState<C>>>,                 // shared with non-Elm managers
+    should_quit: bool,
 }
 ```
+
+Longer-lived business logic lives in `tui-node::core::*Manager`
+types (`WalletManager`, `SessionManager`, `DkgManager`, `SigningManager`,
+`OfflineManager`, `ConnectionManager`) — these are shared with the
+native-node app via the `UICallback` trait. See CLAUDE.md for that
+layering.
 
 ### 4. Native Desktop Application (`apps/native-node`)
 
@@ -295,37 +316,38 @@ Cross-platform desktop application with modern GUI.
 
 #### UI Framework (Slint)
 
+Real UI entry point: `apps/native-node/ui/main_enhanced.slint`. Uses
+std-widgets (TabWidget, VerticalBox, HorizontalBox, GroupBox, LineEdit,
+TextEdit, ListView, Button, ComboBox, ScrollView) — no custom
+`HeaderBar` / `StatusBar` components. Sketch of the actual structure:
+
 ```slint
-MainWindow := Window {
-    title: "MPC Wallet";
-    
+import { TabWidget, VerticalBox, HorizontalBox, GroupBox, /*...*/ }
+    from "std-widgets.slint";
+
+export component MainWindow inherits Window {
+    // AppState globals (populated from Rust via UICallback)
     VerticalBox {
-        HeaderBar { 
-            title: "Multi-Party Computation Wallet";
-        }
-        
+        // Header region (plain Text + HorizontalBox, not a widget)
+        ...
+
         TabWidget {
-            Tab { 
-                title: "Wallet";
-                WalletView { }
-            }
-            Tab {
-                title: "Sessions";
-                SessionView { }
-            }
-            Tab {
-                title: "Settings";
-                SettingsView { }
-            }
-        }
-        
-        StatusBar {
-            connection-status: network.connected;
-            peer-count: session.peer-count;
+            // Tab 1: Wallets
+            VerticalBox { ... WalletSelector + forms }
+            // Tab 2: Sessions / DKG
+            VerticalBox { ... }
+            // Tab 3: Signing
+            VerticalBox { ... }
+            // Tab 4: Network / Settings
+            VerticalBox { ... }
         }
     }
 }
 ```
+
+Callbacks on MainWindow are wired to Rust closures via
+`slint::invoke_from_event_loop` — see CLAUDE.md's Slint integration
+section for the `Weak<MainWindow>` + Send-bridge pattern.
 
 ---
 

@@ -691,10 +691,18 @@ discovers the flags silently do nothing.
 
 ### B. Error Codes
 
-No numeric error-code scheme exists — see `src/errors.rs` for the
-strongly-typed error variants (`DKGError`, `SigningError`,
-`KeystoreError`, `ComponentError`, `CryptoError`). A shared numeric
-registry across Rust + TypeScript is open future work.
+No numeric error-code scheme exists. Strongly-typed error enums
+live per-domain (no top-level `src/errors.rs` umbrella file):
+
+  - `KeystoreError`       (`src/keystore/mod.rs:24`)
+  - `FrostKeystoreError`  (`src/keystore/frost_keystore.rs:19`)
+  - `OfflineError`        (`src/offline/mod.rs:24`)
+  - `CoreError`           (`src/core/mod.rs:21`)
+
+plus upstream `FrostError` from
+`packages/@mpc-wallet/frost-core` which carries FROST-specific
+variants like `SigningError(String)`. A shared numeric registry
+across Rust + TypeScript is open future work.
 
 ### C. Keyboard Map Reference
 

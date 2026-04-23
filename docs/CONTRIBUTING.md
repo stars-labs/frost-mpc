@@ -294,9 +294,13 @@ impl WalletManager {
 }
 
 // Handle errors explicitly — prefer typed error enums over
-// anyhow for API surface. Real error types:
-//   DkgError / SigningError / KeystoreError / ComponentError /
-//   CryptoError — in `src/errors.rs`.
+// anyhow for API surface. Real error types in tui-node:
+//   CoreError            (src/core/mod.rs:21)
+//   KeystoreError        (src/keystore/mod.rs:24)
+//   FrostKeystoreError   (src/keystore/frost_keystore.rs:19)
+//   OfflineError         (src/offline/mod.rs:24)
+// Plus upstream `FrostError` from packages/@mpc-wallet/frost-core
+// which has `SigningError`/etc. variants.
 match operation() {
     Ok(result) => process(result),
     Err(e) => {

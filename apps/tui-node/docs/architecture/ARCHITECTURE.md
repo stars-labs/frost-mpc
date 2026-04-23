@@ -610,22 +610,38 @@ tree that predated the Elm-architecture migration). In short:
 ### Error Handling
 
 The real error-type landscape uses `thiserror`-derived per-domain
-enums:
+enums. Verified live types (no top-level `src/errors.rs` umbrella
+file exists):
 
 ```rust
-// src/errors.rs (+ per-module error types)
-pub enum DkgError { /* ... */ }
-pub enum SigningError { /* ... */ }
-pub enum KeystoreError { /* ... */ }
-pub enum ComponentError { /* ... */ }
-pub enum CryptoError { /* ... */ }
+// src/keystore/mod.rs:24
+pub enum KeystoreError { /* variants */ }
+// src/keystore/frost_keystore.rs:19
+pub enum FrostKeystoreError { /* variants */ }
+// src/offline/mod.rs:24
+pub enum OfflineError { /* variants */ }
+// src/core/mod.rs:21
+pub enum CoreError { /* variants */ }
+
+// Upstream, from packages/@mpc-wallet/frost-core:
+pub enum FrostError {
+    SigningError(String),
+    /* plus other crypto-operation variants */
+}
 ```
 
-Earlier drafts of this section sketched a `WalletError` umbrella
-enum with `Network`, `Crypto`, `Storage`, `InvalidOperation`
-variants. That enum doesn't exist — the actual scheme uses the
-per-domain types above (see tech-doc § Error Codes for the same
-note, removed in 9e9cb19).
+Earlier drafts of this section referenced `src/errors.rs` as a
+central errors module + `DkgError` / `SigningError` /
+`ComponentError` / `CryptoError` as local enums — none of those
+exist in tui-node (`src/errors.rs` never landed despite being
+planned in the archived PHASE1 docs). The error story ended up
+per-domain rather than centralised; "SigningError" specifically
+is a variant of upstream `FrostError`, not a local enum.
+
+Earlier drafts also sketched a `WalletError` umbrella enum with
+`Network`, `Crypto`, `Storage`, `InvalidOperation` variants.
+That enum doesn't exist — see tech-doc § Error Codes for the
+consolidated story.
 
 ### Testing Strategy
 

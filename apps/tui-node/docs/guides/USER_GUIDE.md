@@ -564,6 +564,11 @@ current code.
 
 The TUI does not currently surface numeric `E001`-style error codes;
 errors are shown as descriptive messages derived from the
-`DKGError` / `SigningError` / `KeystoreError` variants in
-`src/errors.rs`. Grep the source by error message or error-type name
-when debugging.
+per-domain typed error enums: `KeystoreError`
+(`src/keystore/mod.rs:24`), `FrostKeystoreError`
+(`src/keystore/frost_keystore.rs:19`), `OfflineError`
+(`src/offline/mod.rs:24`), `CoreError` (`src/core/mod.rs:21`),
+plus upstream `FrostError` from `packages/@mpc-wallet/frost-core`.
+Grep the source by error message or enum name when debugging.
+There is no top-level `src/errors.rs` umbrella file despite what
+earlier drafts of this section claimed.

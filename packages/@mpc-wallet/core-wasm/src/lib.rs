@@ -68,6 +68,28 @@ impl From<FrostError> for WasmError {
     }
 }
 
+// Per-curve WASM wrappers (FrostDkgEd25519 / FrostDkgSecp256k1) —
+// single-curve DKG + threshold signing used by the browser extension.
+// The TUI node uses the curve-agnostic UnifiedDkg binding further
+// down (line ~625); keep both sides in lock-step when touching DKG
+// round bookkeeping.
+//
+// Contract with frost-core (as of 2.2):
+//   - dkg::part2 requires round1_packages.len() == max_signers - 1
+//     (keys/dkg.rs:505). `can_start_round2` below matches.
+//   - dkg::part2 expects peer packages only; self is NOT added to
+//     round1_packages here (generate_round1 stores only the secret).
+//   - round2::sign requires the signer's own commitment to appear
+//     in signing_package (round2.rs:135). `signing_commit` inserts
+//     the own commitment into self.signing_commitments to satisfy
+//     this without exposing the requirement to the caller.
+//   - aggregate requires signature_shares identifiers to match
+//     signing_commitments. `sign` inserts the own share into
+//     self.signature_shares for the same reason.
+//
+// Regression tests covering all four contracts live in
+// apps/browser-extension/tests/wasm-frost-contracts.test.ts.
+
 // Ed25519 WASM wrapper
 #[wasm_bindgen]
 pub struct FrostDkgEd25519 {

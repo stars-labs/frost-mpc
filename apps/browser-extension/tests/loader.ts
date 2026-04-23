@@ -17,5 +17,8 @@ const originalRequire = require;
       }
     };
   }
-  return originalRequire.apply(this, arguments);
+  // Cast arguments to any[] — TS treats arguments as IArguments
+  // which isn't assignable to [id: string]. Runtime semantics
+  // unchanged since Function.apply accepts array-likes.
+  return originalRequire.apply(this, arguments as any);
 };

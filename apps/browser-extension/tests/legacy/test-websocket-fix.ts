@@ -26,9 +26,9 @@ if ((result as any) instanceof Promise) {
     console.log("✅ relayMessage returns Promise - RACE CONDITION FIXED!");
 
     // Test the Promise resolves
-    result.then(() => {
+    (result as any).then(() => {
         console.log("✅ Promise resolved - SessionResponse will be properly sent");
-    }).catch((error) => {
+    }).catch((error: unknown) => {
         console.log("❌ Promise rejected:", error);
     });
 

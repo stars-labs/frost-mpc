@@ -78,10 +78,23 @@ pointers. A dedicated test-dApp fixture is open work.
 ### Expected Behavior
 1. "MPC Wallet" shows up in the dApp's EIP-6963 "Discovered Wallets" list.
 2. Clicking "Connect" invokes the MPC-wallet `eth_requestAccounts` flow.
-3. Default RPC replies (before a wallet is unlocked):
-   - `eth_chainId`: `"0x1"` (Ethereum mainnet)
-   - `net_version`: `"1"`
-   - `eth_accounts`: `[]` until a wallet is selected + unlocked.
+3. RPC replies before a wallet is unlocked:
+   - `eth_chainId`: whatever `NetworkService.getCurrentNetwork().id`
+     returns, hex-encoded via `toHex(...)`. There is **no** hardcoded
+     `"0x1"` default — the handler throws
+     `"No current network found"` if no network has been selected.
+     See § Supported RPC Methods above for the real behaviour.
+   - `net_version`: numeric-string form of the same network id.
+   - `eth_accounts`: the injected provider seeds a deterministic
+     fallback address from `DEFAULT_ADDRESSES.ethereum()` (see
+     `src/entrypoints/injected/index.ts:284`) so dApps can complete
+     the EIP-1193 handshake before a wallet is selected; real
+     connected accounts arrive after unlock.
+
+  (Earlier drafts of this section presented `eth_chainId: "0x1"`
+  and `net_version: "1"` as concrete pre-unlock defaults;
+  corrected to match the real handler logic in
+  `rpcHandler.ts:204-220`.)
 
 ## Integration with dApps
 The wallet will automatically work with any dApp that:

@@ -14,6 +14,7 @@
     import WalletSelector from "./components/WalletSelector.svelte";
     import CreateWalletForm from "../../components/CreateWalletForm.svelte";
     import { MESSAGE_TYPES } from "@mpc-wallet/types/messages";
+    import { hashMessage } from "viem";
 
     // Ext-1b: toggled when the user clicks "+ Create Wallet". Shows
     // the CreateWalletForm overlay until they submit or cancel.
@@ -41,6 +42,22 @@
     let signError = "";
     let signing_ = false;
     let signWalletId = "";
+
+    // Ext-2c: confirm-before-broadcast preview. Populated when the
+    // user clicks "Preview" on the sign form. Shows wallet + message
+    // + EIP-191 hash (secp256k1 only) so a tap-Enter-once-too-many
+    // can't silently announce the wrong payload to the mesh. Mirrors
+    // TUI's Stage 3 PendingSignPreview + Modal::Confirm flow (58c9f85).
+    // Cancel preserves the draft message so the user can edit +
+    // re-preview without retyping.
+    type SignPreview = {
+        walletName: string;
+        walletBlockchain: string;
+        walletAddress: string;
+        message: string;
+        eip191Hash: `0x${string}` | null;
+    };
+    let signPreview: SignPreview | null = null;
 
     // Application state (consolidated from background) - the single source of truth
     let appState: AppState = { ...INITIAL_APP_STATE };
@@ -518,6 +535,80 @@
 
     // Removed ensurePrivateKey() and ensureOffscreenDocument() - this is now an MPC-only wallet
     // Offscreen document management is handled entirely by the background script
+
+    // Ext-2c: build a preview of what we're about to broadcast. We
+    // deliberately duplicate the EIP-191 hash computation client-side
+    // so the user sees exactly what will land on-chain — the
+    // background handler still recomputes authoritatively, so a
+    // tampered popup can't lie about the preview and sign something
+    // different. Matches TUI update.rs SignSubmit → Modal::Confirm.
+    function buildSignPreview() {
+        signError = "";
+        if (!signMessage.trim()) {
+            signError = "Message required";
+            return;
+        }
+        if (!signWalletId) {
+            signError = "Pick a wallet";
+            return;
+        }
+        const wallet = keystoreStatus.wallets?.find(
+            (w: any) => w.id === signWalletId,
+        );
+        if (!wallet) {
+            signError = "Selected wallet not found";
+            return;
+        }
+        const eip191 =
+            wallet.blockchain === "ethereum"
+                ? (hashMessage(signMessage) as `0x${string}`)
+                : null;
+        signPreview = {
+            walletName: wallet.name ?? wallet.id,
+            walletBlockchain: wallet.blockchain,
+            walletAddress: wallet.address,
+            message: signMessage,
+            eip191Hash: eip191,
+        };
+    }
+
+    async function confirmSignPreview() {
+        if (!signPreview || signing_) return;
+        // Option::take equivalent — null out preview before dispatch
+        // so a double-click can't double-announce. Matches TUI's
+        // Option::take in update.rs ConfirmSigningRequest (58c9f85).
+        const preview = signPreview;
+        signPreview = null;
+        signing_ = true;
+        try {
+            const response = await chrome.runtime.sendMessage({
+                type: MESSAGE_TYPES.CREATE_SIGNING_SESSION,
+                walletId: signWalletId,
+                message: preview.message,
+            });
+            if (response?.success) {
+                console.log(
+                    "[UI] Signing session:",
+                    response.sessionId,
+                );
+                showSignForm = false;
+                signMessage = "";
+            } else {
+                signError = response?.error ?? "Sign failed";
+            }
+        } catch (e) {
+            signError = (e as Error).message ?? String(e);
+        } finally {
+            signing_ = false;
+        }
+    }
+
+    function cancelSignPreview() {
+        signPreview = null;
+        // Note: signMessage intentionally preserved so user can edit
+        // and re-preview without retyping. TUI parity with Stage 3
+        // CancelSigningRequest behavior.
+    }
 
     onMount(async () => {
         console.log("[UI] Component mounting");
@@ -1288,36 +1379,7 @@
                 {:else}
                     <form
                         class="space-y-2"
-                        on:submit|preventDefault={async () => {
-                            signError = "";
-                            if (!signMessage.trim()) {
-                                signError = "Message required";
-                                return;
-                            }
-                            if (!signWalletId) {
-                                signError = "Pick a wallet";
-                                return;
-                            }
-                            signing_ = true;
-                            try {
-                                const response = await chrome.runtime.sendMessage({
-                                    type: MESSAGE_TYPES.CREATE_SIGNING_SESSION,
-                                    walletId: signWalletId,
-                                    message: signMessage,
-                                });
-                                if (response?.success) {
-                                    console.log("[UI] Signing session:", response.sessionId);
-                                    showSignForm = false;
-                                    signMessage = "";
-                                } else {
-                                    signError = response?.error ?? "Sign failed";
-                                }
-                            } catch (e) {
-                                signError = (e as Error).message ?? String(e);
-                            } finally {
-                                signing_ = false;
-                            }
-                        }}
+                        on:submit|preventDefault={buildSignPreview}
                     >
                         <p class="text-sm font-semibold text-purple-900">Sign Message</p>
                         <select
@@ -1347,7 +1409,7 @@
                                 class="flex-1 rounded bg-purple-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-purple-700 disabled:bg-purple-300"
                                 disabled={signing_}
                             >
-                                {signing_ ? "Announcing…" : "Confirm & Announce"}
+                                {signing_ ? "Announcing…" : "Preview"}
                             </button>
                             <button
                                 type="button"
@@ -1356,6 +1418,7 @@
                                     showSignForm = false;
                                     signMessage = "";
                                     signError = "";
+                                    signPreview = null;
                                 }}
                                 disabled={signing_}
                             >
@@ -1364,6 +1427,96 @@
                         </div>
                     </form>
                 {/if}
+            </div>
+        {/if}
+
+        <!-- Ext-2c: Confirm-before-broadcast modal. Shows when user
+             hits Preview on the sign form. Mirrors TUI Stage 3
+             Modal::Confirm — wallet / message / EIP-191 hash (for
+             secp256k1 only) / explicit broadcast question. The hash
+             shown here is computed client-side for display; background
+             recomputes before signing so a tampered popup can't
+             deceive the confirmation. -->
+        {#if signPreview}
+            <div
+                class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="sign-preview-title"
+            >
+                <div class="w-full max-w-md rounded-lg bg-white p-4 shadow-xl">
+                    <h3
+                        id="sign-preview-title"
+                        class="mb-3 text-sm font-bold text-purple-900"
+                    >
+                        Confirm signing request
+                    </h3>
+                    <dl class="space-y-2 text-xs">
+                        <div>
+                            <dt class="font-semibold text-gray-700">Wallet</dt>
+                            <dd class="text-gray-900">
+                                {signPreview.walletName}
+                                <span class="text-gray-500">·</span>
+                                <span class="text-gray-500"
+                                    >{signPreview.walletBlockchain}</span
+                                >
+                            </dd>
+                            <dd
+                                class="break-all font-mono text-[10px] text-gray-500"
+                            >
+                                {signPreview.walletAddress}
+                            </dd>
+                        </div>
+                        <div>
+                            <dt class="font-semibold text-gray-700">Message</dt>
+                            <dd
+                                class="max-h-24 overflow-auto whitespace-pre-wrap break-words rounded bg-gray-50 p-2 font-mono text-[11px] text-gray-900"
+                            >
+                                {signPreview.message}
+                            </dd>
+                        </div>
+                        {#if signPreview.eip191Hash}
+                            <div>
+                                <dt class="font-semibold text-gray-700">
+                                    EIP-191 hash
+                                    <span class="text-gray-500"
+                                        >(ecrecover-compatible)</span
+                                    >
+                                </dt>
+                                <dd
+                                    class="break-all rounded bg-amber-50 p-2 font-mono text-[10px] text-amber-900"
+                                >
+                                    {signPreview.eip191Hash}
+                                </dd>
+                            </div>
+                        {/if}
+                    </dl>
+                    <p class="mt-3 text-xs text-gray-600">
+                        Broadcast this signing request to co-signers? Once
+                        announced, the ceremony cannot be revoked.
+                    </p>
+                    {#if signError}
+                        <p class="mt-2 text-xs text-red-600">{signError}</p>
+                    {/if}
+                    <div class="mt-4 flex gap-2">
+                        <button
+                            type="button"
+                            class="flex-1 rounded bg-purple-600 px-3 py-2 text-xs font-medium text-white hover:bg-purple-700 disabled:bg-purple-300"
+                            on:click={confirmSignPreview}
+                            disabled={signing_}
+                        >
+                            {signing_ ? "Broadcasting…" : "Confirm & Broadcast"}
+                        </button>
+                        <button
+                            type="button"
+                            class="rounded border border-gray-300 px-3 py-2 text-xs hover:bg-gray-50"
+                            on:click={cancelSignPreview}
+                            disabled={signing_}
+                        >
+                            Cancel
+                        </button>
+                    </div>
+                </div>
             </div>
         {/if}
 

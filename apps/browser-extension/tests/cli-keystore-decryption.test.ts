@@ -3,10 +3,14 @@ import { readFileSync } from "fs";
 import { resolve } from "path";
 
 /**
- * Test CLI keystore file decryption to ensure proper compatibility
- * 
- * This test verifies that we can properly decrypt .dat files generated
- * by the CLI node using the same encryption parameters (Argon2id + AES-GCM)
+ * Test keystore file decryption to ensure cross-client compatibility.
+ *
+ * The "CLI" naming throughout this file is historical — it predates the
+ * TUI/native split. The encryption format (Argon2id KDF + AES-256-GCM)
+ * is still the one used by apps/tui-node's keystore::Keystore and by
+ * packages/@mpc-wallet/frost-core's keystore module, so this test
+ * continues to guard the round-trip between the Rust side and the
+ * browser extension.
  */
 describe("CLI Keystore Decryption", () => {
     

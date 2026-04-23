@@ -897,7 +897,7 @@ export class WebRTCManager {
       const round1Package = this.frostDkg.generate_round1();
       this._log(`Generated Round 1 package (hex): ${round1Package.substring(0, 20)}...`);
 
-      // Decode hex to get JSON string, then parse it as structured object (like CLI nodes)
+      // Decode hex to get JSON string, then parse it as structured object (wire-compatible with the TUI node).
       let packageObject;
       try {
         // First decode the hex string to get the JSON string
@@ -922,7 +922,7 @@ export class WebRTCManager {
           if (peerId !== this.localPeerId) {
             const message: WebRTCAppMessage = {
               webrtc_msg_type: 'DkgRound1Package' as const,
-              package: packageObject  // Send parsed JSON object like CLI nodes
+              package: packageObject  // Send parsed JSON object — TUI peers expect the object shape, not a hex string.
             };
             this.sendWebRTCAppMessage(peerId, message);
           }
@@ -1263,7 +1263,7 @@ export class WebRTCManager {
       // Enhanced auto-trigger logic: Start DKG if we have session info and any of:
       // 1. Mesh is fully Ready, OR
       // 2. Mesh is PartiallyReady and all session participants have accepted, OR
-      // 3. We have buffered packages from all expected participants (indicating CLI nodes are ready)
+      // 3. We have buffered packages from every expected remote peer (TUI or extension).
       const shouldAutoTrigger = this._shouldAutoTriggerDkg();
 
       this._log(`Auto-trigger evaluation: meshType=${MeshStatusType[this.meshStatus.type]}, sessionInfo=${!!this.sessionInfo}, shouldTrigger=${shouldAutoTrigger}`);
@@ -2632,15 +2632,15 @@ export class WebRTCManager {
       }
     }
 
-    // Condition 3: We have buffered packages from all expected participants (indicating CLI nodes are ready)
+    // Condition 3: We have buffered packages from every remote peer (TUI or extension — both valid co-signers).
     const expectedParticipants = this.sessionInfo.participants.filter(p => p !== this.localPeerId);
     const bufferedFromParticipants = new Set(this.bufferedRound1Packages.map(pkg => pkg.fromPeerId));
-    const allCliNodesReady = expectedParticipants.every(p => bufferedFromParticipants.has(p));
+    const allPeersReady = expectedParticipants.every(p => bufferedFromParticipants.has(p));
 
-    this._log(`Auto-trigger check: CLI nodes ready check - expected: [${expectedParticipants.join(', ')}], buffered from: [${Array.from(bufferedFromParticipants).join(', ')}], all ready: ${allCliNodesReady}`);
+    this._log(`Auto-trigger check: peers-ready check - expected: [${expectedParticipants.join(', ')}], buffered from: [${Array.from(bufferedFromParticipants).join(', ')}], all ready: ${allPeersReady}`);
 
-    if (allCliNodesReady && expectedParticipants.length > 0) {
-      this._log(`Auto-trigger check: All CLI nodes have sent Round 1 packages ✅`);
+    if (allPeersReady && expectedParticipants.length > 0) {
+      this._log(`Auto-trigger check: All peers have sent Round 1 packages ✅`);
       return true;
     }
 

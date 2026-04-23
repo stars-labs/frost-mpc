@@ -15,7 +15,7 @@
 // ===================================================================
 
 // Application-Level Messages (sent over established WebRTC Data Channel)
-// Format compatible with CLI node implementation
+// Format compatible with the TUI node (apps/tui-node) wire protocol
 export type WebRTCAppMessage =
   // Basic communication
   | { webrtc_msg_type: 'SimpleMessage'; text: string }

@@ -61,10 +61,10 @@ The Cloudflare Worker now supports:
 
 After deployment, test with:
 ```bash
-cargo run --bin cli_node -- --device-id mpc-1
+cargo run --bin mpc-wallet-tui -p tui-node -- --device-id mpc-1
 # Create a session
 
-cargo run --bin cli_node -- --device-id mpc-2  
+cargo run --bin mpc-wallet-tui -p tui-node -- --device-id mpc-2
 # Should see the session from mpc-1
 ```
 

@@ -288,7 +288,7 @@ pub struct EncryptedWallet {
 - Key Derivation: PBKDF2-SHA256 (100,000 iterations)
 - Encryption: AES-256-GCM
 - Authentication: Built into GCM mode
-- Backup Format: Compatible with CLI node format
+- Backup Format: Compatible with the browser extension keystore format (PBKDF2 + AES-256-GCM round-trip tested)
 
 ## Storage System
 

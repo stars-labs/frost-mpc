@@ -1251,7 +1251,7 @@
         // Generate a test signing ID
         const signingId = `test_signing_${Date.now()}`;
         
-        // Use hex of "hello" (68656c6c6f) to match CLI node test
+        // Use hex of "hello" (68656c6c6f) to match the TUI node's signing smoke-test fixture.
         const testTransactionData = "68656c6c6f";
         
         // Use the threshold from the current session

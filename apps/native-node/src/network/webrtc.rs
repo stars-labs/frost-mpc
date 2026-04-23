@@ -23,7 +23,7 @@ use webrtc::peer_connection::RTCPeerConnection;
 use crate::commands::{DirectMessage, InternalCommand, WebRTCSignal};
 use crate::state::{SharedAppState, WebRTCConnectionState};
 
-// WebRTC configuration matching CLI node
+// WebRTC configuration matching the TUI node (apps/tui-node)
 static WEBRTC_CONFIG: Lazy<RTCConfiguration> = Lazy::new(|| RTCConfiguration {
     ice_servers: vec![
         // Google's public STUN servers

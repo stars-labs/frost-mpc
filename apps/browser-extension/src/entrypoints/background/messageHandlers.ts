@@ -1725,7 +1725,7 @@ export class OffscreenMessageHandler {
         }
     }
 
-    private async handleDkgComplete(payload: any): void {
+    private async handleDkgComplete(payload: any): Promise<void> {
         console.log("[OffscreenMessageHandler] DKG complete:", payload);
         
         // Update DKG state to Complete

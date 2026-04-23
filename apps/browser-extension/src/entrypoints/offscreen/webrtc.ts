@@ -434,6 +434,28 @@ export class WebRTCManager {
     }
   }
 
+  /**
+   * Send a plain text / debug message to a peer over the data
+   * channel. Distinct from sendWebRTCAppMessage (which requires a
+   * discriminated WebRTCAppMessage shape) — this just wraps the
+   * string in a SimpleMessage envelope. Used by the popup's
+   * developer-debug Send Direct Message feature. Returns whether
+   * the send was attempted (false if data channel isn't open).
+   */
+  public sendDirectMessage(toPeerId: string, text: string): boolean {
+    const dc = this.dataChannels.get(toPeerId);
+    if (dc && dc.readyState === 'open') {
+      dc.send(JSON.stringify({
+        webrtc_msg_type: 'SimpleMessage',
+        text,
+      }));
+      this._log(`Sent direct SimpleMessage to ${toPeerId}: ${text}`);
+      return true;
+    }
+    this._logVerbose(`Cannot send direct message to ${toPeerId}: data channel not open.`);
+    return false;
+  }
+
   // Missing private methods that tests are calling
   private _handlePeerDisconnection(peerId: string): void {
     this._log(`Handling peer disconnection for ${peerId}`);
@@ -793,10 +815,13 @@ export class WebRTCManager {
         const missing = this.sessionInfo.participants.filter(p => !this.receivedRound1Packages.has(p));
         if (missing.length > 0) {
           this._log(`🚨 POST-REPLAY CHECK: Missing Round 1 packages from: [${missing.join(', ')}]`);
-          
-          // Request missing Round 1 packages from peers
-          this._log(`📡 Requesting missing Round 1 packages from: [${missing.join(', ')}]`);
-          await this._requestMissingRound1Packages(missing);
+
+          // Request missing Round 1 packages from peers. Stub —
+          // peers will re-broadcast on the next mesh-ready cycle
+          // via the normal ordering; an explicit request protocol
+          // hasn't been wired yet. Logging so the ask is visible
+          // if the retry path ever becomes needed.
+          this._log(`📡 Need missing Round 1 packages from: [${missing.join(', ')}] — awaiting peer re-broadcast`);
         }
       }
       

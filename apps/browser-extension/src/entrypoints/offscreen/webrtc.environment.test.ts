@@ -1,4 +1,5 @@
 // Environment difference test for FROST DKG in production vs test
+import { describe, it, test, expect, beforeAll, beforeEach, afterEach, afterAll, jest } from 'bun:test';
 import { DkgState, WebRTCManager } from './webrtc';
 import wasmInit, { FrostDkgEd25519, FrostDkgSecp256k1 } from '@mpc-wallet/core-wasm';
 

@@ -184,150 +184,134 @@ field).
 
 ## TUI Architecture
 
-### Ratatui Integration
+### tui-realm Integration
 
-The TUI is built on Ratatui, providing a responsive terminal interface:
-
-```rust
-pub struct TuiManager {
-    terminal: Terminal<CrosstermBackend<Stdout>>,
-    ui_state: UIState,
-    event_receiver: mpsc::Receiver<Event>,
-    command_sender: mpsc::Sender<Command>,
-}
-```
+The TUI is built on [tui-realm](https://github.com/veeso/tuirealm)
+(which itself wraps Ratatui), using its Elm-architecture event
+routing. There is no named `TuiManager` struct — the terminal +
+application machinery lives on `ElmApp<C>` (see Core Components
+above).
 
 ### UI Components
 
-#### Main Layout
+The real per-screen components (under `src/elm/components/`):
+
 ```
-┌─ Title Bar ─────────────────────────┐
-├─ Menu/Content Area ─────────────────┤
-│                                      │
-├─ Activity Log ──────────────────────┤
-│                                      │
-├─ Status Bar ────────────────────────┤
+src/elm/components/
+├── main_menu.rs            # root navigation
+├── mode_selection.rs       # online / offline selection
+├── threshold_config.rs     # t-of-n picker
+├── join_session.rs         # browse + join announced sessions
+├── wallet_list.rs          # ManageWallets screen
+├── wallet_detail.rs
+├── wallet_complete.rs      # DKG completion
+├── create_wallet.rs
+├── password_prompt.rs      # unlock / import password flow
+├── dkg_progress.rs         # DKG progress gauge
+├── sign_transaction.rs
+├── signature_complete.rs   # EIP-191 result display
+├── notification.rs         # toast-style messages
+└── modal.rs                # modal dialog scaffolding
 ```
 
-#### Component Tree
-```
-App
-├── TitleBar
-│   ├── AppName
-│   ├── DeviceId
-│   └── ConnectionStatus
-├── ContentArea
-│   ├── MainMenu
-│   ├── WalletList
-│   ├── SessionView
-│   └── PopupManager
-├── ActivityLog
-│   └── LogEntries
-└── StatusBar
-    ├── NetworkIndicator
-    ├── WalletCount
-    └── NotificationBadge
-```
+Each component is a tui-realm `Component` impl that routes input
+events through `Component::on(Event) -> Option<Message>`. The `Id`
+enum (one variant per component) is what `Application::mount` /
+`Application::active` reference.
 
 ### Event System
 
-Events flow through a centralized event bus:
-
-```rust
-pub enum UIEvent {
-    KeyPress(KeyEvent),
-    MenuSelection(MenuItem),
-    NetworkUpdate(NetworkStatus),
-    SessionUpdate(SessionInfo),
-    WalletUpdate(WalletInfo),
-    Notification(NotificationType),
-}
-```
+User input arrives as `tuirealm::Event<UserEvent>`. Each component
+translates events into `Message` variants (`src/elm/message.rs`),
+which go through the `update` function (`src/elm/update.rs`) to
+produce state transitions plus a `Vec<Command<C>>` of side effects
+(`src/elm/command.rs`). There is no standalone `UIEvent` enum —
+that was a fabrication in earlier drafts of this doc.
 
 ### Rendering Pipeline
 
-1. **Event Collection**: Keyboard and system events
-2. **State Update**: Modify application state based on events
-3. **View Calculation**: Determine what to render
-4. **Buffer Rendering**: Draw to terminal buffer
-5. **Terminal Update**: Flush buffer to screen
+1. **Poll tui-realm**: `app.tick(PollStrategy::Once)` pulls
+   pending crossterm events.
+2. **Route to component**: Active component's `Component::on` handles
+   the event and optionally returns a `Message`.
+3. **Update model**: `update(&mut model, Message) -> Vec<Command<C>>`
+   mutates pure state and emits side effects.
+4. **Execute commands**: `Command<C>::execute` runs async tasks
+   (WebSocket send, keystore I/O, DKG rounds, etc.) that eventually
+   feed messages back into the queue.
+5. **Draw**: tui-realm calls `Component::view` on the active
+   screen, Ratatui flushes to the terminal.
 
 ## Network Layer
 
-### WebSocket Communication
+### WebSocket client
 
-Maintains persistent connection to signaling server:
+The signal-server WebSocket client lives in `src/elm/ws_runtime.rs`
+(and accompanying `src/network/` helpers). No named `WebSocketClient`
+struct — earlier drafts of this doc claimed a specific public
+struct with `reconnect_strategy` / `message_handler` fields that
+don't exist. The real flow:
 
-```rust
-pub struct WebSocketClient {
-    url: String,
-    connection: Option<WebSocketStream>,
-    message_handler: Arc<dyn MessageHandler>,
-    reconnect_strategy: ReconnectStrategy,
-}
-```
+- Connection bootstrapped by `Command::ConnectWebSocket`
+- Inbound messages (`ServerMsg` envelopes — see
+  `apps/signal-server/server/src/lib.rs` for the enum) decode
+  back to `Message` variants
+- Outbound messages (`ClientMsg`) emit via the `Command::SendWs*`
+  variants
 
-**Features:**
-- Automatic reconnection with exponential backoff
-- Message queuing during disconnections
-- TLS certificate validation
-- Binary and text message support
+### WebRTC Mesh
 
-### WebRTC Mesh Network
+`src/webrtc/mesh_manager.rs` holds the real full-mesh manager. Peer
+connections live on `AppState<C>.device_connections` (see the state
+section) — an `Arc<Mutex<HashMap<String, Arc<RTCPeerConnection>>>>`
+— alongside `data_channels`, `device_statuses`, and `pending_ice_candidates`
+tables.
 
-Peer-to-peer communication for DKG and signing:
-
-```rust
-pub struct WebRTCManager {
-    local_peer: PeerConnection,
-    remote_peers: HashMap<String, PeerConnection>,
-    data_channels: HashMap<String, DataChannel>,
-    ice_servers: Vec<IceServer>,
-}
-```
-
-**Mesh Formation Process:**
-1. Signal server facilitates peer discovery
-2. ICE candidates exchanged via signaling
-3. Direct P2P connections established
-4. Data channels created for protocol messages
+**Mesh formation**:
+1. Signal server relays session announcements + discovery
+2. Per-peer SDP offer/answer exchanged through `Relay` envelopes
+3. ICE candidates exchanged over `Relay` during gathering
+4. Data channels open per-peer; `MeshStatus::Ready` fires once all
+   peers are connected; DKG/signing ceremony starts
 
 ### Offline Data Transfer
 
-Support for air-gapped operations:
-
-```rust
-pub struct OfflineHandler {
-    import_queue: VecDeque<OfflinePacket>,
-    export_queue: VecDeque<OfflinePacket>,
-    sd_card_monitor: FileSystemWatcher,
-}
-```
+`src/offline/` (`types.rs`, `export.rs`, `import.rs`, `session.rs`)
+implements the SD-card air-gap mode. No named `OfflineHandler`
+struct — the export/import functions work over JSON bundles
+read/written to whatever path the user selects. Coordinator and
+participants exchange a handful of round-specific files; the full
+procedure is in [`../guides/offline-mode.md`](../guides/offline-mode.md)
+and [`../OFFLINE_DKG_GUIDE.md`](../OFFLINE_DKG_GUIDE.md).
 
 ## Cryptographic Core
 
 ### FROST Protocol Implementation
 
-Threshold signature scheme with distributed key generation:
+This crate does NOT define its own `FrostProtocol<C>` type — all
+DKG and signing primitives come from the upstream ZCash Foundation
+`frost-core 2.2` crate family. The TUI wraps them in:
 
-```rust
-pub struct FrostProtocol<C: Ciphersuite> {
-    round: ProtocolRound,
-    participant_index: u16,
-    threshold: u16,
-    total_participants: u16,
-    commitments: HashMap<u16, Commitment<C>>,
-    shares: HashMap<u16, Share<C>>,
-}
-```
+- `src/protocal/dkg.rs` — DKG orchestration (state machine driving
+  `dkg::part1` → `part2` → `part3`)
+- `src/protocal/signing.rs` — signing orchestration
+  (`round1::commit`, `round2::sign`, `aggregate`)
+- `src/protocal/dkg_coordinator.rs` — round-level helpers
+- FROST state for an in-flight ceremony lives on `AppState<C>`:
+  `dkg_round1_packages`, `dkg_round2_packages`, `key_package`,
+  `group_public_key`, `frost_commitments`, `frost_signature_shares`,
+  `frost_nonces`.
 
-**Protocol Rounds:**
-1. **DKG Round 1**: Generate and broadcast commitments
-2. **DKG Round 2**: Generate and send secret shares
-3. **Key Derivation**: Compute public key from shares
-4. **Signing Round 1**: Generate nonce commitments
-5. **Signing Round 2**: Create signature shares
-6. **Aggregation**: Combine shares into final signature
+**Protocol rounds** (as orchestrated by the Rust types here, not
+the underlying FROST math):
+
+1. DKG round 1: broadcast `part1` Package to all peers
+2. DKG round 2: unicast per-peer `part2` Package to each recipient
+3. DKG finalize: local `part3` to compute `KeyPackage` + group key
+4. Signing round 1: broadcast `SigningCommitments`
+5. Signing round 2: compute + broadcast `SignatureShare`
+6. Aggregate: combine shares into the final `Signature` (verified
+   automatically inside `frost_core::aggregate`)
 
 ### Keystore Architecture
 

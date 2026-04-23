@@ -66,8 +66,11 @@ export component MainWindow inherits Window {
     // Callbacks
     callback connect_websocket(string);
     callback create_wallet();
-    callback import_wallet();
-    callback export_wallet();
+    // import_wallet / export_wallet: second arg is the keystore
+    // password. The caller reads it out of the "Keystore password"
+    // LineEdit in Settings; for passwordless keystores pass "".
+    callback import_wallet(string);
+    callback export_wallet(string);
     callback join_session(string);
     callback create_session();
     callback leave_session();
@@ -189,8 +192,13 @@ export component MainWindow inherits Window {
                     has_keystore: AppState.has_keystore;
                     
                     create_wallet => { root.create_wallet(); }
-                    import_wallet => { root.import_wallet(); }
-                    export_wallet => { root.export_wallet(); }
+                    // WalletSelector's own inline Import/Export
+                    // buttons fire with an empty password — use
+                    // them for unencrypted / dev keystores. For
+                    // encrypted keystores use the dedicated
+                    // password-aware Import/Export in Settings.
+                    import_wallet => { root.import_wallet(""); }
+                    export_wallet => { root.export_wallet(""); }
                 }
                 
                 // Offline mode
@@ -315,6 +323,41 @@ export component MainWindow inherits Window {
                                         Button {
                                             text: "Connect";
                                             clicked => { root.connect_websocket("wss://auto-life.tech"); }
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Keystore password + password-aware
+                            // Import / Export buttons. The inline
+                            // WalletSelector buttons fire with "";
+                            // these pass the contents of the
+                            // password field to rfd-backed file
+                            // dialogs handled in core_adapter.rs.
+                            GroupBox {
+                                title: "Keystore (encrypted import/export)";
+
+                                VerticalBox {
+                                    spacing: 8px;
+
+                                    keystore-pw := LineEdit {
+                                        placeholder-text: "Keystore password";
+                                        input-type: password;
+                                    }
+
+                                    HorizontalBox {
+                                        Button {
+                                            text: "Import with password…";
+                                            clicked => {
+                                                root.import_wallet(keystore-pw.text);
+                                            }
+                                        }
+                                        Button {
+                                            text: "Export with password…";
+                                            enabled: AppState.has_keystore;
+                                            clicked => {
+                                                root.export_wallet(keystore-pw.text);
+                                            }
                                         }
                                     }
                                 }

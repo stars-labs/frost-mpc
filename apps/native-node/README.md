@@ -24,8 +24,8 @@ automatically.
 | Session create/join     | ✅       | ✅          | ✅          |
 | WebRTC mesh             | ✅       | ✅          | ✅ (core reused) |
 | DKG ceremony            | ✅       | ✅          | ✅ (core reused) |
-| Wallet import/export    | ✅       | ✅          | ✅ wired to `WalletManager` via `rfd` file dialog (password prompt still TODO) |
-| Threshold signing       | ✅       | ✅          | ❌ no signing flow wired |
+| Wallet import/export    | ✅       | ✅          | ✅ `rfd` file dialog + Settings password field (for encrypted keystores) |
+| Threshold signing       | ✅       | ✅          | ⚠ full approve/reject modal + SigningManager in `tui-node::core`; signature is a placeholder until FROST rounds plug into `protocal::signing` |
 | SD-card air-gap mode    | ✅       | ❌          | ⚠ core wired, no file-picker UI |
 | Keystore persistence    | ✅       | ✅          | ⚠ inherits from TUI's `Keystore` but no UI to unlock/lock |
 | EIP-1193 dApp injection | ❌       | ✅          | ❌ (desktop app — no in-browser context) |
@@ -38,28 +38,32 @@ UI surface isn't hooked up".
 
 ## Next steps (in recommended order)
 
-1. **Add a password-prompt modal** in the Slint UI. `import_wallet`
-   / `export_wallet` currently pass an empty password to
-   `WalletManager`, so encrypted keystores fail silently. The
-   missing piece is UI, not Rust logic.
+1. **Hook the SigningManager into real FROST rounds.** The Slint
+   modal, approve/reject wiring, and `SigningManager` skeleton
+   all exist — `SigningManager::approve` fast-forwards state
+   through Commitment → Share → Aggregating → Complete with a
+   placeholder all-zero signature. Plugging in
+   `protocal::signing::{handle_start_signing,
+   process_signing_round1, process_signing_round2}` requires
+   either (a) extracting a ciphersuite-generic backend that's
+   shared between the elm `Message` loop and the core
+   SigningManager, or (b) bridging the existing elm-coupled
+   functions via an internal channel. See the TODO at the top
+   of `src/core/signing_manager.rs`.
 
-2. **Add a `SigningManager` to `tui-node::core`** mirroring the
-   browser extension's `webrtc.ts` signing ceremony. `tui-node::
-   protocal::signing` already has the FROST round-1 / round-2 /
-   aggregate logic, but it's wired through the elm `Message` loop
-   on `AppState<C>`; the native-node needs a thinner facade that
-   operates on `CoreState` + emits `UICallback` events.
-
-3. **Extend `main_enhanced.slint`** with a signing modal
-   (transaction preview, approve/reject) matching the extension's
-   popup and the TUI's `SignTransactionComponent`. Add callbacks
-   `sign_transaction(hex)`, `approve_signing()`, `reject_signing()`
-   plus `update_signing_progress` / `update_signing_complete`
-   methods on `UICallback`.
-
-4. **Wire SD-card export/import UI** — the core `OfflineManager`
+2. **Wire SD-card export/import UI** — the core `OfflineManager`
    already handles the serialization; native-node just needs
-   `rfd::FileDialog` hooks for the round-1 / round-2 artifacts.
+   `rfd::FileDialog::pick_folder` hooks + callback signatures
+   to route the round-1 / round-2 artifacts to the user-chosen
+   SD card path.
+
+3. **Password-prompt UX polish.** The Settings tab has a
+   persistent password field that feeds `import_wallet` /
+   `export_wallet`. A proper UX would clear it after each use
+   (plain-text password lingering in the field is a foot-gun)
+   and optionally prompt in a modal per operation. Low priority
+   since the field is `input-type: password` (masked) and not
+   persisted.
 
 ## Known Slint 1.x gotchas (from the rehabilitation pass)
 

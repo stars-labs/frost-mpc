@@ -55,22 +55,24 @@ async fn main() -> Result<()> {
     
     {
         let adapter = adapter.clone();
-        window.on_import_wallet(move || {
+        window.on_import_wallet(move |password| {
             let adapter = adapter.clone();
+            let password = password.to_string();
             tokio::spawn(async move {
-                if let Err(e) = adapter.import_wallet().await {
+                if let Err(e) = adapter.import_wallet(password).await {
                     println!("Failed to import wallet: {}", e);
                 }
             });
         });
     }
-    
+
     {
         let adapter = adapter.clone();
-        window.on_export_wallet(move || {
+        window.on_export_wallet(move |password| {
             let adapter = adapter.clone();
+            let password = password.to_string();
             tokio::spawn(async move {
-                if let Err(e) = adapter.export_wallet().await {
+                if let Err(e) = adapter.export_wallet(password).await {
                     println!("Failed to export wallet: {}", e);
                 }
             });

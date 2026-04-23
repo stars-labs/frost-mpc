@@ -101,10 +101,10 @@ impl CoreAdapter {
     }
     
     /// Import a keystore from disk. Opens a native file-picker for
-    /// the `.dat` path, and (for now) uses an empty password — the
-    /// full flow should surface a password-prompt modal in Slint
-    /// before calling into here; see README "Next steps" #1.
-    pub async fn import_wallet(&self) -> Result<(), String> {
+    /// the `.dat` path, then passes the user-supplied password to
+    /// `WalletManager::import_wallet` for decryption. Pass `""` if
+    /// the keystore is unencrypted.
+    pub async fn import_wallet(&self, password: String) -> Result<(), String> {
         // `rfd::AsyncFileDialog` is async-friendly but its await
         // point runs on the GUI thread; keep this on tokio's
         // blocking scheduler to avoid blocking the Slint event loop.
@@ -124,23 +124,24 @@ impl CoreAdapter {
         };
 
         let path = handle.to_string_lossy().into_owned();
-        self.ui_callback
-            .show_message(format!("Importing keystore from {path}..."), false)
-            .await;
+        let msg = if password.is_empty() {
+            format!("Importing keystore from {path} (no password)...")
+        } else {
+            format!("Importing keystore from {path}...")
+        };
+        self.ui_callback.show_message(msg, false).await;
 
-        // TODO(native-node): wire a password-prompt modal and pass
-        // the user-supplied password in here. Empty string for now
-        // — WalletManager::import_wallet will surface the real error
-        // from keystore decryption.
         self.wallet_manager
-            .import_wallet(path, String::new())
+            .import_wallet(path, password)
             .await
             .map_err(|e| e.to_string())
     }
 
     /// Export the active wallet to a keystore file. Opens a native
-    /// save dialog for the destination path.
-    pub async fn export_wallet(&self) -> Result<(), String> {
+    /// save dialog for the destination path; the user-supplied
+    /// password is used to encrypt the output. Pass `""` to write
+    /// an unencrypted keystore.
+    pub async fn export_wallet(&self, password: String) -> Result<(), String> {
         let Some(handle) = tokio::task::spawn_blocking(|| {
             rfd::FileDialog::new()
                 .add_filter("MPC keystore", &["dat"])
@@ -162,13 +163,15 @@ impl CoreAdapter {
         // Export the currently-active wallet. CoreState tracks the
         // active index alongside the wallet list.
         let active_index = *self.state.active_wallet_index.lock().await;
-        self.ui_callback
-            .show_message(format!("Exporting wallet to {path}..."), false)
-            .await;
+        let msg = if password.is_empty() {
+            format!("Exporting wallet to {path} (unencrypted)...")
+        } else {
+            format!("Exporting wallet to {path}...")
+        };
+        self.ui_callback.show_message(msg, false).await;
 
-        // TODO(native-node): password-prompt modal (see import_wallet).
         self.wallet_manager
-            .export_wallet(active_index, path, String::new())
+            .export_wallet(active_index, path, password)
             .await
             .map_err(|e| e.to_string())
     }

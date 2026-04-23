@@ -24,12 +24,13 @@ frost-core = { version = "2.2.0", features = ["serde"] }
 rand = "0.10.1"
 getrandom.workspace = true
 
-# Solana SDK + the `solana_system_program` it re-exports. Used by
-# utils/solana_encoder.rs for SOL/SPL transaction construction.
-# (No `solana-client` — the TUI doesn't RPC directly; it hands
-# serialized txs to the user/extension.)
+# Solana SDK. Used by utils/solana_encoder.rs for SOL/SPL
+# transaction construction. (No `solana-client` — the TUI doesn't
+# RPC directly; it hands serialized txs to the user/extension. No
+# `solana-system-program` either — the System Program pubkey is a
+# well-known constant that we parse from its base58 string in
+# solana_encoder::SYSTEM_PROGRAM_PUBKEY.)
 solana-sdk = "4.0.1"
-solana-system-program = "3.0.1"
 
 hex = { version = "0.4.3", features = ["serde"] }
 tokio = { version = "1.42.0", features = ["full"] }

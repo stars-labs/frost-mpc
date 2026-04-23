@@ -7,17 +7,29 @@ use solana_sdk::{
     hash::Hash,
     message::Message,
 };
-use solana_system_program;
 use serde::{Serialize, Deserialize};
+use std::str::FromStr;
+use std::sync::LazyLock;
 
 /// SPL Token program ID
 pub const TOKEN_PROGRAM_ID: &str = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
 
-/// Associated Token Account program ID  
+/// Associated Token Account program ID
 pub const ATA_PROGRAM_ID: &str = "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL";
 
 /// System program ID
 pub const SYSTEM_PROGRAM_ID: &str = "11111111111111111111111111111111";
+
+/// Parsed `SYSTEM_PROGRAM_ID` as a `Pubkey`.
+///
+/// Replaces `solana_system_program::id()` — the `solana-system-program`
+/// crate is deprecated (from v4.0.0 onward it requires the
+/// `agave-unstable-api` feature opt-in per a deprecation notice). The
+/// System Program's on-chain address is a well-known all-zeros pubkey
+/// that's stable forever, so parsing the constant string once and
+/// caching in a `LazyLock` gives the same result without the dep.
+static SYSTEM_PROGRAM_PUBKEY: LazyLock<Pubkey> =
+    LazyLock::new(|| Pubkey::from_str(SYSTEM_PROGRAM_ID).expect("SYSTEM_PROGRAM_ID is valid"));
 
 /// Common SPL token mint addresses on Solana mainnet
 pub struct TokenMints;
@@ -90,7 +102,7 @@ impl SolanaTransactionBuilder {
         
         // Create a system transfer instruction manually
         let instruction = Instruction {
-            program_id: solana_system_program::id(),
+            program_id: *SYSTEM_PROGRAM_PUBKEY,
             accounts: vec![
                 AccountMeta::new(from_pubkey, true),
                 AccountMeta::new(to_pubkey, false),
@@ -275,7 +287,7 @@ impl SolanaHelper {
             
             result.push_str(&format!("Instruction {}: ", i));
             
-            if program_id == solana_system_program::id() {
+            if program_id == *SYSTEM_PROGRAM_PUBKEY {
                 result.push_str("System Transfer\n");
             } else if program_id == TOKEN_PROGRAM_ID.parse::<Pubkey>().unwrap() {
                 result.push_str("SPL Token Transfer\n");

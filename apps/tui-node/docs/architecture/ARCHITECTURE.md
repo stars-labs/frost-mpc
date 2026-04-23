@@ -62,61 +62,125 @@ The FROST MPC TUI Wallet is built as a modular, event-driven system that provide
 
 ## Core Components
 
-### Application Runner (`app_runner.rs`)
+### Application Entry (`elm/app.rs`)
 
-The central orchestrator that manages the application lifecycle:
+The real entry struct is `ElmApp<C>`, not a named `AppRunner`.
+Earlier drafts of this doc referenced an `AppRunner` type that
+never existed in source.
 
 ```rust
-pub struct AppRunner<C: Ciphersuite> {
-    state: Arc<Mutex<AppState<C>>>,
-    ui_provider: Arc<dyn UIProvider>,
-    network_manager: NetworkManager,
-    session_handler: SessionHandler<C>,
-    keystore_service: KeystoreService,
+// src/elm/app.rs
+pub struct ElmApp<C: frost_core::Ciphersuite> {
+    model: Model,                                // pure UI state
+    app: Application<Id, Message, UserEvent>,    // tui-realm shell
+    terminal: CrosstermTerminalAdapter,
+    message_tx: UnboundedSender<Message>,
+    message_rx: UnboundedReceiver<Message>,
+    app_state: Arc<Mutex<AppState<C>>>,          // shared with non-Elm managers
+    should_quit: bool,
 }
 ```
 
-**Responsibilities:**
-- Initialize and coordinate all subsystems
-- Route messages between components
-- Manage application state
-- Handle lifecycle events
+See [`ELM_ARCHITECTURE.md`](./ELM_ARCHITECTURE.md) for the
+Model/Update/View breakdown.
 
-### UI Provider System (`ui/provider.rs`)
+### UI Provider System (`elm/provider.rs`)
 
-Abstraction layer that enables different UI implementations:
+Trait abstracting UI backends so non-Elm managers (the `core::*Manager`
+types reused by native-node) can push state without knowing whether
+they're driving a Ratatui TUI, a Slint GUI, or a test harness:
 
 ```rust
+#[async_trait]
 pub trait UIProvider: Send + Sync {
-    fn update_status(&self, status: &str);
-    fn show_error(&self, error: &str);
-    fn show_success(&self, message: &str);
-    fn request_input(&self, prompt: &str) -> Result<String>;
-    fn show_progress(&self, operation: &str, progress: f32);
+    // Connection + device list
+    async fn set_connection_status(&self, connected: bool);
+    async fn set_device_id(&self, device_id: String);
+    async fn update_device_list(&self, devices: Vec<String>);
+
+    // Session / DKG / signing updates
+    async fn update_session_status(&self, status: String);
+    async fn add_session_invite(&self, invite: SessionInfo);
+    async fn update_dkg_status(&self, status: String);
+    async fn add_signing_request(&self, request: PendingSigningRequest);
+    async fn set_signature_result(&self, signing_id: String, signature: Vec<u8>);
+
+    // Wallet list + logs + mesh status + error/progress
+    async fn update_wallet_list(&self, wallets: Vec<WalletDisplayInfo>);
+    async fn add_log(&self, message: String);
+    async fn update_mesh_status(&self, ready: usize, total: usize);
+    async fn show_error(&self, error: String);
+    async fn set_busy(&self, busy: bool);
+    // …etc., see provider.rs for the full surface
 }
 ```
 
-**Implementations:**
-- `TuiProvider`: Full terminal UI with windows and menus
-- `CliProvider`: Simple command-line interface
-- `TestProvider`: Mock implementation for testing
+**Real implementations:**
+- `NoOpUIProvider` (`elm/provider.rs`) — no-op for tests / headless
+- The TUI itself drives UI updates through the tui-realm Elm loop
+  rather than implementing `UIProvider` directly. (Earlier drafts
+  of this doc listed `TuiProvider` / `CliProvider` / `TestProvider`
+  implementations that don't exist in source — removed.)
 
-### State Management (`utils/state.rs`)
+### State Management (`utils/appstate_compat.rs`)
 
-Centralized state management with thread-safe access:
+`AppState<C: Ciphersuite>` is the shared state container — a
+thread-safe (`Arc<Mutex<AppState<C>>>`) blob holding the pieces
+that the Elm `Model` doesn't own: peer connections, ICE candidates,
+DKG/signing FROST state, etc.
+
+Key fields (abbreviated — full struct in `utils/appstate_compat.rs`):
 
 ```rust
 pub struct AppState<C: Ciphersuite> {
+    // Identity + network
     pub device_id: String,
-    pub curve_type: CurveType,
+    pub signal_server_url: String,
     pub devices: Vec<String>,
+
+    // Session
     pub session: Option<SessionInfo>,
-    pub wallets: HashMap<String, WalletInfo>,
-    pub pending_operations: VecDeque<Operation>,
-    pub network_status: NetworkStatus,
-    pub offline_mode: bool,
+    pub invites: Vec<SessionInfo>,
+    pub available_sessions: Vec<SessionAnnouncement>,
+
+    // Keystore + blockchain surface
+    pub keystore: Option<Arc<Keystore>>,
+    pub blockchain_addresses: Vec<BlockchainInfo>,
+    pub current_wallet_id: Option<String>,
+
+    // WebRTC mesh (per-peer tables)
+    pub device_connections: Arc<Mutex<HashMap<String, Arc<RTCPeerConnection>>>>,
+    pub data_channels: HashMap<String, Arc<RTCDataChannel>>,
+    pub device_statuses: HashMap<String, RTCPeerConnectionState>,
+    pub pending_ice_candidates: HashMap<String, Vec<RTCIceCandidateInit>>,
+
+    // DKG state machine + packages
+    pub mesh_status: MeshStatus,
+    pub dkg_state: DkgState,
+    pub dkg_round1_packages: BTreeMap<Identifier<C>, round1::Package<C>>,
+    pub dkg_round2_packages: BTreeMap<Identifier<C>, round2::Package<C>>,
+    pub key_package: Option<KeyPackage<C>>,
+    pub group_public_key: Option<VerifyingKey<C>>,
+
+    // Signing state machine + FROST intermediates
+    pub signing_state: SigningState<C>,
+    pub pending_signing_requests: Vec<PendingSigningRequest>,
+    pub frost_commitments: BTreeMap<Identifier<C>, SigningCommitments<C>>,
+    pub frost_signature_shares: BTreeMap<Identifier<C>, SignatureShare<C>>,
+    pub frost_nonces: Option<SigningNonces<C>>,
+    pub signing_message: Option<Vec<u8>>,
+
+    pub log: Vec<String>,
 }
 ```
+
+No `curve_type`, `wallets: HashMap<…>`, `pending_operations: VecDeque<…>`,
+`network_status`, or `offline_mode` fields — those were listed in
+earlier drafts of this doc. Curve is per-wallet (lives in the
+keystore's `WalletMetadata`), wallets live in the keystore, signing
+requests queue through `pending_signing_requests`, and offline-mode
+is set at startup via the `--offline` CLI flag (no runtime toggle
+field).
 
 ## TUI Architecture
 

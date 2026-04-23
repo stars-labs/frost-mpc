@@ -46,6 +46,14 @@ export interface Account {
     /** Whether this account is currently active/selected */
     isActive?: boolean;
 
+    /**
+     * Account type discriminator. 'frost' for MPC/threshold accounts
+     * created via DKG ceremony — the primary kind in this extension.
+     * Left optional and string-unioned open for future account kinds
+     * (e.g. 'watch-only', 'hardware').
+     */
+    type?: 'frost' | 'watch-only' | 'hardware' | string;
+
     /** Optional metadata for the account */
     metadata?: {
         /** Derivation path used to generate this account */

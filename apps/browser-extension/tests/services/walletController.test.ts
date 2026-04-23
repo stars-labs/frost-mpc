@@ -420,7 +420,8 @@ describe('WalletController', () => {
                 name: 'Test Account',
                 address: '0x1234567890123456789012345678901234567890',
                 blockchain: 'ethereum',
-                type: 'frost'
+                balance: '0',
+                type: 'frost',
             });
             await accountService.setCurrentAccount('test-account-1');
 
@@ -472,7 +473,8 @@ describe('WalletController', () => {
                 name: 'Test Account',
                 address: '0x1234567890123456789012345678901234567890',
                 blockchain: 'ethereum',
-                type: 'frost'
+                balance: '0',
+                type: 'frost',
             });
         });
 

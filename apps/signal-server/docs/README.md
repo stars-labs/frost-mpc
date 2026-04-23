@@ -5,7 +5,13 @@ Documentation for the WebRTC signaling servers used by the MPC Wallet.
 ## Documentation Structure
 
 - [`deployment/`](./deployment/) - Deployment guides and configurations
-- [`architecture/`](./architecture/) - Technical architecture documentation (coming soon)
+
+Architecture specifics live as Rust doc comments on the public
+types in [`server/src/lib.rs`](../server/src/lib.rs) (`ServerMsg`,
+`DeviceId`, etc.). For the broader wire-protocol overview, see the
+top-of-repo `CLAUDE.md` § "Browser extension: threshold signing
+architecture" — the signal server's role is the unmodified
+message relay in that flow diagram.
 
 ## Overview
 

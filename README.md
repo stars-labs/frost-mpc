@@ -101,7 +101,6 @@ cargo run -p native-node
 #### Signal Server
 - [Signal Server Guide](apps/signal-server/docs/README.md) - WebRTC signaling server
 - [Deployment](apps/signal-server/docs/deployment/cloudflare-deployment.md) - Cloudflare deployment guide
-- [Architecture](apps/signal-server/docs/architecture/) - Server architecture and design
 
 ### 🔧 Development Resources
 - [Testing Documentation](docs/testing/README.md) - Testing strategies and tools

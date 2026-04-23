@@ -133,8 +133,8 @@ async fn main() {
                                 }
                                 Ok(ClientMsg::Relay { to, data }) => {
                                     // Check if this is a SessionProposal to update session participants
-                                    if data.get("websocket_msg_type").and_then(|v| v.as_str()) == Some("SessionProposal") {
-                                        if let (Some(session_id), Some(participants)) = (
+                                    if data.get("websocket_msg_type").and_then(|v| v.as_str()) == Some("SessionProposal")
+                                        && let (Some(session_id), Some(participants)) = (
                                             data.get("session_id").and_then(|v| v.as_str()),
                                             data.get("participants").and_then(|v| v.as_array())
                                         ) {
@@ -176,11 +176,10 @@ async fn main() {
                                             }
                                             drop(device_sessions_guard);
                                         }
-                                    }
                                     
                                     // Check if this is a SessionUpdate to track active participants  
-                                    if data.get("websocket_msg_type").and_then(|v| v.as_str()) == Some("SessionUpdate") {
-                                        if let (Some(session_id), Some(accepted_devices)) = (
+                                    if data.get("websocket_msg_type").and_then(|v| v.as_str()) == Some("SessionUpdate")
+                                        && let (Some(session_id), Some(accepted_devices)) = (
                                             data.get("session_id").and_then(|v| v.as_str()),
                                             data.get("accepted_devices").and_then(|v| v.as_array())
                                         ) {
@@ -226,7 +225,6 @@ async fn main() {
                                             }
                                             drop(device_sessions_guard);
                                         }
-                                    }
                                     
                                     let devices_guard = devices.lock().unwrap();
                                     
@@ -354,9 +352,9 @@ async fn main() {
                                     
                                     // Handle participant joining a session
                                     if let Some(participant_joined) = session_info.get("participant_joined")
-                                        .and_then(|v| v.as_str()) {
+                                        .and_then(|v| v.as_str())
                                         
-                                        if let Some(session_id) = session_info.get("session_id")
+                                        && let Some(session_id) = session_info.get("session_id")
                                             .and_then(|v| v.as_str()) {
                                             
                                             // Update the stored session with new participant
@@ -417,7 +415,6 @@ async fn main() {
                                                 println!("Session {} not found for participant update", session_id);
                                             }
                                         }
-                                    }
                                 }
                                 Ok(ClientMsg::QueryMyActiveSessions) => {
                                     // Client asks "what sessions am I in?"

@@ -870,71 +870,36 @@ bun run test:e2e
 
 ## Deployment Architecture
 
-### Production Deployment
+Full deployment guide lives in [`docs/deployment/README.md`](deployment/README.md)
+— this section is a summary. For Cloudflare-Worker-specific steps see
+[`docs/deployment/CLOUDFLARE_DEPLOYMENT.md`](deployment/CLOUDFLARE_DEPLOYMENT.md).
 
-#### 1. Signal Server Deployment
+### What ships to production
 
-**Option A: Cloudflare Workers**
-```bash
-cd apps/signal-server/cloudflare-worker
-wrangler publish
-```
+- **Cloudflare Worker signal server**: canonical production path.
+  `wrangler deploy` from `apps/signal-server/cloudflare-worker/`.
+- **Self-hosted signal server**: `cargo build --release -p webrtc-signal-server`
+  → systemd service behind an HTTPS terminator. Binds `0.0.0.0:9000`;
+  reads zero env vars; stateless. No Dockerfile or docker-compose
+  ships in-tree today.
+- **Browser extension**: `bun run build:chrome` / `build:firefox`
+  → web-store distribution.
+- **TUI / native apps**: `cargo build --release` → single static
+  binary. No platform installers (`.msi` / `.dmg` / `.AppImage`)
+  ship today — earlier drafts of this section referenced WiX /
+  create-dmg / linuxdeploy scaffolding that does not exist in the
+  repo (verified: zero `.wxs` / `AppDir` / `create-dmg` references
+  anywhere). Users build and run the raw binary.
 
-**Option B: Traditional Server**
-```bash
-cd apps/signal-server/server
-docker build -t mpc-signal-server .
-docker run -p 8080:8080 mpc-signal-server
-```
+### Infrastructure sizing
 
-#### 2. Browser Extension Distribution
-
-**Chrome Web Store**
-1. Build production bundle: `bun run build:chrome`
-2. Create ZIP: `cd .output/chrome-mv3 && zip -r ../extension.zip .`
-3. Upload to Chrome Developer Dashboard
-
-**Firefox Add-ons**
-1. Build production bundle: `bun run build:firefox`
-2. Sign with web-ext: `web-ext sign --api-key=xxx --api-secret=yyy`
-
-#### 3. Desktop Application Distribution
-
-**Windows**
-```powershell
-# Build MSI installer
-cargo build --release
-wix candle installer.wxs
-wix light installer.wixobj
-```
-
-**macOS**
-```bash
-# Build DMG
-cargo build --release
-create-dmg target/release/mpc-wallet-native.app
-```
-
-**Linux**
-```bash
-# Build AppImage
-cargo build --release
-linuxdeploy --appdir AppDir --executable target/release/mpc-wallet-native
-```
-
-### Infrastructure Requirements
-
-#### Signal Server
-- **CPU**: 2 vCPUs minimum
-- **Memory**: 4GB RAM
-- **Network**: 100 Mbps bandwidth
-- **Storage**: 20GB SSD
-- **Scaling**: Horizontal scaling with load balancer
-
-#### STUN/TURN Servers
-- **Bandwidth**: 1 Gbps recommended
-- **Locations**: Multiple geographic regions
-- **Redundancy**: Active-active configuration
+The standalone signal server is stateless and lightweight —
+memory scales with active WebSocket count, not historic session
+volume. Real-world sizing depends on concurrent-peer load and has
+not been benchmarked; start small and scale vertically by
+kernel-tuning (see `docs/deployment/README.md` § Operator notes
+for the sysctl knobs). The public Cloudflare Worker deployment
+offloads capacity planning entirely to Cloudflare's edge runtime.
 
 ### Monitoring and Observability
 

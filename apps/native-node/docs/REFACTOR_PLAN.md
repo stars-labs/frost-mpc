@@ -1,14 +1,25 @@
 # Native Node Refactor Plan
 
-## 📊 Current State Analysis
+> **Historical plan.** This document captures the refactor plan at
+> the start of the Slint rehabilitation pass. For the **current**
+> state of native-node (what ships, what's stubbed, what's
+> outstanding), see [`../README.md`](../README.md) — the
+> feature-parity matrix there is kept current; this plan is kept
+> for context on how we got here. Some claims below (especially
+> the "TUI Node has X" list) drift from reality because items were
+> never actually shipped by either client.
 
-### Native Node (Current)
-The native node currently has:
+## 📊 Current State Analysis (at plan time)
+
+### Native Node (at plan time)
+The native node at plan time:
 - ✅ Basic Slint UI with tabs and forms
 - ✅ WebSocket connection
 - ✅ Simple DKG flow
 - ✅ Basic signing functionality
-- ✅ Uses TUI node as library (AppRunner)
+- ✅ Uses `tui-node` as library. (Plan-era name `AppRunner`
+  referenced the entry struct; after the Elm-architecture
+  migration the real type is `ElmApp<C>` in `tui-node/src/elm/app.rs`.)
 - ⚠️ Limited feature set compared to TUI
 - ⚠️ No offline mode support
 - ⚠️ No WebRTC mesh networking
@@ -16,8 +27,8 @@ The native node currently has:
 - ⚠️ No multi-wallet support
 - ⚠️ Limited error handling
 
-### TUI Node (Reference Implementation)
-The TUI node has these advanced features:
+### TUI Node (Reference Implementation — as the plan imagined it)
+The plan-era comparison listed TUI features as:
 - ✅ Complete DKG implementation with FROST
 - ✅ Offline/Online dual-mode operation
 - ✅ WebRTC mesh networking with rejoin
@@ -29,6 +40,17 @@ The TUI node has these advanced features:
 - ✅ Comprehensive error handling
 - ✅ Audit logging
 - ✅ Network partition handling
+
+Two items above have not been verified against source and probably
+never shipped in either client:
+
+- **"Audit logging"** — no structured audit-log emission exists
+  in tui-node (consistent with the audit-log absence fixed across
+  multiple security docs in 9e9cb19 / d854239 / 6d7fd5a).
+- **"Network partition handling"** — the WebRTC mesh detects and
+  logs disconnections but there's no automatic recovery /
+  partition-recombining layer; a dropped peer has to manually
+  rejoin a new session.
 
 ## 🎯 Missing Components in Native Node
 

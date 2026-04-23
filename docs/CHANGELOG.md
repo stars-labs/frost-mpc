@@ -1,54 +1,53 @@
 # Changelog
 
-All notable changes to this project will be documented in this file.
+The format is inspired by [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+but note that no tagged release has been cut yet — `git tag -l` is
+empty and every workspace crate is at `0.1.0` (signal-server is at
+`0.1.1` because it was published to crates.io once before being
+absorbed into the monorepo).
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+This file records notable milestones as they land on `main`; version
+numbers below are milestone labels, not published release tags.
 
-## [2.0.0] - 2025-07-10
+## Unreleased
+
+Ongoing development on `main`. Recent threads include repo-hygiene
+cleanup (doc-vs-code accuracy, unused-dependency pruning, stale
+archive) and feature work on native-node and browser-extension
+signing UX. See `git log` for the authoritative record.
+
+## Monorepo migration milestone — July 2025
 
 ### Added
-- **Monorepo Structure**: Complete project reorganization into apps/ and packages/ directories
-- **Native Desktop Application**: Cross-platform desktop app built with Slint UI framework
-  - Real-time WebSocket connections
-  - Session management interface
-  - Visual DKG progress tracking
-  - Modern tabbed UI (Session, DKG, Signing, Logs)
-- **Shared Packages**:
-  - `@mpc-wallet/frost-core`: Shared FROST cryptographic library
-  - `@mpc-wallet/core-wasm`: WebAssembly bindings for browser
-  - `@mpc-wallet/types`: Centralized TypeScript type definitions
-- **Enhanced Build System**:
-  - Unified Cargo workspace for Rust projects
-  - Bun workspace for TypeScript packages
-  - Monorepo-wide build scripts
-- **Documentation**:
-  - Comprehensive monorepo architecture guide
-  - Native desktop application user guide
-  - Updated README for multi-platform support
+- **Monorepo layout**: Workspace reorganized into `apps/` (tui-node,
+  native-node, signal-server, browser-extension) and
+  `packages/@mpc-wallet/` (frost-core, core-wasm, blockchain, types).
+- **Native desktop app** (`apps/native-node/`): Slint 1.x UI reusing
+  `tui-node::core::{*Manager, CoreState}` via a `UICallback` trait.
+- **Shared packages**:
+  - `@mpc-wallet/frost-core`: ciphersuite-generic FROST library used
+    by TUI, native, and (via WASM) the browser extension.
+  - `@mpc-wallet/core-wasm`: thin `wasm-bindgen` wrapper.
+  - `@mpc-wallet/types`: shared TypeScript types for the extension.
+- **Build tooling**: Unified Cargo workspace (edition 2024, requires
+  Rust 1.85+); Bun workspace for TypeScript packages.
 
 ### Changed
-- **Browser Extension**: Moved from root to `apps/browser-extension/`
-- **Import Paths**: All TypeScript imports now use `@mpc-wallet/types`
-- **Build Commands**: Must be run from project root
-- **Dependencies**: Updated Nix flake with GUI support (Wayland, X11)
+- **Browser extension**: Moved from repo root to `apps/browser-extension/`.
+- **TypeScript imports**: Standardized on `@mpc-wallet/types` package path.
+- **Build commands**: All `bun run *` scripts run from the repo root.
+- **Nix flake**: Added GUI libs (Wayland, X11, accesskit deps) for Slint.
 
-### Fixed
-- Code duplication between CLI and WASM implementations
-- Type inconsistencies across different apps
-- Build complexity with multiple independent projects
+### Breaking
+- File paths changed wholesale due to the monorepo restructure.
+- Import statements rewritten to use `@mpc-wallet/types`.
+- Build commands must be run from the workspace root, not inside apps.
 
-### Breaking Changes
-- File paths have changed due to monorepo structure
-- Import statements need updating to use @mpc-wallet/types
-- Build commands must be run from repository root
-- Browser extension location moved
-
-## [1.0.0] - 2025-07-09
+## Pre-monorepo milestone — July 2025
 
 ### Added
-- Initial release with browser extension and CLI node
-- FROST threshold signature implementation
-- WebRTC peer-to-peer networking
-- Multi-blockchain support (Ethereum, Solana)
-- Keystore import/export functionality
+- Initial browser extension (MV3) with FROST-over-WebRTC threshold signing.
+- CLI / TUI node with FROST ed25519 + secp256k1 DKG and signing.
+- WebRTC peer-to-peer networking (full-mesh) with WebSocket signal server.
+- Multi-chain address derivation (Ethereum, Solana).
+- Keystore import/export between TUI and extension.

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, beforeEach, afterEach, jest } from 'bun:test';
+import { describe, it, test, expect, beforeAll, beforeEach, afterEach, afterAll, jest } from 'bun:test';
 import { DkgState, WebRTCManager, SigningState } from '../../../src/entrypoints/offscreen/webrtc';
 import {
     initializeWasmIfNeeded,

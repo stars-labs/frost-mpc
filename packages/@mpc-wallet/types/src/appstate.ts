@@ -60,6 +60,10 @@ export interface AppState {
   // these; user has to redo DKG). ---
   /** Derived on-chain address from the DKG result. */
   dkgAddress?: string;
+  /** Last DKG error message (ceremony failed, peer dropped, etc.).
+   *  Cleared to "" on new ceremony start; stateManager writes this
+   *  from the fetchAndUpdateDkgAddress error path. */
+  dkgError?: string;
   /** FROST group public key hex. */
   dkgGroupPublicKey?: string;
   /** Full DKG result snapshot for the save-wallet form. */

@@ -8,43 +8,45 @@ The MPC Wallet has been restructured as a monorepo to support multiple platforms
 
 ```
 mpc-wallet/
-├── apps/                      # All applications
-│   ├── browser-extension/     # Chrome/Firefox extension
-│   ├── cli-node/             # Rust CLI for MPC operations
-│   ├── native-node/          # Native desktop application
-│   └── signal-server/        # WebRTC signaling servers
-│       ├── server/           # Standard WebSocket server
-│       └── cloudflare-worker/ # Edge deployment
+├── apps/                        # All applications
+│   ├── browser-extension/       # Chrome/Firefox extension (WXT + Svelte 5)
+│   ├── tui-node/                # Terminal UI (Ratatui) + shared tui-node::core library
+│   ├── native-node/             # Desktop GUI (Slint 1.x), reuses tui-node::core
+│   └── signal-server/           # WebRTC signaling servers
+│       ├── server/              # Standard WebSocket server
+│       └── cloudflare-worker/   # Edge deployment
 │
-├── packages/@mpc-wallet/      # Shared packages
-│   ├── frost-core/           # Core FROST cryptography (Rust)
-│   ├── core-wasm/            # WebAssembly bindings
-│   └── types/                # TypeScript type definitions
+├── packages/@mpc-wallet/        # Shared packages
+│   ├── frost-core/              # Core FROST cryptography (Rust)
+│   ├── core-wasm/               # WebAssembly bindings (Rust → JS)
+│   ├── blockchain/              # Chain integrations (solana-sdk, ethers, bitcoin)
+│   └── types/                   # TypeScript type definitions
 │
-├── scripts/                   # Monorepo build scripts
-├── Cargo.toml                # Rust workspace root
-├── package.json              # Bun workspace root
-└── flake.nix                 # Nix development environment
+├── scripts/                     # Monorepo build / test / clean scripts
+├── Cargo.toml                   # Rust workspace root
+├── package.json                 # Bun workspace root
+└── flake.nix                    # Nix development environment
 ```
 
 ## Applications
 
 ### Browser Extension (`apps/browser-extension/`)
-- **Technology**: TypeScript, Svelte, WXT framework
-- **Features**: Web3 wallet, FROST MPC, multi-chain support
-- **Build**: `bun run build`
-- **Dev**: `bun run dev`
+- **Technology**: TypeScript, Svelte 5 (legacy reactivity, not runes), WXT framework
+- **Features**: Web3 wallet, FROST MPC, multi-chain support, EIP-1193 provider injection
+- **Build**: `bun run build` (from apps/browser-extension)
+- **Dev**: `bun run dev` (from apps/browser-extension)
 
-### CLI Node (`apps/cli-node/`)
-- **Technology**: Rust, TUI (ratatui), WebRTC
-- **Features**: Terminal UI, offline mode, keystore management
-- **Build**: `cargo build --bin cli_node`
-- **Run**: `cargo run --bin cli_node -- --device-id Device-001`
+### Terminal UI Node (`apps/tui-node/`)
+- **Technology**: Rust, Ratatui (terminal UI), tui-realm (Elm architecture), WebRTC
+- **Features**: Terminal UI, offline/SD-card mode, keystore management
+- **Build**: `cargo build -p tui-node`
+- **Run**: `cargo run --bin mpc-wallet-tui -p tui-node -- --device-id mpc-1`
+- **Library**: Exposes `tui-node::core::{WalletManager, SessionManager, DkgManager, OfflineManager, ConnectionManager, SigningManager}` for reuse by native-node.
 
 ### Native Node (`apps/native-node/`)
-- **Technology**: Rust, Slint UI framework
-- **Features**: Cross-platform GUI, real-time updates, session management
-- **Build**: `cargo build --bin mpc-wallet-native`
+- **Technology**: Rust, Slint 1.x UI framework, `rfd` for native file dialogs
+- **Features**: Desktop GUI reusing tui-node::core business logic; session management, DKG, encrypted keystore import/export, signing modal, SD-card export/import
+- **Build**: `cargo build -p mpc-wallet-native`
 - **Run**: `cargo run --bin mpc-wallet-native`
 
 ### Signal Servers (`apps/signal-server/`)
@@ -54,7 +56,7 @@ mpc-wallet/
 ## Shared Packages
 
 ### `@mpc-wallet/frost-core`
-Core FROST implementation in Rust, shared between CLI and WASM:
+Core FROST implementation in Rust, shared between TUI, native, and the WASM bindings:
 - DKG (Distributed Key Generation)
 - Threshold signing
 - Keystore management
@@ -144,7 +146,7 @@ cargo test                    # Rust tests
 ## Communication Flow
 
 ```
-Browser Extension          CLI Node              Native Node
+Browser Extension          TUI Node              Native Node
        |                      |                      |
        |------WebSocket-------|------WebSocket------|
                               |

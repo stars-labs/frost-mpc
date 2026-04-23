@@ -1,77 +1,105 @@
-# WebRTC Signal Server - Cloudflare Worker
+# WebRTC Signal Server — Cloudflare Worker
 
-A simple, scalable WebRTC signaling server implemented as a Cloudflare Worker using Rust and Durable Objects.  
-This server allows devices to register, list, and relay messages for device-to-device WebRTC connections.
+Rust-over-WASM Cloudflare Worker backing the signal-server side of
+the MPC Wallet. Uses a single `Devices` Durable Object class to hold
+connected-device + session-announcement state.
 
 ## Features
 
-- **WebSocket-based signaling** for WebRTC device discovery and message relay.
-- **Durable Object** for scalable, consistent device management.
-- Compatible with Cloudflare's free plan (uses SQLite-backed Durable Objects).
+- **WebSocket-based signaling** for WebRTC device discovery + P2P
+  relay
+- **Durable Object** persistence (`Devices` class) for consistent
+  device + session tracking across Worker invocations
+- Compatible with Cloudflare's free plan (uses SQLite-backed
+  Durable Objects via the `new_sqlite_classes` migration flag)
 
 ## Protocol
 
-- **Register:**  
-  `{ "type": "register", "device_id": "<your_id>" }`
-- **List Devices:**  
-  `{ "type": "list_devices" }`
-- **Relay:**  
-  `{ "type": "relay", "to": "<device_id>", "data": <any JSON> }`
+The wire protocol is shared with the standalone Rust signal server
+under `../server/` — authoritative enum definitions live at
+`apps/signal-server/server/src/lib.rs` (`ClientMsg` and `ServerMsg`).
+Full message-type matrix + session-discovery semantics are in
+[`docs/deployment/CLOUDFLARE_DEPLOYMENT.md`](../../../docs/deployment/CLOUDFLARE_DEPLOYMENT.md)
+(workspace-level, rewritten in commit 1841904). Abbreviated
+mini-reference:
 
-### Server Messages
+### Client → Server
 
-- **Devices List:**  
-  `{ "type": "devices", "devices": [ ... ] }`
-- **Relay:**  
-  `{ "type": "relay", "from": "<device_id>", "data": <any JSON> }`
-- **Error:**  
-  `{ "type": "error", "error": "<message>" }`
+- `{ "type": "register", "device_id": "<id>" }`
+- `{ "type": "list_devices" }`
+- `{ "type": "relay", "to": "<id>", "data": <any JSON> }`
+- `{ "type": "announce_session", "session_info": { … } }`
+- `{ "type": "request_active_sessions" }`
+- `{ "type": "session_status_update", "session_info": { … } }`
+- `{ "type": "query_my_active_sessions" }`
+
+### Server → Client
+
+- `{ "type": "devices", "devices": [ … ] }`
+- `{ "type": "relay", "from": "<id>", "data": <any JSON> }`
+- `{ "type": "error", "error": "<message>" }`
+- `{ "type": "session_available", "session_info": { … } }`
+- `{ "type": "sessions_for_device", "sessions": [ … ] }`
+- `{ "type": "session_list_request", "from": "<id>" }`
+- `{ "type": "session_removed", "session_id": "<id>", "reason": "<text>" }`
 
 ## Project Structure
 
-- `src/lib.rs` — Main Worker and Durable Object logic.
-- `wrangler.toml` — Cloudflare Worker and Durable Object configuration.
+- `src/lib.rs` — Worker entry + `Devices` Durable Object impl
+- `wrangler.toml` — Worker + Durable Object configuration
+- `Cargo.toml` — `cdylib` + `rlib` crate-type, builds via
+  `worker-build --release`
 
 ## Deploying to Cloudflare
 
-1. **Install Wrangler:**  
-   ```sh
-   npm install -g wrangler
-   # or for v4+
-   npm install --save-dev wrangler@4
-   ```
+```bash
+# 1. Install wrangler + worker-build
+npm install -g wrangler          # or: bun add -g wrangler
+cargo install worker-build
 
-2. **Configure Durable Object in `wrangler.toml`:**
-   ```toml
-   [durable_objects]
-   bindings = [{ name = "Devices", class_name = "Devices" }]
+# 2. Log in once per machine
+wrangler login
 
-   [[migrations]]
-   tag = "v1"
-   new_sqlite_classes = ["Devices"]
-   ```
+# 3. Edit wrangler.toml with YOUR account_id + routes
+#    (the committed config is bound to the upstream
+#    maintainer's `xiongchenyu.dpdns.org` route)
 
-3. **Build the Worker:**
-   ```sh
-   wrangler build
-   ```
+# 4. Deploy — wrangler deploy handles the build via the
+#    `[build] command = "worker-build --release"` entry in
+#    wrangler.toml; no separate `wrangler build` step.
+wrangler deploy
+```
 
-4. **Publish/Deploy:**
-   ```sh
-   wrangler deploy
-   # or for older versions:
-   wrangler publish
-   ```
+Older `wrangler publish` is deprecated in current Wrangler
+versions — use `wrangler deploy`.
 
-5. **Access your Worker:**  
-   Wrangler will output your deployed URL. Connect your WebRTC clients to this endpoint.
+## Durable Object migration notes
 
-## Notes
+The `Devices` Durable Object class was renamed from an earlier
+`Peers` name; the committed `wrangler.toml` has:
 
-- **Durable Objects** are required for device state.  
-- On the free plan, you must use `new_sqlite_classes` in your migration.
-- See [Cloudflare Durable Objects Docs](https://developers.cloudflare.com/workers/learning/using-durable-objects/) for more info.
+```toml
+[[migrations]]
+tag = "v2"
+renamed_classes = [{ from = "Peers", to = "Devices" }]
+```
 
----
+A fresh-account deployment that has never shipped `Peers` can use a
+simpler migration:
 
-**Happy hacking!**
+```toml
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Devices"]
+```
+
+(`new_sqlite_classes` is the free-plan-compatible route.)
+
+## References
+
+- Canonical deployment reference:
+  [`docs/deployment/CLOUDFLARE_DEPLOYMENT.md`](../../../docs/deployment/CLOUDFLARE_DEPLOYMENT.md)
+  + [`docs/signal-server/docs/deployment/cloudflare-deployment.md`](../docs/deployment/cloudflare-deployment.md)
+- [Cloudflare Durable Objects docs](https://developers.cloudflare.com/durable-objects/)
+- [worker-rs](https://github.com/cloudflare/workers-rs) — the Rust
+  SDK this crate uses

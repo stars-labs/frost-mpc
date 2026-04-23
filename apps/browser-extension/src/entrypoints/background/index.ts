@@ -36,6 +36,7 @@ import { PopupMessageHandler, OffscreenMessageHandler } from './messageHandlers'
 // Import types
 import { AppState, INITIAL_APP_STATE } from "@mpc-wallet/types/appstate";
 import { SessionProposal, SessionResponse, SessionInfo } from "@mpc-wallet/types/session";
+import { getSignalServerUrl } from "../../config/signal-server";
 import { MeshStatusType, MeshStatus } from "@mpc-wallet/types/mesh";
 import { DkgState } from "@mpc-wallet/types/dkg";
 import {
@@ -370,7 +371,11 @@ export async function checkAndRestoreKeystores(): Promise<void> {
  */
 async function initializeWebSocket(): Promise<void> {
     try {
-        const WEBSOCKET_URL = "wss://auto-life.tech";
+        // Resolve from config: user override via chrome.storage.local
+        // ['signalServerUrl'] wins; otherwise the TUI-matching default.
+        // Migrating away from the old hardcoded `auto-life.tech` so TUI
+        // and extension nodes actually land on the same signal server.
+        const WEBSOCKET_URL = await getSignalServerUrl();
 
         // Generate device ID
         const deviceId = "mpc-2"; // TODO: Generate unique device ID

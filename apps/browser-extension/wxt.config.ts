@@ -20,6 +20,12 @@ export default defineConfig({
     permissions: ['storage', 'tabs', 'activeTab', 'offscreen'],
     host_permissions: [
       'https://*/*',
+      // Allow both signal servers. `xiongchenyu.dpdns.org` is the
+      // new default (matches TUI's `model.rs::WEBSOCKET_URL`);
+      // `auto-life.tech` is the legacy endpoint left in place so
+      // users who set a manual override via chrome.storage.local
+      // ['signalServerUrl'] still have host permission for it.
+      'wss://xiongchenyu.dpdns.org/*',
       'wss://auto-life.tech/*'
     ],
     icons: {

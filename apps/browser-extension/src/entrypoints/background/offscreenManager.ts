@@ -14,6 +14,7 @@ import type {
     OffscreenMessage
 } from "@mpc-wallet/types/messages";
 import { AppState } from "@mpc-wallet/types/appstate";
+import { getSignalServerUrl } from "../../config/signal-server";
 
 /**
  * Simplified offscreen document manager with enhanced logging
@@ -167,14 +168,21 @@ export class OffscreenManager {
     }
 
     /**
-     * Send initialization data to offscreen
+     * Send initialization data to offscreen. Callers that don't care
+     * which URL is used (e.g. background boot) can omit `wsUrl`; we
+     * resolve it from config (user override via chrome.storage.local,
+     * falling back to DEFAULT_SIGNAL_SERVER_URL which matches the
+     * TUI). Callers that already have a URL pass it through.
      */
-    async sendInitData(deviceId: string, wsUrl: string = "wss://auto-life.tech"): Promise<any> {
-        console.log(`🔧 [OffscreenManager] Initializing offscreen with deviceId: ${deviceId}`);
+    async sendInitData(deviceId: string, wsUrl?: string): Promise<any> {
+        const resolvedUrl = wsUrl ?? (await getSignalServerUrl());
+        console.log(
+            `🔧 [OffscreenManager] Initializing offscreen with deviceId: ${deviceId} (wsUrl=${resolvedUrl})`,
+        );
         return await this.sendToOffscreen({
             type: "init",
             deviceId,
-            wsUrl
+            wsUrl: resolvedUrl,
         }, `init(${deviceId})`);
     }
 

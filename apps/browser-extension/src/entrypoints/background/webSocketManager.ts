@@ -13,6 +13,7 @@
 import { WebSocketClient } from "./websocket";
 import { AppState } from "@mpc-wallet/types/appstate";
 import { SessionManager } from "./sessionManager";
+import { getSignalServerUrl } from "../../config/signal-server";
 import type {
     BackgroundToPopupMessage,
     InitialStateMessage,
@@ -31,6 +32,12 @@ export class WebSocketManager {
     private broadcastToPopup: (message: BackgroundToPopupMessage) => void;
     private sendToOffscreen: (message: OffscreenMessage, description: string) => Promise<{ success: boolean; error?: string }>;
     private stateManager?: any; // StateManager for persistence
+    /**
+     * The URL we actually called `initialize` with. Kept so the status
+     * reporter can surface the real endpoint instead of a hardcoded
+     * string that drifts whenever the default changes.
+     */
+    private connectedUrl: string | undefined;
 
     constructor(
         appState: AppState,
@@ -59,6 +66,7 @@ export class WebSocketManager {
      */
     async initialize(url: string, deviceId: string): Promise<void> {
         try {
+            this.connectedUrl = url;
             this.wsClient = new WebSocketClient(url);
 
             // Set device ID
@@ -100,7 +108,11 @@ export class WebSocketManager {
      * Initialize WebSocket connection (legacy method)
      */
     async initializeWebSocket(): Promise<void> {
-        return this.initialize("wss://auto-life.tech", "mpc-2");
+        // Legacy entry point without explicit URL/device id. Resolve
+        // the URL from config so this path matches the main
+        // initializeWebSocket() in background/index.ts.
+        const url = await getSignalServerUrl();
+        return this.initialize(url, "mpc-2");
     }
 
     /**
@@ -384,7 +396,7 @@ export class WebSocketManager {
         return {
             connected: this.appState.wsConnected,
             readyState: this.wsClient?.getReadyState(),
-            url: this.wsClient ? "wss://auto-life.tech" : undefined
+            url: this.wsClient ? this.connectedUrl : undefined,
         };
     }
 

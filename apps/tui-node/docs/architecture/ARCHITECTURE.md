@@ -452,25 +452,36 @@ Real persistence surface is a handful of `Keystore` methods:
 
 ### Real optimizations in source
 
-- **Async I/O**: All networking is tokio-based and non-blocking
-- **Adaptive event loop** (`src/elm/adaptive_event_loop.rs`):
-  poll interval ramps 5 ms → 200 ms based on UI activity to hold
-  idle CPU below 1%
-- **Bounded channels** (`src/elm/channel_config.rs`): tokio mpsc
-  channels use explicit capacity limits to prevent memory growth
-  from queue buildup
-- **Deterministic session derivation**
-  (`src/protocal/session_handler.rs`): session-id is a pure hash
-  of the wallet name, so re-creating the same wallet produces the
-  same group key without re-running DKG
+- **Async I/O**: All networking is tokio-based and non-blocking.
 
-Earlier drafts of this section claimed connection-pooling,
-message-batching, a `ResourceManager { connection_pool,
-message_batcher, state_cache, render_throttle }` struct, and
-specific benchmark targets (< 5 s DKG / < 2 s signing / < 50 ms
-UI / < 500 MB peak memory). None of those types or numbers
-exist in source — removed to stay consistent with the tech-doc
-Performance section (41d5ca0).
+That's it, concretely. Earlier drafts of this section (including
+my own 7febf90 commit) listed three additional optimizations:
+
+  - `adaptive_event_loop.rs` — adaptive poll-interval ramp
+  - `channel_config.rs` — bounded mpsc channels
+  - `protocal/session_handler.rs` — deterministic session derivation
+
+**None of those files exist** in `apps/tui-node/src/` (verified
+by `ls`/`find`). No type named `AdaptiveEventLoop`,
+`ChannelConfig`, or `UpdateStrategy` is defined anywhere in the
+workspace. Those claims originated in the archived
+`docs/archive/dev-journal/PERFORMANCE_OPTIMIZATIONS.md` dev-journal
+which described work that was planned but never landed — and I
+propagated them as real while fixing other docs. Correcting now.
+
+Also still removed from even earlier drafts: connection-pooling,
+message-batching, a `ResourceManager` struct, and specific
+benchmark targets (< 5 s DKG / < 2 s signing / < 50 ms UI /
+< 500 MB peak memory).
+
+Real opportunities for perf work:
+
+- Measure actual idle vs active CPU usage and decide if an
+  adaptive poll loop is warranted.
+- Audit `mpsc::unbounded_channel` call sites and switch to bounded
+  channels where queue growth could matter.
+- Add `criterion` benches for DKG / signing / keystore paths so
+  future optimizations have a reproducible baseline.
 
 ## Extension Points
 

@@ -50,86 +50,64 @@ The MPC Wallet TUI follows the **Elm Architecture** pattern, providing:
 
 ### File Structure
 
+Real layout of `src/elm/` — from `ls`:
+
 ```
 src/elm/
-├── app.rs                 # Main application loop
-├── model.rs              # Application state
-├── message.rs            # Message definitions
-├── update.rs             # State update logic
-├── command.rs            # Side effects
-├── components/           # UI components
-├── adaptive_event_loop.rs # Performance optimization
-├── channel_config.rs     # Memory management
-└── differential_update.rs # Rendering optimization
+├── app.rs                # ElmApp<C> — main event loop + tui-realm shell
+├── model.rs              # Model (pure UI state)
+├── message.rs            # Message enum — input events
+├── update.rs             # Update fn — Message → state transition + Commands
+├── command.rs            # Command<C> enum — side-effect tasks
+├── mod.rs
+├── provider.rs           # UIProvider trait
+├── ws_runtime.rs         # WebSocket client runtime
+├── webrtc_signaling.rs   # WebRTC signaling over the signal server
+└── components/           # Per-screen tui-realm Component impls
 ```
+
+Earlier drafts listed `adaptive_event_loop.rs` / `channel_config.rs`
+/ `differential_update.rs` as part of this tree — none of those
+files exist (verified via `find`). See § 2 below for details.
 
 ---
 
 ## 2. Performance Optimizations
 
-### Adaptive Event Loop
+Deliberate perf work in source today: **async tokio I/O**. That's
+it.
 
-**Purpose**: Reduce CPU usage by dynamically adjusting polling intervals.
+Earlier drafts of this section described three specific optimizations
+with Rust code samples:
 
-**Implementation**:
-```rust
-pub struct AdaptiveEventLoop {
-    config: AdaptiveConfig,
-    current_interval_ms: u64,
-    last_activity: Instant,
-    is_idle: bool,
-}
-```
+  - `AdaptiveEventLoop { config, current_interval_ms, last_activity,
+    is_idle }` — doesn't exist; no adaptive poll-interval code
+    anywhere in the tree
+  - `ChannelConfig { message_queue_size: 1000, session_event_queue_size:
+    500, … }` — doesn't exist; no bounded-channel sizing scheme
+  - `UpdateStrategy { NoUpdate / FullRemount / PartialUpdate }` —
+    doesn't exist; no differential-render layer
+  - "Reduces rendering overhead by 60-80%" — fabricated measurement
+  - "CPU usage reduced from 5-10% to <1% when idle" — fabricated
+    measurement
 
-**Behavior**:
-- Active: 5ms polling (responsive to user input)
-- Transitioning: 20ms → 50ms → 100ms
-- Idle: 200ms polling (minimal CPU usage)
+All three types are from
+`docs/archive/dev-journal/PERFORMANCE_OPTIMIZATIONS.md` — a design
+doc for work that was planned but never landed. I had propagated
+these as real in other performance-section fixes earlier in this
+cleanup pass (41d5ca0 / 7febf90 / f591806 / b335731); those have
+been corrected back in their own docs.
 
-**Results**:
-- CPU usage reduced from 5-10% to <1% when idle
-- Maintains responsive feel during active use
+Real opportunities if someone takes perf work on:
 
-### Bounded Channels
-
-**Purpose**: Prevent memory leaks from unbounded message queues.
-
-**Configuration**:
-```rust
-pub struct ChannelConfig {
-    pub message_queue_size: usize,        // 1000
-    pub session_event_queue_size: usize,  // 500
-    pub websocket_queue_size: usize,      // 200
-    pub internal_command_queue_size: usize, // 100
-    pub batch_queue_size: usize,          // 50
-}
-```
-
-**Features**:
-- Backpressure handling
-- Dropped message metrics
-- Configurable limits per channel type
-- Conservative/Performance presets
-
-### Differential UI Updates
-
-**Purpose**: Only re-render components that have changed.
-
-**Strategy Types**:
-```rust
-pub enum UpdateStrategy {
-    NoUpdate,           // No changes detected
-    FullRemount,        // Screen change
-    PartialUpdate {     // Specific components
-        components: HashSet<ComponentId>,
-    },
-}
-```
-
-**Benefits**:
-- Reduces rendering overhead by 60-80%
-- Smoother UI experience
-- Lower terminal bandwidth usage
+- Measure idle vs active CPU usage and introduce an adaptive
+  event loop if the baseline justifies it.
+- Audit `mpsc::unbounded_channel` call sites and add bounded
+  alternatives where queue-growth could matter.
+- Introduce differential rendering if tui-realm's built-in
+  remount-on-state-change turns out to be a bottleneck.
+- Add `criterion` benches with a reproducible methodology so
+  future claims in this section can be anchored in measurement.
 
 ---
 

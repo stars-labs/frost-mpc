@@ -1035,21 +1035,40 @@ functional coverage is `cargo test --workspace` (≈170 tests) +
 
 ### Optimization present in code today
 
-- **Adaptive event loop** (`apps/tui-node/src/elm/adaptive_event_loop.rs`):
-  poll interval ramps 5ms→200ms based on UI activity to keep idle
-  CPU below 1%.
-- **Bounded channels** (`apps/tui-node/src/elm/channel_config.rs`):
-  tokio mpsc channels use explicit capacity limits to prevent memory
-  growth from queue buildup.
-- **Deterministic session derivation** (`src/protocal/session_handler.rs`):
-  session-id is a pure hash of wallet name, so re-generating the
-  same wallet produces the same group key without re-running DKG.
+Async I/O — the whole stack is tokio-based and non-blocking. That
+is the extent of deliberate optimization work in this codebase.
 
-There is **no** connection pool, message batcher, or state cache in
-the code today — earlier drafts of this section sketched these as
-aspirational patterns (`ConnectionPool`, `MessageBatcher`,
-`StateCache`). They were removed because they described Rust types
-that do not exist in the source.
+Earlier drafts of this section (including my 41d5ca0 commit) listed
+three supposedly-real optimizations:
+
+  - `apps/tui-node/src/elm/adaptive_event_loop.rs` — adaptive
+    poll-interval ramp
+  - `apps/tui-node/src/elm/channel_config.rs` — bounded mpsc channels
+  - `apps/tui-node/src/protocal/session_handler.rs` — deterministic
+    session derivation
+
+**None of those files exist** (`find apps/tui-node/src -name
+"adaptive_event_loop*" -o -name "channel_config*" -o -name
+"session_handler*"` returns empty, and no types named
+`AdaptiveEventLoop` / `ChannelConfig` / `UpdateStrategy` are
+defined anywhere in the workspace). Those names were carried
+forward from `docs/archive/dev-journal/PERFORMANCE_OPTIMIZATIONS.md`
+— work that was planned but never landed — and I repeated the
+error in 41d5ca0 while fixing unrelated fabrications elsewhere.
+Corrected now.
+
+There is also **no** connection pool, message batcher, state cache,
+or `ResourceManager` in the code — earlier drafts sketched these
+as aspirational Rust types (`ConnectionPool`, `MessageBatcher`,
+`StateCache`) that don't exist. Removed.
+
+Real opportunities if someone wants to take perf work on:
+
+- Measure idle vs active CPU and add an adaptive event loop if
+  warranted.
+- Audit `mpsc::unbounded_channel` call sites and add bounded
+  alternatives where queue-growth could matter.
+- Add `criterion` benches so future optimizations have a baseline.
 
 ### Scalability Considerations
 

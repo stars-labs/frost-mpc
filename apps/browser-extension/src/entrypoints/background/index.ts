@@ -120,6 +120,12 @@ function initializeComponents(): void {
         stateManager
     );
 
+    // Ext-4: inject SessionManager into RpcHandler so
+    // personal_sign / eth_sign RPCs can route through the TUI-
+    // compatible FROST signing flow (createSigningSession) instead
+    // of the legacy single-party DkgManager path.
+    rpcHandler.setSessionManager(sessionManager);
+
     // Ext-3a: chrome.notifications push on incoming signing invites.
     // Guarded because chrome.notifications is only present when the
     // `notifications` manifest permission is granted AND we're in an

@@ -627,6 +627,21 @@ export class StateManager {
                         "[StateManager] Signing complete received:",
                         (this.appState as any).lastSignature,
                     );
+                    // Ext-4: resolve any pending dApp RPC promise
+                    // keyed by the session_id. The popup's manual
+                    // "Sign Message" button ignores this (it doesn't
+                    // register a pending promise), so missing keys
+                    // are silently skipped inside handleSignatureComplete.
+                    if (
+                        this.rpcHandler &&
+                        typeof this.rpcHandler.handleSignatureComplete ===
+                            "function"
+                    ) {
+                        this.rpcHandler.handleSignatureComplete(
+                            info.sessionId,
+                            info.signature,
+                        );
+                    }
                     this.broadcastToPopupPorts({
                         type: "signingCompleted",
                         ...info,

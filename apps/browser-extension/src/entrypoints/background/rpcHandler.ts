@@ -15,6 +15,7 @@ import WalletController from "../../services/walletController";
 import { getPermissionService } from '../../services/permissionService';
 import { toHex } from 'viem';
 import type { JsonRpcRequest } from "@mpc-wallet/types/messages";
+import type { SessionManager } from './sessionManager';
 
 /**
  * Handles JSON-RPC requests from web applications
@@ -25,12 +26,36 @@ export class RpcHandler {
     private walletClientService: WalletClientService;
     private permissionService = getPermissionService();
     private origin: string = '';
+    /**
+     * Pending signature promises keyed by signing/session id. Two
+     * producers:
+     *   - Legacy path (`handleSignMessageRequest` pre-Ext-4 flow):
+     *     key is `msg_<timestamp>_<nonce>`; resolved by
+     *     `messageSignatureComplete` via stateManager.
+     *   - Ext-4 path (FROST threshold signing): key is the session
+     *     id returned from SessionManager.createSigningSession
+     *     (`sign_<hex>`); resolved by `signingComplete` via
+     *     stateManager. Both map through the same
+     *     handleSignatureComplete entrypoint, so a single Map
+     *     suffices.
+     */
     private pendingSignatures: Map<string, { resolve: (value: string) => void; reject: (reason?: any) => void }> = new Map();
+    /**
+     * Ext-4: injected so RPC calls (e.g. personal_sign from a dApp)
+     * can create the same TUI-compatible signing session the popup
+     * does. Kept optional so stateless RPC calls that don't need
+     * signing (chainId, getBalance, etc.) work before it's wired.
+     */
+    private sessionManager?: SessionManager;
 
     constructor() {
         this.accountService = AccountService.getInstance();
         this.networkService = NetworkService.getInstance();
         this.walletClientService = WalletClientService.getInstance();
+    }
+
+    setSessionManager(sm: SessionManager): void {
+        this.sessionManager = sm;
     }
 
     /**
@@ -254,11 +279,44 @@ export class RpcHandler {
     }
 
     /**
-     * Handle message signing requests
+     * Ext-4: handle personal_sign / eth_sign by routing the request
+     * through the TUI-compatible FROST threshold signing flow.
+     *
+     * This replaces the legacy `requestMessageSignature` path that
+     * asked the offscreen DkgManager to sign single-party over the
+     * loaded keystore. That path produced a lone share, never a
+     * threshold signature — fine for internal use but useless for
+     * dApp `ecrecover` verification since no real aggregation
+     * happened.
+     *
+     * New flow:
+     *   1. Parse params (personal_sign: [msg, addr] / eth_sign
+     *      reversed — detect by which param looks like an address).
+     *   2. Look up the wallet by address via KeystoreManager. Reject
+     *      if the user has no wallet for that address (dApp sent a
+     *      stale/wrong account).
+     *   3. EIP-191 wrap via viem's `hashMessage` so the FROST output
+     *      pairs with standard ecrecover (matches the popup's
+     *      Sign Message flow exactly).
+     *   4. Call sessionManager.createSigningSession — same entrypoint
+     *      the popup's manual-sign button uses. Announces on the
+     *      signal server; co-signers get notified; ceremony starts
+     *      at threshold; stateManager.signingComplete eventually
+     *      calls rpcHandler.handleSignatureComplete(sessionId, sig)
+     *      to resolve the promise returned here.
+     *   5. Popup receives a `signatureRequest` broadcast to surface
+     *      the dApp origin to the user (existing UI hook reused for
+     *      origin display).
      */
     private async handleSignMessageRequest(params: unknown[]): Promise<string> {
         if (!params || params.length < 1) {
             throw new Error('Missing message parameter');
+        }
+
+        if (!this.sessionManager) {
+            throw new Error(
+                'SessionManager not initialized — cannot route signing request',
+            );
         }
 
         let message: string;
@@ -268,21 +326,20 @@ export class RpcHandler {
         // personal_sign: [message, address]
         // eth_sign: [address, message]
         if (params.length >= 2) {
-            // Determine order based on which param looks like an address
             const param0 = params[0] as string;
             const param1 = params[1] as string;
-            
+
             if (param0.startsWith('0x') && param0.length === 42) {
-                // eth_sign format
+                // eth_sign format: [address, message]
                 address = param0;
                 message = param1;
             } else {
-                // personal_sign format
+                // personal_sign format: [message, address]
                 message = param0;
                 address = param1;
             }
         } else {
-            // Single param, assume it's the message and use current account
+            // Single param: message only, use current account.
             message = params[0] as string;
             const currentAccount = this.accountService.getCurrentAccount();
             if (!currentAccount) {
@@ -291,47 +348,94 @@ export class RpcHandler {
             address = currentAccount.address;
         }
 
-        // Generate a unique signing ID
-        const signingId = `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        // Look up the wallet backing this address. KeystoreManager's
+        // wallets carry `address` from the save-wallet flow (Ext-1d).
+        // Case-insensitive compare — dApps frequently lowercase
+        // addresses but our storage uses checksummed-or-mixed case.
+        const { KeystoreManager } = await import('../../services/keystoreManager');
+        const km = KeystoreManager.getInstance();
+        const wallets = km.getWallets();
+        const normalized = address.toLowerCase();
+        const wallet = wallets.find(
+            (w: any) => typeof w.address === 'string' && w.address.toLowerCase() === normalized,
+        );
+        if (!wallet) {
+            throw new Error(
+                `No wallet found for address ${address}. Unlock a wallet in the extension that owns this address before signing.`,
+            );
+        }
 
-        // Create a promise that will resolve when we get the signature
-        const signaturePromise = new Promise<string>((resolve, reject) => {
-            // Store the resolver in a map (we'll need to create this)
-            if (!this.pendingSignatures) {
-                this.pendingSignatures = new Map();
-            }
-            this.pendingSignatures.set(signingId, { resolve, reject });
+        const blockchain: 'ethereum' | 'solana' =
+            (wallet as any).blockchain === 'solana' ? 'solana' : 'ethereum';
 
-            // Set a timeout
-            setTimeout(() => {
-                if (this.pendingSignatures?.has(signingId)) {
-                    this.pendingSignatures.delete(signingId);
-                    reject(new Error('Signature request timed out'));
-                }
-            }, 300000); // 5 minute timeout
+        // Pull threshold/total/groupPublicKey from the KeyShareData.
+        const keyShare = (km as any).getKeyShareData?.((wallet as any).id);
+        const groupPublicKey =
+            keyShare?.group_public_key ?? (wallet as any).group_public_key ?? '';
+        const threshold = keyShare?.threshold ?? 2;
+        const total = keyShare?.total_participants ?? 3;
+
+        // EIP-191 wrap for secp256k1, raw UTF-8 bytes for ed25519.
+        // Mirrors handleCreateSigningSessionRequest in messageHandlers.
+        let messageHex: string;
+        if (blockchain === 'ethereum') {
+            const { hashMessage } = await import('viem');
+            // `message` may already be 0x-hex bytes (dApp convention)
+            // or raw UTF-8 text. hashMessage accepts string and treats
+            // 0x-prefixed hex as raw bytes only if wrapped in `{raw}`.
+            // For personal_sign, the standard treats the param as raw
+            // bytes if 0x-prefixed. Match that:
+            const isHex = /^0x[0-9a-fA-F]*$/.test(message);
+            const hash = isHex
+                ? hashMessage({ raw: message as `0x${string}` })
+                : hashMessage(message);
+            messageHex = hash.startsWith('0x') ? hash.slice(2) : hash;
+        } else {
+            const encoder = new TextEncoder();
+            const bytes = encoder.encode(message);
+            messageHex = Array.from(bytes, (b) =>
+                b.toString(16).padStart(2, '0'),
+            ).join('');
+        }
+
+        const result = await this.sessionManager.createSigningSession({
+            walletId: (wallet as any).id,
+            walletName: (wallet as any).name ?? (wallet as any).id,
+            groupPublicKey,
+            blockchain,
+            threshold,
+            total,
+            signingMessageHex: messageHex,
         });
+        if (!result.success || !result.sessionId) {
+            throw new Error(result.error ?? 'Failed to create signing session');
+        }
 
-        // Send signature request to offscreen document
-        chrome.runtime.sendMessage({
-            type: 'fromBackground',
-            payload: {
-                type: 'requestMessageSignature',
-                signingId,
-                message,
-                fromAddress: address
-            }
-        });
-
-        // Also notify popup if open for user approval
+        const sessionId = result.sessionId;
+        // Surface the request in the popup so users see the dApp
+        // origin requesting the signature. Reuses the existing
+        // SignatureRequest UI shape.
         chrome.runtime.sendMessage({
             type: 'signatureRequest',
-            signingId,
+            signingId: sessionId,
             message,
             origin: this.origin || 'Unknown',
-            fromAddress: address
+            fromAddress: address,
         });
 
-        return signaturePromise;
+        // Promise that stateManager's signingComplete handler will
+        // resolve when the FROST ceremony produces the aggregated
+        // signature. 5-min timeout so abandoned ceremonies don't
+        // leak promises.
+        return new Promise<string>((resolve, reject) => {
+            this.pendingSignatures.set(sessionId, { resolve, reject });
+            setTimeout(() => {
+                if (this.pendingSignatures.has(sessionId)) {
+                    this.pendingSignatures.delete(sessionId);
+                    reject(new Error('Signature request timed out'));
+                }
+            }, 300_000);
+        });
     }
 
     /**
@@ -451,12 +555,21 @@ export class RpcHandler {
     }
 
     /**
-     * Handle signature completion from offscreen document
+     * Handle signature completion from either the legacy
+     * `messageSignatureComplete` path (offscreen DkgManager output,
+     * keyed by `msg_<ts>_<nonce>`) or the Ext-4 `signingComplete`
+     * path (FROST aggregated signature, keyed by `sign_<hex>`
+     * session id). Normalizes the hex to `0x...` before resolving
+     * so dApp callers can feed it straight into ecrecover /
+     * verifyMessage without additional formatting.
      */
     handleSignatureComplete(signingId: string, signature: string): void {
         const pending = this.pendingSignatures.get(signingId);
         if (pending) {
-            pending.resolve(signature);
+            const normalized = signature.startsWith('0x')
+                ? signature
+                : `0x${signature}`;
+            pending.resolve(normalized);
             this.pendingSignatures.delete(signingId);
         }
     }

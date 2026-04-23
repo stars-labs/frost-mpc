@@ -8,7 +8,6 @@ Reference material for the MPC Wallet test suite.
 - `COVERAGE.md` — coverage configuration + Bun limitations
 - `RUN_TEST_INSTRUCTIONS.md` — 3-node manual test run
 - `E2E_TEST_IMPLEMENTATION_PLAN.md` — plan for real-signal-server E2E
-- `E2E_TEST_SUMMARY.md` — E2E coverage overview
 
 Per-crate test docs live with the code:
 - `apps/browser-extension/tests/README.md` — browser-extension test tree

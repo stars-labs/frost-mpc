@@ -457,9 +457,8 @@ By contributing to MPC Wallet, you agree that your contributions will be license
 ## Questions?
 
 If you have questions about contributing, please:
-1. Check the [FAQ](docs/FAQ.md)
-2. Ask in [GitHub Discussions](https://github.com/your-org/mpc-wallet/discussions)
-3. Join our [Discord](https://discord.gg/mpc-wallet)
+1. Ask in [GitHub Discussions](https://github.com/your-org/mpc-wallet/discussions)
+2. Join our [Discord](https://discord.gg/mpc-wallet)
 
 ---
 

@@ -569,7 +569,15 @@ export default defineUnlistedScript(() => {
         // Handle as a synchronous call with payload
         else {
             const payload = methodOrPayload;
-            const response = { id: payload.id, jsonrpc: '2.0', result: null };
+            // Explicit result type (any) so later assignments of
+            // string / string[] / null all type-check — initializing
+            // with `null` alone would infer \`result: null\` and
+            // reject everything else.
+            const response: { id: any; jsonrpc: string; result: any } = {
+                id: payload.id,
+                jsonrpc: '2.0',
+                result: null,
+            };
             
             // For simple synchronous methods
             if (payload.method === 'eth_accounts') {

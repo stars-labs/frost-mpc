@@ -64,22 +64,77 @@ impl CoreAdapter {
         Ok(())
     }
     
-    /// Import wallet from file
+    /// Import a keystore from disk. Opens a native file-picker for
+    /// the `.dat` path, and (for now) uses an empty password — the
+    /// full flow should surface a password-prompt modal in Slint
+    /// before calling into here; see README "Next steps" #1.
     pub async fn import_wallet(&self) -> Result<(), String> {
-        // In a real implementation, this would open a file dialog
+        // `rfd::AsyncFileDialog` is async-friendly but its await
+        // point runs on the GUI thread; keep this on tokio's
+        // blocking scheduler to avoid blocking the Slint event loop.
+        let Some(handle) = tokio::task::spawn_blocking(|| {
+            rfd::FileDialog::new()
+                .add_filter("MPC keystore", &["dat", "json"])
+                .set_title("Import MPC keystore")
+                .pick_file()
+        })
+        .await
+        .map_err(|e| e.to_string())?
+        else {
+            self.ui_callback
+                .show_message("Import cancelled".to_string(), false)
+                .await;
+            return Ok(());
+        };
+
+        let path = handle.to_string_lossy().into_owned();
         self.ui_callback
-            .show_message("Import wallet feature coming soon".to_string(), false)
+            .show_message(format!("Importing keystore from {path}..."), false)
             .await;
-        Ok(())
+
+        // TODO(native-node): wire a password-prompt modal and pass
+        // the user-supplied password in here. Empty string for now
+        // — WalletManager::import_wallet will surface the real error
+        // from keystore decryption.
+        self.wallet_manager
+            .import_wallet(path, String::new())
+            .await
+            .map_err(|e| e.to_string())
     }
-    
-    /// Export wallet to file
+
+    /// Export the active wallet to a keystore file. Opens a native
+    /// save dialog for the destination path.
     pub async fn export_wallet(&self) -> Result<(), String> {
-        // In a real implementation, this would open a save dialog
+        let Some(handle) = tokio::task::spawn_blocking(|| {
+            rfd::FileDialog::new()
+                .add_filter("MPC keystore", &["dat"])
+                .set_title("Export MPC keystore")
+                .set_file_name("mpc-wallet.dat")
+                .save_file()
+        })
+        .await
+        .map_err(|e| e.to_string())?
+        else {
+            self.ui_callback
+                .show_message("Export cancelled".to_string(), false)
+                .await;
+            return Ok(());
+        };
+
+        let path = handle.to_string_lossy().into_owned();
+
+        // Export the currently-active wallet. CoreState tracks the
+        // active index alongside the wallet list.
+        let active_index = *self.state.active_wallet_index.lock().await;
         self.ui_callback
-            .show_message("Export wallet feature coming soon".to_string(), false)
+            .show_message(format!("Exporting wallet to {path}..."), false)
             .await;
-        Ok(())
+
+        // TODO(native-node): password-prompt modal (see import_wallet).
+        self.wallet_manager
+            .export_wallet(active_index, path, String::new())
+            .await
+            .map_err(|e| e.to_string())
     }
     
     /// Create a new session

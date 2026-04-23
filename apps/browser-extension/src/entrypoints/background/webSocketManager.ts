@@ -14,6 +14,7 @@ import { WebSocketClient } from "./websocket";
 import { AppState } from "@mpc-wallet/types/appstate";
 import type { SessionInfo } from "@mpc-wallet/types/session";
 import { SessionManager } from "./sessionManager";
+import { SigningNotifier } from "./signingNotification";
 import { getSignalServerUrl } from "../../config/signal-server";
 import { parseSessionInfoFromWire } from "../../utils/session-parse";
 import type {
@@ -49,19 +50,29 @@ export class WebSocketManager {
      * flows via `clearDkgTriggerFor`.
      */
     private dkgTriggerFiredFor: string | undefined;
+    /**
+     * Ext-3a: emits chrome.notifications on signing invites we're a
+     * participant in. Injected (not constructed inline) so tests can
+     * stub chrome.notifications. Null means "notifications disabled"
+     * — chrome.notifications is undefined in service worker contexts
+     * without the permission, and in bun tests.
+     */
+    private signingNotifier: SigningNotifier | null = null;
 
     constructor(
         appState: AppState,
         sessionManager: SessionManager,
         broadcastToPopup: (message: BackgroundToPopupMessage) => void,
         sendToOffscreen: (message: OffscreenMessage, description: string) => Promise<{ success: boolean; error?: string }>,
-        stateManager?: any // Optional StateManager for persistence
+        stateManager?: any, // Optional StateManager for persistence
+        signingNotifier?: SigningNotifier,
     ) {
         this.appState = appState;
         this.sessionManager = sessionManager;
         this.broadcastToPopup = broadcastToPopup;
         this.sendToOffscreen = sendToOffscreen;
         this.stateManager = stateManager;
+        this.signingNotifier = signingNotifier ?? null;
     }
 
     /**
@@ -374,6 +385,15 @@ export class WebSocketManager {
         this.broadcastToPopup({ type: "sessionAvailable", session: parsed } as any);
         if (this.stateManager?.updateInvites) {
             this.stateManager.updateInvites(invites);
+        }
+
+        // Ext-3a: desktop push-notification for signing invites we're
+        // a co-signer on. No-op for DKG sessions, for sessions we're
+        // proposing, or for sessions we've already notified for.
+        // Skipped silently when `signingNotifier` isn't wired (tests,
+        // or manifests without the notifications permission).
+        if (this.signingNotifier) {
+            this.signingNotifier.maybeNotify(parsed, this.appState.deviceId);
         }
 
         // Ext-1c + Ext-2d auto-trigger: a session update that brings

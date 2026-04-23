@@ -30,6 +30,7 @@ import { SessionManager } from './sessionManager';
 import { RpcHandler, UIRequestHandler } from './rpcHandler';
 import { OffscreenManager } from './offscreenManager';
 import { WebSocketManager } from './webSocketManager';
+import { SigningNotifier } from './signingNotification';
 import { StateManager } from './stateManager';
 import { PopupMessageHandler, OffscreenMessageHandler } from './messageHandlers';
 import { KeepaliveController } from './keepaliveController';
@@ -119,13 +120,27 @@ function initializeComponents(): void {
         stateManager
     );
 
+    // Ext-3a: chrome.notifications push on incoming signing invites.
+    // Guarded because chrome.notifications is only present when the
+    // `notifications` manifest permission is granted AND we're in an
+    // extension context (undefined in isolated bun test env). Passing
+    // null disables push notifications silently — the sessionAvailable
+    // flow still lights up the popup UI via broadcastToPopup.
+    const signingNotifier =
+        typeof chrome !== "undefined" && chrome.notifications
+            ? new SigningNotifier({
+                  notifications: chrome.notifications as any,
+              })
+            : undefined;
+
     // Initialize WebSocket manager (needs app state, session manager, broadcast function, send to offscreen function, and state manager)
     webSocketManager = new WebSocketManager(
         stateManager.getState(),
         sessionManager,
         (message) => stateManager.broadcastToPopupPorts(message),
         (message, description) => offscreenManager.sendToOffscreen(message, description),
-        stateManager  // Add StateManager for persistence
+        stateManager, // Add StateManager for persistence
+        signingNotifier,
     );
 
     // Initialize message handlers with all dependencies
@@ -424,6 +439,32 @@ export default defineBackground(async () => {
 
     // Set up message handlers
     setupMessageHandlers();
+
+    // Ext-3a: open the popup when the user clicks a signing-request
+    // notification. chrome.action.openPopup() requires user gesture
+    // context, which a notification click provides. If the popup
+    // API isn't available (Firefox lacks it), fall back to opening
+    // popup.html in a tab so the user still has a path forward.
+    if (typeof chrome !== "undefined" && chrome.notifications) {
+        chrome.notifications.onClicked.addListener(async (notificationId) => {
+            if (!notificationId.startsWith("mpc-signing-req:")) return;
+            try {
+                if (chrome.action && (chrome.action as any).openPopup) {
+                    await (chrome.action as any).openPopup();
+                } else {
+                    await chrome.tabs.create({
+                        url: chrome.runtime.getURL("popup.html"),
+                    });
+                }
+                chrome.notifications.clear(notificationId);
+            } catch (e) {
+                console.warn(
+                    "[Background] Failed to open popup from notification:",
+                    e,
+                );
+            }
+        });
+    }
 
     // Check for existing keystores and restore state
     await checkAndRestoreKeystores();

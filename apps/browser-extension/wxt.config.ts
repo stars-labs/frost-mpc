@@ -17,7 +17,12 @@ export default defineConfig({
     name: 'Browser Wallet',
     description: 'A secure browser extension wallet for Ethereum',
     version: '1.0.0',
-    permissions: ['storage', 'tabs', 'activeTab', 'offscreen'],
+    // `notifications` added for Ext-3a: chrome.notifications push
+    // when someone else announces a signing session we're a
+    // participant in. Without it, co-signers on MainMenu would miss
+    // the invite entirely (service worker logs it but nothing
+    // surfaces in the browser chrome).
+    permissions: ['storage', 'tabs', 'activeTab', 'offscreen', 'notifications'],
     host_permissions: [
       'https://*/*',
       // Allow both signal servers. `xiongchenyu.dpdns.org` is the

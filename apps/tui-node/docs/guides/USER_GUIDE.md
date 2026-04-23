@@ -334,33 +334,22 @@ In offline mode, the UI guides you through each step:
 
 ### Offline Data Review
 
-Before signing offline:
+Before signing offline, the user is shown the decoded
+`OfflineData` envelope (see `src/offline/types.rs:12`) — session
+id, request type (`signing_request` / `commitments` / etc.),
+created/expires timestamps, and the raw message bytes being
+signed.
 
-```
-┌─────────────────────────────────────────────────────┐
-│ 🔒 Review Offline Signing Request                   │
-├─────────────────────────────────────────────────────┤
-│ Request ID: sig_20240120_4521                      │
-│ Created: 2024-01-20 10:30:00                       │
-│ Expires: 2024-01-20 11:30:00                       │
-│                                                     │
-│ Transaction Details:                                │
-│ • Wallet: company-treasury (2-of-3)                │
-│ • Type: Ethereum Transfer                           │
-│ • To: 0x987...3210                                 │
-│ • Amount: 1.5 ETH                                  │
-│ • Gas: 50 gwei max                                 │
-│                                                     │
-│ Required Participants: 2 of 3                      │
-│ • alice (You)                                       │
-│ • bob                                               │
-│ • charlie                                           │
-│                                                     │
-│ ⚠️  Verify details match expected transaction       │
-│                                                     │
-│ [Approve & Sign] [Reject] [Export Details]         │
-└─────────────────────────────────────────────────────┘
-```
+Earlier drafts of this section showed a rich "Review" modal with
+a `Transaction Details` block (To / Amount / Gas) and
+`[Approve & Sign] [Reject] [Export Details]` action buttons.
+That UI does not ship — the TUI signs raw messages (EIP-191
+`personal_sign` shape), not transactions with to-address /
+amount / gas fields. See § "Signing Messages → Scope of what the
+TUI signs" above for the honest accounting. For offline signing,
+the user sees the message bytes + session identity and then
+approves/rejects via Enter/Esc; there is no transaction-decoding
+step.
 
 ## Advanced Features
 
@@ -402,11 +391,18 @@ that UI is not implemented.
 The TUI has two import/export surfaces:
 
 - **Export wallet**: from the wallet-detail screen, write a
-  `.json`+`.dat` pair to a chosen path using the keystore's
-  encrypted format (also the extension-compatible format — the
-  browser extension can import the same file).
-- **Import wallet**: reverse of the above; read a `.json`+`.dat`
-  pair plus the password to unlock it.
+  single `<wallet_id>.json` file to a chosen path. It's a
+  `WalletFile` JSON wrapping plaintext metadata + the base64-
+  encoded encrypted share (same format the browser extension
+  produces, so extension ↔ TUI keystore import is a direct
+  round-trip).
+- **Import wallet**: reverse of the above; read a `.json` file
+  and the password to unlock it.
+
+Earlier drafts of this section described a `.json`+`.dat` pair
+per wallet. No `.dat` file is produced — everything lives in the
+one JSON (retraction previously landed in f4fc866 for the broader
+keystore layout but missed this spot).
 
 There is **no** "Backup & Recovery Center" screen with Full Backup /
 HSM / Mnemonic options. Earlier drafts promised:

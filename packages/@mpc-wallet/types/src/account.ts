@@ -50,8 +50,11 @@ export interface Account {
     metadata?: {
         /** Derivation path used to generate this account */
         derivationPath?: string;
-        /** Whether this account was imported or generated */
-        source: 'generated' | 'imported';
+        /** How this account was created:
+         *    - 'generated': single-party generation (legacy; kept for tests)
+         *    - 'imported': user-supplied CLI keystore import
+         *    - 'dkg': multi-party threshold DKG ceremony (the primary path) */
+        source: 'generated' | 'imported' | 'dkg';
         /** Custom tags or labels */
         tags?: string[];
     };

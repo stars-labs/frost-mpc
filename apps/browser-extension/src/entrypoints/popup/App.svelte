@@ -131,7 +131,19 @@
     }> = [];
     
     // Keystore state
-    let keystoreStatus = {
+    // Explicit typing so `.wallets.find(...)` returns
+    // `ExtensionWalletMetadata | undefined` instead of `never`.
+    // Without this, TS infers `wallets: never[]` from the empty
+    // array literal and every subsequent `.find(w => w.xxx)`
+    // narrows w to never, tanking type safety for the whole
+    // keystore-dependent UI.
+    let keystoreStatus: {
+        initialized: boolean;
+        locked: boolean;
+        wallets: import("@mpc-wallet/types/keystore").ExtensionWalletMetadata[];
+        activeWallet: import("@mpc-wallet/types/keystore").ExtensionWalletMetadata | null;
+        pendingImport: boolean;
+    } = {
         initialized: false,
         locked: true,
         wallets: [],

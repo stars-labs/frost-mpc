@@ -1,12 +1,18 @@
 // Mock KeystoreService for tests
 import { jest } from 'bun:test';
-import type { KeyShareData, WalletMetadata, KeystoreBackup } from "@mpc-wallet/types/keystore";
+import type { KeyShareData, ExtensionWalletMetadata, KeystoreBackup } from "@mpc-wallet/types/keystore";
+// Alias so existing method signatures in this mock that use
+// \`WalletMetadata\` (for addWallet / getWallet return types)
+// still resolve to the correct shape.
+type WalletMetadata = ExtensionWalletMetadata;
 
 export class KeystoreService {
   private static instance: KeystoreService | null = null;
   private isInitialized = false;
   private isUnlocked = false;
-  private wallets: Map<string, WalletMetadata> = new Map();
+  // Typed with ExtensionWalletMetadata (the shape the real service
+  // stores) so hasBackup / isActive access type-checks.
+  private wallets: Map<string, ExtensionWalletMetadata> = new Map();
 
   static getInstance(): KeystoreService {
     if (!KeystoreService.instance) {

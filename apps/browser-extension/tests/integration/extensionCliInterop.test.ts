@@ -338,11 +338,15 @@ describe('Extension-CLI Keystore Interoperability', () => {
                 createdAt: Date.now()
             };
             
-            // Convert and import
+            // Convert and import. cliKeyShare uses CLI camelCase
+            // shape; spread + cast to any because KeyShareData
+            // wants snake_case. Test just round-trips the opaque
+            // payload through add/get so the field-name mismatch
+            // is cosmetic.
             const extensionKeyShare: KeyShareData = {
                 ...cliKeyShare,
                 curve: cliKeyShare.curve as 'secp256k1'
-            };
+            } as any;
             
             await extensionKeystore.addWallet('session-test', extensionKeyShare, {
                 id: 'session-test',

@@ -423,6 +423,39 @@ class NetworkService {
     private publicClientCache: Map<number, ReturnType<typeof createPublicClient>> = new Map();
 
     /**
+     * Probe network connectivity by issuing a cheap RPC call
+     * (getBlockNumber). Returns true if the call resolves, false
+     * on any exception. Used by the Settings UI to show live
+     * connection indicators per configured chain.
+     */
+    public async testNetworkConnectivity(network: Chain): Promise<boolean> {
+        try {
+            const client = this.getPublicClient(network);
+            await (client as any).getBlockNumber();
+            return true;
+        } catch {
+            return false;
+        }
+    }
+
+    /**
+     * Shallow Chain-shape validator. Rejects obvious garbage:
+     * non-numeric id, empty name, zero RPC URLs. Callers that
+     * want stricter validation should combine this with chainlist
+     * lookup or a getBlockNumber probe.
+     */
+    public validateNetworkConfig(network: unknown): network is Chain {
+        if (!network || typeof network !== 'object') return false;
+        const n = network as Partial<Chain>;
+        if (typeof n.id !== 'number') return false;
+        if (typeof n.name !== 'string' || n.name.length === 0) return false;
+        if (!n.rpcUrls || !n.rpcUrls.default) return false;
+        const http = n.rpcUrls.default.http;
+        if (!Array.isArray(http) || http.length === 0) return false;
+        return true;
+    }
+
+    /**
      * Helper method to get a viem PublicClient for either the
      * current network (when called with no args) or a specific
      * network (when passed a Chain). Cached per-chain-id so

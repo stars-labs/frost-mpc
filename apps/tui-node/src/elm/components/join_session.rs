@@ -49,11 +49,7 @@ pub enum SessionType {
 #[derive(Debug, Clone)]
 pub enum SessionStatus {
     Waiting,
-    #[allow(dead_code)]
-    InProgress,
     Ready,
-    #[allow(dead_code)]
-    Expired,
 }
 
 impl Default for JoinSessionComponent {
@@ -113,18 +109,14 @@ impl JoinSessionComponent {
     fn get_status_color(&self, status: &SessionStatus) -> Color {
         match status {
             SessionStatus::Waiting => Color::Yellow,
-            SessionStatus::InProgress => Color::Blue,
             SessionStatus::Ready => Color::Green,
-            SessionStatus::Expired => Color::Red,
         }
     }
-    
+
     fn get_status_text(&self, status: &SessionStatus) -> &str {
         match status {
             SessionStatus::Waiting => "⏳ Waiting for Participants",
-            SessionStatus::InProgress => "🔄 In Progress",
             SessionStatus::Ready => "✅ Ready to Join",
-            SessionStatus::Expired => "❌ Expired",
         }
     }
 }
@@ -277,9 +269,7 @@ impl JoinSessionComponent {
                     session.mode,
                     match session.status {
                         SessionStatus::Waiting => "⏳",
-                        SessionStatus::InProgress => "🔄",
                         SessionStatus::Ready => "✅",
-                        SessionStatus::Expired => "❌",
                     },
                     session.joined,
                     session.required
@@ -350,14 +340,11 @@ impl JoinSessionComponent {
             format!("  • Created: {}", session.created_at),
             format!("  • Expires in: {}", session.expires_in),
             format!(""),
-            if matches!(session.status, SessionStatus::Ready) {
-                "✅ Ready to join! Press Enter to participate".to_string()
-            } else if matches!(session.status, SessionStatus::Waiting) {
-                format!("⏳ Waiting for {} more participant(s)", session.required - session.joined)
-            } else if matches!(session.status, SessionStatus::InProgress) {
-                "🔄 Session already in progress".to_string()
-            } else {
-                "❌ This session has expired".to_string()
+            match session.status {
+                SessionStatus::Ready =>
+                    "✅ Ready to join! Press Enter to participate".to_string(),
+                SessionStatus::Waiting =>
+                    format!("⏳ Waiting for {} more participant(s)", session.required - session.joined),
             },
         ]);
         

@@ -31,7 +31,7 @@ use crate::protocal::signal::WebRTCMessage;
 use crate::utils::appstate_compat::AppState;
 use crate::utils::state::SigningState;
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
-use frost_core::{Ciphersuite, Identifier};
+use frost_core::Ciphersuite;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -596,14 +596,6 @@ async fn broadcast_signing_frame<C>(
             }
         }
     }
-}
-
-// Suppress a "unused import" warning when compiled without the downstream
-// sites yet in place (they land in Stage C.3/C.4). Remove once wired.
-#[allow(dead_code)]
-pub(crate) fn _unused_anchor<C: Ciphersuite>(
-    _x: &BTreeMap<Identifier<C>, ()>,
-) {
 }
 
 // -----------------------------------------------------------------

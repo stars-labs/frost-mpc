@@ -22,7 +22,7 @@ const result = client.relayMessage("test-peer", {
     accepted: true
 });
 
-if (result instanceof Promise) {
+if ((result as any) instanceof Promise) {
     console.log("✅ relayMessage returns Promise - RACE CONDITION FIXED!");
 
     // Test the Promise resolves

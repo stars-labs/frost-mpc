@@ -1083,7 +1083,7 @@
         const allParticipants = [appState.deviceId, ...selectedDevicesList];
 
         const sessionId =
-            appState.proposedSessionIdInput.trim() ||
+            (appState.proposedSessionIdInput ?? "").trim() ||
             `wallet_${appState.threshold}of${appState.totalParticipants}_${Date.now()}`;
 
         chrome.runtime.sendMessage({

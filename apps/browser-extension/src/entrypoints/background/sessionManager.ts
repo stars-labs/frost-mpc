@@ -157,10 +157,13 @@ export class SessionManager {
 
                 // No persistence - sessions are ephemeral
 
-                // Forward to offscreen for WebRTC setup
+                // Forward to offscreen for WebRTC setup. We only
+                // reach here when a session was successfully set on
+                // appState (createSession → updateState); non-null
+                // assertion is sound in this branch.
                 this.sendToOffscreen({
                     type: "sessionAccepted",
-                    sessionInfo: this.appState.sessionInfo,
+                    sessionInfo: this.appState.sessionInfo!,
                     currentdeviceId: this.appState.deviceId,
                     blockchain: this.appState.blockchain || "solana"
                 }, "proposerWebRTCSetup");

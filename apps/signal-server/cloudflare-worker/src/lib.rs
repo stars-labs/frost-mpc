@@ -113,7 +113,7 @@ impl DurableObject for Devices {
                                                 error: "device_id already registered".to_string(),
                                             };
                                             let _ = server.send_with_str(
-                                                &serde_json::to_string(&err).unwrap(),
+                                                serde_json::to_string(&err).unwrap(),
                                             );
                                             break;
                                         }
@@ -152,13 +152,13 @@ impl DurableObject for Devices {
                                             .unwrap_or(vec![]);
                                         let msg = ServerMsg::Devices { devices: device_list };
                                         let _ = server
-                                            .send_with_str(&serde_json::to_string(&msg).unwrap());
+                                            .send_with_str(serde_json::to_string(&msg).unwrap());
                                     }
                                     Ok(ClientMsg::Relay { to, data }) => {
                                         // Check if this is a SessionUpdate to track active participants
-                                        if let Ok(relay_msg) = serde_json::from_value::<serde_json::Value>(data.clone()) {
-                                            if relay_msg.get("type").and_then(|v| v.as_str()) == Some("SessionUpdate") {
-                                                if let (Some(session_code), Some(participants)) = (
+                                        if let Ok(relay_msg) = serde_json::from_value::<serde_json::Value>(data.clone())
+                                            && relay_msg.get("type").and_then(|v| v.as_str()) == Some("SessionUpdate")
+                                                && let (Some(session_code), Some(participants)) = (
                                                     relay_msg.get("session_code").and_then(|v| v.as_str()),
                                                     relay_msg.get("participants").and_then(|v| v.as_array())
                                                 ) {
@@ -168,11 +168,10 @@ impl DurableObject for Devices {
                                                         // Update active participants based on who's connected
                                                         let mut active_participants = Vec::new();
                                                         for p in participants {
-                                                            if let Some(participant_id) = p.as_str() {
-                                                                if devices.borrow().contains_key(participant_id) {
+                                                            if let Some(participant_id) = p.as_str()
+                                                                && devices.borrow().contains_key(participant_id) {
                                                                     active_participants.push(participant_id.to_string());
                                                                 }
-                                                            }
                                                         }
                                                         session_data["active_participants"] = serde_json::json!(active_participants);
                                                         session_data["session_info"] = relay_msg.clone();
@@ -195,8 +194,6 @@ impl DurableObject for Devices {
                                                         }
                                                     }
                                                 }
-                                            }
-                                        }
                                         
                                         // Relay the message
                                         let from = device_id.clone().unwrap_or_default();
@@ -204,14 +201,14 @@ impl DurableObject for Devices {
                                         let found = devices.borrow().get(&to).cloned();
                                         if let Some(ws) = found {
                                             let _ = ws.send_with_str(
-                                                &serde_json::to_string(&relay).unwrap(),
+                                                serde_json::to_string(&relay).unwrap(),
                                             );
                                         } else {
                                             let err = ServerMsg::Error {
                                                 error: format!("unknown device: {}", to),
                                             };
                                             let _ = server.send_with_str(
-                                                &serde_json::to_string(&err).unwrap(),
+                                                serde_json::to_string(&err).unwrap(),
                                             );
                                         }
                                     }
@@ -267,8 +264,8 @@ impl DurableObject for Devices {
                                         let list_result = state.storage().list().await;
                                         if let Ok(keys) = list_result {
                                             for key_result in keys.keys() {
-                                                if let Ok(key_value) = key_result {
-                                                    if let Some(key_str) = key_value.as_string() {
+                                                if let Ok(key_value) = key_result
+                                                    && let Some(key_str) = key_value.as_string() {
                                                         if !key_str.starts_with("session:") {
                                                             continue;
                                                         }
@@ -283,8 +280,7 @@ impl DurableObject for Devices {
                                                             .storage()
                                                             .get::<serde_json::Value>(&key_str)
                                                             .await
-                                                        {
-                                                            if let Some(session_info) =
+                                                            && let Some(session_info) =
                                                                 session_data.get("session_info").cloned()
                                                             {
                                                                 // Drop entries whose stored key doesn't match
@@ -293,22 +289,18 @@ impl DurableObject for Devices {
                                                                 if let Some(declared) = session_info
                                                                     .get("session_id")
                                                                     .and_then(|v| v.as_str())
-                                                                {
-                                                                    if format!("session:{}", declared) != key_str {
+                                                                    && format!("session:{}", declared) != key_str {
                                                                         continue;
                                                                     }
-                                                                }
                                                                 let reply = ServerMsg::SessionAvailable {
                                                                     session_info,
                                                                 };
                                                                 let _ = server.send_with_str(
-                                                                    &serde_json::to_string(&reply)
+                                                                    serde_json::to_string(&reply)
                                                                         .unwrap(),
                                                                 );
                                                             }
-                                                        }
                                                     }
-                                                }
                                             }
                                         }
 
@@ -336,11 +328,11 @@ impl DurableObject for Devices {
                                             let list_result = state.storage().list().await;
                                             if let Ok(keys) = list_result {
                                                 for key_result in keys.keys() {
-                                                    if let Ok(key_value) = key_result {
-                                                        if let Some(key_str) = key_value.as_string() {
-                                                            if key_str.starts_with("session:") {
-                                                                if let Ok(Some(mut session_data)) = state.storage().get::<serde_json::Value>(&key_str).await {
-                                                                    if let Some(info) = session_data.get("session_info").cloned() {
+                                                    if let Ok(key_value) = key_result
+                                                        && let Some(key_str) = key_value.as_string()
+                                                            && key_str.starts_with("session:")
+                                                                && let Ok(Some(mut session_data)) = state.storage().get::<serde_json::Value>(&key_str).await
+                                                                    && let Some(info) = session_data.get("session_info").cloned() {
                                                                         // Check if device is in participants
                                                                         if let Some(participants) = info.get("participants").and_then(|v| v.as_array()) {
                                                                             let is_participant = participants.iter()
@@ -359,10 +351,6 @@ impl DurableObject for Devices {
                                                                             }
                                                                         }
                                                                     }
-                                                                }
-                                                            }
-                                                        }
-                                                    }
                                                 }
                                             }
                                             
@@ -374,7 +362,7 @@ impl DurableObject for Devices {
                                             let response = ServerMsg::SessionsForDevice {
                                                 sessions: my_sessions,
                                             };
-                                            let _ = server.send_with_str(&serde_json::to_string(&response).unwrap());
+                                            let _ = server.send_with_str(serde_json::to_string(&response).unwrap());
                                         }
                                     }
                                     Ok(ClientMsg::SessionStatusUpdate { session_info }) => {
@@ -404,7 +392,7 @@ impl DurableObject for Devices {
                                                 error: "SessionStatusUpdate missing session_id".to_string(),
                                             };
                                             let _ = server
-                                                .send_with_str(&serde_json::to_string(&err).unwrap());
+                                                .send_with_str(serde_json::to_string(&err).unwrap());
                                             continue;
                                         }
 
@@ -423,7 +411,7 @@ impl DurableObject for Devices {
                                                     ),
                                                 };
                                                 let _ = server.send_with_str(
-                                                    &serde_json::to_string(&err).unwrap(),
+                                                    serde_json::to_string(&err).unwrap(),
                                                 );
                                                 continue;
                                             }
@@ -431,8 +419,8 @@ impl DurableObject for Devices {
 
                                         // Update session_info.participants
                                         if let Some(joiner) = joiner {
-                                            if let Some(info) = session_data.get_mut("session_info") {
-                                                if let Some(participants) = info
+                                            if let Some(info) = session_data.get_mut("session_info")
+                                                && let Some(participants) = info
                                                     .get_mut("participants")
                                                     .and_then(|v| v.as_array_mut())
                                                 {
@@ -442,7 +430,6 @@ impl DurableObject for Devices {
                                                         participants.push(joiner_val);
                                                     }
                                                 }
-                                            }
                                             // Track for cleanup on disconnect
                                             if let Some(active) = session_data
                                                 .get_mut("active_participants")
@@ -499,12 +486,11 @@ impl DurableObject for Devices {
                                             {
                                                 let registered = devices.borrow();
                                                 for p in participants {
-                                                    if let Some(pid) = p.as_str() {
-                                                        if let Some(ws) = registered.get(pid) {
+                                                    if let Some(pid) = p.as_str()
+                                                        && let Some(ws) = registered.get(pid) {
                                                             let _ =
                                                                 ws.send_with_str(&update_str);
                                                         }
-                                                    }
                                                 }
                                             }
                                         }
@@ -514,7 +500,7 @@ impl DurableObject for Devices {
                                             error: "invalid message".to_string(),
                                         };
                                         let _ = server
-                                            .send_with_str(&serde_json::to_string(&err).unwrap());
+                                            .send_with_str(serde_json::to_string(&err).unwrap());
                                     }
                                 }
                             }
@@ -578,7 +564,7 @@ impl DurableObject for Devices {
                                     devices: device_list.clone(),
                                 };
                                 for (_id, ws) in devices.borrow().iter() {
-                                    let _ = ws.send_with_str(&serde_json::to_string(&msg).unwrap());
+                                    let _ = ws.send_with_str(serde_json::to_string(&msg).unwrap());
                                 }
                             }
                         }

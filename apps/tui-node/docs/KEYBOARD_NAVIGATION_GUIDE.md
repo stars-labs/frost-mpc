@@ -6,28 +6,35 @@ under `apps/tui-node/src/elm/components/`; there is no runtime
 config file or remap mechanism.
 
 Earlier drafts of this guide described ~40 different shortcuts:
-`hjkl` vim navigation, `Ctrl+Q`/`Ctrl+R`/`Ctrl+H`/`Ctrl+L` globals,
-single-letter quick keys (`n`/`j`/`w`/`s`/`i`/`e`/`d`/`r`), command
-mode (`:`), search mode (`/`), vim-style macros (`q`, `@`),
-bookmarks (`m`, `'`), number-key menu selection (`1`-`6`), and a
-`?` help overlay. **None of those are wired up** (verified by
-grepping `KeyCode::` / `Key::Char(...)` patterns across
-`src/elm/components/` and `src/elm/update.rs`). This doc now
-reflects what actually works.
+`hjkl` vim navigation, single-letter quick keys
+(`n`/`j`/`w`/`s`/`i`/`e`/`d`/`r`), command mode (`:`), search mode
+(`/`), vim-style macros (`q`, `@`), bookmarks (`m`, `'`),
+number-key menu selection (`1`-`6`), and a `?` help overlay.
+**None of those are wired up** (verified by grepping `KeyCode::` /
+`Key::Char(...)` patterns across `src/elm/components/` and
+`src/elm/update.rs`). Four Ctrl-modified globals ARE wired up,
+though — see below; an earlier version of this retraction
+incorrectly lumped them in with the non-existent shortcuts.
 
 ## Global keys
 
-These work everywhere inside the TUI:
+These work everywhere inside the TUI. Arrow-key + Enter +
+Esc + Tab navigation come from per-component `on()` handlers; the
+Ctrl-modified globals are handled in `src/elm/app.rs:851-866`
+before delegation to the active component.
 
-| Key     | Action                  |
-|---------|-------------------------|
-| `↑` `↓` | Move selection / focus  |
-| `Enter` | Confirm selection       |
-| `Esc`   | Back / cancel           |
-| `Tab`   | Move focus within screen |
+| Key       | Action                  | Source               |
+|-----------|-------------------------|----------------------|
+| `↑` / `↓` | Move selection / focus  | per-component        |
+| `Enter`   | Confirm selection       | per-component        |
+| `Esc`     | Back / cancel           | per-component + app.rs:847 |
+| `Tab`     | Move focus within screen | per-component        |
+| `Ctrl+Q`  | Quit                    | `app.rs:851` → `Message::Quit` |
+| `Ctrl+C`  | Quit                    | `app.rs:855` → `Message::Quit` |
+| `Ctrl+R`  | Refresh                 | `app.rs:859` → `Message::Refresh` |
+| `Ctrl+H`  | Navigate home           | `app.rs:863` → `Message::NavigateHome` |
 
-Quit the app with `Ctrl+C` from the terminal — there's no dedicated
-in-app quit key beyond the system-level interrupt.
+(`Ctrl+L` is NOT wired up — earlier drafts listed it.)
 
 ## Per-screen behaviours
 
@@ -46,8 +53,14 @@ for the full list.
 
 ### Curve selection
 
-- `↑` / `↓` — toggle between secp256k1 (Ethereum) / ed25519 (Solana).
-- `Enter` — confirm.
+There is no standalone CurveSelection screen (verified: no
+`curve_selection.rs` under `src/elm/components/`, no
+`CurveSelection` type in source). Curve choice is part of the
+unified DKG ceremony — `frost-core::unified_dkg` produces
+ed25519 + secp256k1 key shares from one DKG run, so the TUI
+doesn't ask the user to pick a curve. Earlier drafts of this
+guide described a Curve selection screen with `↑`/`↓` toggles;
+none of that ships.
 
 ### Threshold config (`threshold_config.rs`)
 

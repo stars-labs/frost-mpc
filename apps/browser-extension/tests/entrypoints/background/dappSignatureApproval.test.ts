@@ -23,7 +23,19 @@
  *   - Duplicate approve: second call is a no-op (context already
  *     consumed)
  */
-import { describe, it, expect, beforeEach, jest } from "bun:test";
+import { describe, it, expect, beforeEach, jest, mock } from "bun:test";
+
+// setup-bun.ts installs `#imports` as a mock module via its
+// preload. Bun's mock registry has per-file isolation quirks:
+// when this test file runs AFTER another that doesn't itself
+// re-register the mock (e.g. signingDecline.test.ts), the
+// subsequent transitive import chain `RpcHandler → permissionService
+// → #imports` fails to resolve. Re-install the mock locally at
+// file scope so the import below always sees it regardless of
+// test-file ordering.
+import * as mockImports from "../../wxt-imports-mock";
+mock.module("#imports", () => mockImports);
+
 import { RpcHandler } from "../../../src/entrypoints/background/rpcHandler";
 
 // setup-bun.ts already installs a global chrome with storage +

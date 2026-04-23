@@ -638,9 +638,18 @@ These enhancements would significantly improve the system's reliability, securit
 
 ## Appendix A: Complete State Transition Table
 
+Events below are `InternalCommand<C>` variants (defined in
+`apps/tui-node/src/utils/state.rs:29`), which is the
+ciphersuite-generic command enum distinct from the newer
+`elm/command.rs::Command` (non-generic, used for the higher-level
+Elm loop). Both enums coexist — InternalCommand handles the
+per-round DKG / signing mechanics; Command handles higher-level
+orchestration. See `src/utils/state.rs` vs `src/elm/command.rs`
+for the full variant lists.
+
 | Current State | Event | Guard Conditions | Next State | Side Effects |
 |--------------|-------|------------------|------------|--------------|
-| `DkgState::Idle` | `TriggerDkgRound1` | `mesh_ready && identifier_map.is_some() && session.is_dkg()` | `Round1InProgress` | Generate Round1 package, broadcast to peers |
+| `DkgState::Idle` | `InternalCommand::TriggerDkgRound1` | `mesh_ready && identifier_map.is_some() && session.is_dkg()` | `Round1InProgress` | Generate Round1 package, broadcast to peers |
 | `DkgState::Round1InProgress` | `ProcessDkgRound1` | Package from valid participant | `Round1InProgress` or `Round1Complete` | Store package, check if all received |
 | `DkgState::Round1Complete` | `TriggerDkgRound2` | All Round1 packages processed | `Round2InProgress` | Generate Round2 packages, broadcast to peers |
 | `DkgState::Round2InProgress` | `ProcessDkgRound2` | Package from valid participant | `Round2InProgress` or `Round2Complete` | Store package, check if all received |

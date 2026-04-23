@@ -536,9 +536,12 @@ canonical set.
 
 ### Command Types
 
+Note: the TUI has TWO parallel command enums. Read both together
+to understand the flow:
+
 ```rust
-// Real definition: apps/tui-node/src/elm/command.rs
-pub enum Command<C: frost_core::Ciphersuite> {
+// src/elm/command.rs — non-generic, higher-level Elm commands
+pub enum Command {
     // Keystore
     InitializeKeystore { path: String, device_id: String },
     FinalizeWalletFromDkg { password: String, keystore_path: String,
@@ -546,27 +549,61 @@ pub enum Command<C: frost_core::Ciphersuite> {
     UnlockWallet { wallet_id: String, keystore_path: String,
                    password: String, … },
 
-    // Signal-server WebSocket
-    ConnectWebSocket,
-    SendWs(ClientMsg),
-
     // DKG / signing orchestration
     StartDKG { config: WalletConfig },   // session announce
     StartFrostProtocol,                  // fires once mesh is up
     StartSigning { wallet_id: String, message: String },
-    // …etc.
 
-    NoOp,
+    // …~60 more variants
+}
+
+impl Command {
+    pub async fn execute<C: frost_core::Ciphersuite + …>(
+        self,
+        tx: UnboundedSender<Message>,
+        app_state: &Arc<Mutex<AppState<C>>>,
+    ) -> anyhow::Result<()> { /* … */ }
+}
+
+// src/utils/state.rs — ciphersuite-generic, per-round DKG/signing
+pub enum InternalCommand<C: Ciphersuite> {
+    // Keystore
+    InitKeystore { path: String, device_name: String },
+    ListWallets,
+    CreateWallet { name: String, password: String, … },
+
+    // Session lifecycle
+    SendToServer(ClientMsg),
+    ProposeSession { session_id, total, threshold, participants },
+    AcceptSessionProposal(String),
+    InitiateWebRTCConnections,
+    ReportChannelOpen { device_id },
+    ProcessMeshReady { device_id },
+
+    // DKG rounds (per-round granularity)
+    TriggerDkgRound1,
+    ProcessDkgRound1 { from_device_id: String, package: round1::Package<C> },
+    TriggerDkgRound2,
+    ProcessDkgRound2 { from_device_id: String, package: round2::Package<C> },
+    FinalizeDkg,
+
+    // Signing rounds
+    InitiateSigning { transaction_data: String, blockchain: String, … },
+    ProcessSigningCommitment { /* … */ },
+    ProcessSignatureShare { /* … */ },
+    // …more
 }
 ```
 
-Note the `<C>` type parameter: every `Command` instance is
-NON-generic. Earlier drafts of this section claimed `Command<C>`
-with a ciphersuite generic; the real enum has no type parameter
-(`pub enum Command` at `src/elm/command.rs:15`). The ciphersuite
-is threaded through `AppState<C>` which `Command::execute` takes
-by reference. This means the same Elm loop drives both the ed25519
-and secp256k1 code paths via monomorphization.
+The split is the product of two generations of the code:
+`InternalCommand<C>` is the older ciphersuite-generic enum that
+handles per-round DKG/signing mechanics; `Command` is the newer
+Elm-architecture enum for higher-level orchestration. Retracting
+my earlier claim (27615dd) that `TriggerDkgRound1`/`TriggerDkgRound2`
+don't exist — they exist as `InternalCommand<C>` variants. The
+retraction was right about `elm::Command` being non-generic
+(verified) but wrong to extend that claim to every Command-named
+type.
 
 ### UIProvider trait
 

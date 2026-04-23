@@ -1085,78 +1085,84 @@ but production use has only been exercised at small cohorts (2-of-3,
 
 **Solutions**:
 ```bash
-# Check connectivity — the server is WebSocket-only, so curl just
-# verifies DNS + TLS + that something is listening on 443.
+# Check signal-server connectivity — the server is WebSocket-only,
+# so curl just verifies DNS + TLS + that something is listening on 443.
 curl -v https://xiongchenyu.dpdns.org/
 
-# Test STUN server
-npm install -g stun
-stun stun.l.google.com:19302
+# Probe STUN with wscat / stuntman / anything that does a BINDING
+# Request — Google's public STUN works out of the box, any
+# reachability failure here means your outbound UDP path is broken.
 
 # Enable debug logging
-RUST_LOG=debug cargo run
+RUST_LOG=debug cargo run -p tui-node --bin mpc-wallet-tui
 ```
 
 #### 2. WebRTC Connection Issues
 
 **Symptom**: Peers cannot establish direct connection
 
-**Debugging Steps**:
-```javascript
-// Enable WebRTC debugging in browser
-chrome.webRequest.onBeforeRequest.addListener(
-  details => console.log('WebRTC:', details),
-  {urls: ["stun:*", "turn:*"]}
-);
+**Debugging Steps**: use `chrome://webrtc-internals/` (or
+`about:webrtc` in Firefox) to inspect per-connection ICE gathering,
+SDP exchange, and data-channel state in real time. This surface
+makes STUN/TURN traffic observable — application code can't monitor
+STUN itself, since it's UDP (chrome.webRequest only sees HTTP-family
+schemes, not `stun:` / `turn:` URIs).
 
-// Check ICE gathering state
+For programmatic introspection, the standard `RTCPeerConnection`
+events are:
+
+```javascript
 pc.addEventListener('icegatheringstatechange', () => {
-  console.log('ICE gathering state:', pc.iceGatheringState);
+  console.log('ICE gathering:', pc.iceGatheringState);
+});
+pc.addEventListener('iceconnectionstatechange', () => {
+  console.log('ICE connection:', pc.iceConnectionState);
+});
+pc.addEventListener('connectionstatechange', () => {
+  console.log('PeerConnection:', pc.connectionState);
 });
 ```
+
+Earlier drafts of this section listed a
+`chrome.webRequest.onBeforeRequest` filter on `stun:*` / `turn:*`
+URLs — that filter is invalid: `chrome.webRequest` only matches
+http/https/ws/wss/file/ftp, and STUN/TURN are UDP-level.
 
 #### 3. Signature Verification Failures
 
 **Symptom**: Generated signatures fail verification
 
-**Diagnostic Commands**:
-```rust
-// Verify key shares
-let public_key = compute_group_public_key(&key_shares);
-assert_eq!(public_key, expected_public_key);
+**Diagnostic steps**: run FROST's own `aggregate` + `verify` paths
+from the upstream ZCash crates — `frost_core::aggregate` already
+verifies internally against the group public key before returning
+a signature. A post-aggregate verification failure therefore almost
+always means:
 
-// Check signature components
-debug!("R: {:?}", signature.r);
-debug!("S: {:?}", signature.s);
-debug!("Message hash: {:?}", message_hash);
-```
+- wrong message bytes (hash mismatch — check the signing-payload
+  construction; `signing_message_hex` must be what you believed)
+- wrong group public key (probably stale keystore metadata —
+  inspect the `.json` sidecar in `~/.frost_keystore/<device_id>/<curve>/`)
+- stale share from a previous DKG run (participants all need the
+  same group key — rerun DKG if in doubt)
+
+There are no `compute_group_public_key` / signature.r / signature.s
+helpers to call manually — the earlier draft of this section
+referenced a custom helper that doesn't exist.
 
 ### Debug Tools
 
-#### 1. Protocol Analyzer
+No custom `ProtocolAnalyzer` struct ships — earlier drafts of this
+section described a `ProtocolAnalyzer` counting `Round1`/`Round2`/`Round3`
+messages in a trace, which is not backed by any real type in source.
+The practical tools are:
 
-```rust
-pub struct ProtocolAnalyzer {
-    pub fn analyze_dkg_session(&self, session_id: &str) {
-        let messages = self.get_session_messages(session_id);
-        
-        println!("DKG Session Analysis");
-        println!("====================");
-        println!("Total messages: {}", messages.len());
-        println!("Round 1 messages: {}", count_by_type(&messages, Round1));
-        println!("Round 2 messages: {}", count_by_type(&messages, Round2));
-        println!("Round 3 messages: {}", count_by_type(&messages, Round3));
-        
-        // Verify message ordering
-        self.verify_message_order(&messages);
-        
-        // Check for missing messages
-        self.check_missing_messages(&messages);
-    }
-}
-```
+- `RUST_LOG=tui_node=debug` (or a finer scope like `tui_node::protocal::dkg=trace`)
+  + the session log at `~/.frost_keystore/logs/mpc-wallet.log`
+- `chrome://webrtc-internals` for the browser side
+- `wscat -c wss://xiongchenyu.dpdns.org/` + `Register` / `ListDevices`
+  ClientMsg payloads for manual signal-server probes
 
-#### 2. Network Diagnostics
+#### Network Diagnostics
 
 ```bash
 #!/bin/bash

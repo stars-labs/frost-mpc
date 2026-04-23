@@ -1,6 +1,19 @@
 #!/bin/sh
 
-# Script to remove debug console logs while keeping essential ones
+# One-off console-log cleanup script from an earlier refactor.
+#
+# Comments out decorative console.logs and keeps console.error
+# plus security/audit-relevant messages. Creates a
+# src.backup.<timestamp> directory before editing.
+#
+# If you run this again, audit + extend FILES_TO_CLEAN below to
+# match the current tree — several 2024-vintage files in the
+# original list (webrtcConnection.ts, messageRouter.ts,
+# wasmInitializer.ts, patternRouter.ts, utils/messageHandler.ts,
+# utils/sessionActions.ts, utils/uiState.ts, components/*.svelte)
+# have since been consolidated or renamed. The \`file not found\`
+# branch in the loop skips silently; this is a coverage warning,
+# not a crash.
 
 echo "🧹 Starting console log cleanup..."
 
@@ -8,25 +21,16 @@ echo "🧹 Starting console log cleanup..."
 echo "📦 Creating backup..."
 cp -r src src.backup.$(date +%Y%m%d_%H%M%S)
 
-# Files with the most debug logs to clean
+# Files still in the tree that are likely to hold debug noise.
 FILES_TO_CLEAN=(
     "src/entrypoints/offscreen/webrtc.ts"
-    "src/entrypoints/offscreen/webrtcConnection.ts"
     "src/entrypoints/background/messageHandlers.ts"
-    "src/entrypoints/offscreen/messageRouter.ts"
     "src/entrypoints/background/stateManager.ts"
-    "src/entrypoints/offscreen/wasmInitializer.ts"
-    "src/entrypoints/background/patternRouter.ts"
     "src/entrypoints/content/provider.ts"
     "src/entrypoints/background/index.ts"
     "src/entrypoints/offscreen/index.ts"
-    "src/utils/messageHandler.ts"
-    "src/utils/sessionActions.ts"
     "src/entrypoints/background/webSocketManager.ts"
     "src/entrypoints/popup/App.svelte"
-    "src/components/Settings.svelte"
-    "src/components/AccountManager.svelte"
-    "src/utils/uiState.ts"
 )
 
 # Function to comment out debug logs

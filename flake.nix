@@ -124,10 +124,11 @@
               fi
               echo ""
               echo "Available commands:"
-              echo "  cargo build         - Build the project"
-              echo "  cargo run           - Run the TUI application"
-              echo "  bun install         - Install JavaScript dependencies"
-              echo "  bun run build:wasm  - Build WebAssembly modules"
+              echo "  cargo build                                  - Build the workspace"
+              echo "  cargo run --bin mpc-wallet-tui -p tui-node   - Run the TUI"
+              echo "  cargo run --bin mpc-wallet-native -p mpc-wallet-native  - Run the desktop GUI"
+              echo "  bun install                                  - Install JS dependencies"
+              echo "  bun run build:wasm                           - Build WebAssembly modules"
               echo ""
             '';
           };

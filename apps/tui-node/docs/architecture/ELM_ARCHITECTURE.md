@@ -432,99 +432,63 @@ impl Screen {
 ### Message Processing Pipeline
 
 ```
-Terminal Input
+Terminal input (crossterm)
     ↓
-Event Handler
+tuirealm Event<UserEvent>
     ↓
-Component.on(event) → Option<Message>
+Component::on(event) → Option<Message>
     ↓
-update(model, message) → (Model, Option<Command>)
+update(&mut model, message) → Option<Command>
     ↓
-Command.execute() → Future<Message>
+Command::execute(self, tx, &app_state) → async side effect
+    ↓ (emits new Messages onto tx)
+update(&mut model, message) → Option<Command>
     ↓
-update(model, message) → (Model, Option<Command>)
+Component::view(frame, area)
     ↓
-View.render(model)
-    ↓
-Terminal Output
+Ratatui flushes to terminal
 ```
+
+Real `update` signature takes `&mut Model` and returns just
+`Option<Command>` — it does NOT return a new Model. Earlier
+drafts of this pipeline arrow showed `update(model, message) →
+(Model, Option<Command>)`, as if the function were pure in the
+strict sense. It isn't: the Model is mutated in place for
+performance, while still being the single point of state
+transition.
 
 ## State Management
 
 ### State Transitions
 
-All state transitions are explicit and traceable:
-
-```rust
-pub struct StateTransition {
-    pub from: Screen,
-    pub to: Screen,
-    pub trigger: Message,
-    pub timestamp: DateTime<Utc>,
-}
-
-pub struct StateHistory {
-    transitions: Vec<StateTransition>,
-    max_history: usize,
-}
-
-impl StateHistory {
-    pub fn record(&mut self, from: Screen, to: Screen, trigger: Message) {
-        let transition = StateTransition {
-            from,
-            to,
-            trigger,
-            timestamp: Utc::now(),
-        };
-        
-        self.transitions.push(transition);
-        
-        if self.transitions.len() > self.max_history {
-            self.transitions.remove(0);
-        }
-    }
-    
-    pub fn recent(&self, count: usize) -> &[StateTransition] {
-        let start = self.transitions.len().saturating_sub(count);
-        &self.transitions[start..]
-    }
-}
-```
+All state transitions flow through the single `update(&mut Model,
+Message) -> Option<Command>` function. The sequence of transitions
+is not persisted anywhere — earlier drafts of this section showed
+a `StateTransition { from, to, trigger, timestamp }` struct + a
+`StateHistory { transitions, max_history }` recorder. No such types
+exist in source (verified via grep). If transition tracing is
+needed for debugging, the standard answer is `RUST_LOG=trace` which
+emits tracing events per-message through `tracing::debug!` /
+`tracing::info!` calls scattered through `update.rs`.
 
 ### State Persistence
 
-Critical state is persisted to enable recovery:
+`Model` itself is not persisted. Earlier drafts of this section
+showed `Model::save_state() / load_state() / persistent_state()`
+methods that serialize to JSON — none exist. Persistence surface:
 
-```rust
-impl Model {
-    pub fn save_state(&self) -> Result<()> {
-        let state_file = self.get_state_file_path()?;
-        let state_json = serde_json::to_string_pretty(&self.persistent_state())?;
-        std::fs::write(state_file, state_json)?;
-        Ok(())
-    }
-    
-    pub fn load_state() -> Result<Self> {
-        let state_file = Self::get_state_file_path()?;
-        if state_file.exists() {
-            let state_json = std::fs::read_to_string(state_file)?;
-            let persistent = serde_json::from_str(&state_json)?;
-            Ok(Self::from_persistent(persistent))
-        } else {
-            Ok(Self::default())
-        }
-    }
-    
-    fn persistent_state(&self) -> PersistentState {
-        PersistentState {
-            selected_wallet: self.selected_wallet.clone(),
-            device_id: self.device_id.clone(),
-            websocket_url: self.network_state.websocket_url.clone(),
-            // ... other persistent fields
-        }
-    }
-}
-```
+- **Keystore files**: wallet metadata (plaintext) +
+  encrypted key share (AES-256-GCM blob) per wallet, at
+  `~/.frost_keystore/<device_id>/<curve>/<wallet_id>.{json,dat}`.
+  Written when `Command::SaveWallet` fires; re-read via
+  `Keystore::load_wallet(wallet_id, password)`.
+- **Tracing log file**: append-only at `--log-location` (default
+  `~/.frost_keystore/logs/mpc-wallet.log`).
+
+That's the full durable state. On crash, anything in-memory on
+`Model` / `AppState<C>` that hasn't been written through the
+keystore is lost (same finding as 3f87b38 / 933db62 for the
+COMPLETE_TUI_DOCUMENTATION.md State Persistence section).
 
 ## Testing Strategy
 
@@ -532,75 +496,60 @@ impl Model {
 
 Test individual components in isolation:
 
+See `apps/tui-node/tests/update_transitions.rs` for the real
+pattern — pure `update(model, message)` assertions without any
+network / TTY / async machinery. Example shape, using real
+variant names:
+
 ```rust
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
-    fn test_navigation_back() {
-        let mut model = Model::default();
+    fn push_screen_pushes_previous_onto_stack() {
+        let mut model = Model::new("alice".to_string());
         model.current_screen = Screen::MainMenu;
-        
-        // Navigate to wallet list
-        let cmd = update(&mut model, Message::Navigate(Screen::ManageWallets));
+
+        // Push wallet-list screen
+        update(&mut model, Message::PushScreen(Screen::ManageWallets));
         assert_eq!(model.current_screen, Screen::ManageWallets);
         assert_eq!(model.navigation_stack.len(), 1);
-        
-        // Navigate back
-        let cmd = update(&mut model, Message::NavigateBack);
+
+        // Pop back
+        update(&mut model, Message::PopScreen);
         assert_eq!(model.current_screen, Screen::MainMenu);
         assert_eq!(model.navigation_stack.len(), 0);
     }
-    
-    #[test]
-    fn test_esc_key_navigation() {
-        let mut model = Model::default();
-        model.current_screen = Screen::ManageWallets;
-        model.navigation_stack.push(Screen::MainMenu);
-        
-        // Press Esc
-        let cmd = update(&mut model, Message::KeyPressed(KeyEvent {
-            code: KeyCode::Esc,
-            modifiers: KeyModifiers::empty(),
-        }));
-        
-        // Should return NavigateBack command
-        assert!(matches!(cmd, Some(Command::SendMessage(Message::NavigateBack))));
-    }
 }
 ```
+
+Real names: `PushScreen` / `PopScreen` (NOT `Navigate` /
+`NavigateBack`), `Model::new(device_id)` constructor (NOT
+`Model::default()`). There is no top-level `Message::KeyPressed`
+match arm in update — keyboard events flow through tui-realm
+component `on()` handlers first, which translate each press into
+the right typed Message variant (see KEYBOARD_HANDLING_GUIDE.md).
 
 ### Integration Testing
 
-Test complete workflows:
+No `ElmApp::new(tx)` constructor exists — real constructor is
+`ElmApp::new(device_id, app_state)` where `app_state` is an
+`Arc<Mutex<AppState<C>>>` (see `src/elm/app.rs:58`). A full
+integration test harness spanning "drive the Elm app through a
+DKG ceremony" is open work (see
+`docs/testing/E2E_TEST_IMPLEMENTATION_PLAN.md` — the harness it
+sketches is marked "plan only, not implemented" in 9197c38).
 
-```rust
-#[tokio::test]
-async fn test_wallet_creation_flow() {
-    let (tx, mut rx) = mpsc::channel(100);
-    let mut app = ElmApp::new(tx);
-    
-    // Start wallet creation
-    app.update(Message::Navigate(Screen::CreateWallet));
-    
-    // Select mode
-    app.update(Message::SelectMode(Mode::Online));
-    
-    // Select curve
-    app.update(Message::SelectCurve(Curve::Secp256k1));
-    
-    // Select template
-    app.update(Message::SelectTemplate(Template::TwoOfThree));
-    
-    // Start DKG
-    app.update(Message::ConfirmWalletCreation);
-    
-    // Verify DKG started
-    let cmd = rx.recv().await.unwrap();
-    assert!(matches!(cmd, Command::StartDKG { .. }));
-}
-```
+The current coverage for integration paths lives in:
+
+- `apps/tui-node/tests/update_transitions.rs` — pure state-machine
+  transitions
+- `apps/tui-node/tests/component_rendering.rs` — ratatui snapshot
+  tests
+- `apps/tui-node/examples/hybrid_mode_e2e_test.rs` +
+  `webrtc_mesh_e2e_test.rs` — full DKG + signing over the real
+  frost-core wrapping
 
 ## Migration Strategy
 

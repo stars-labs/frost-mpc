@@ -57,6 +57,80 @@ Shared FROST cryptographic implementation used by all Rust targets. Key modules:
 
 **Elm architecture** in TUI: State is `Model`, transitions via `Update`, rendering via `View`. Event-driven through `InternalCommand<C>` enum.
 
+## Browser extension: threshold signing architecture
+
+The extension is a standalone MPC client with TUI wire-protocol parity — any combination of extensions and TUI nodes can run DKG, threshold signing, and dApp `personal_sign`. Four runtime contexts (MV3):
+
+1. **Popup** (`src/entrypoints/popup/App.svelte`) — Svelte 5 legacy reactivity (NOT runes). Lives only while the browser-action panel is open. Talks to background via `chrome.runtime.connect({name: "popup"})`.
+2. **Background SW** (`src/entrypoints/background/`) — Orchestrates. Owns `StateManager`, `SessionManager`, `WebSocketManager` (signal server), `OffscreenManager`. MV3 service workers terminate after ~30s idle; `KeepaliveController` pings during active DKG/signing states to prevent death.
+3. **Offscreen** (`src/entrypoints/offscreen/`) — Long-lived WebRTC + WASM host. Loads `@mpc-wallet/core-wasm` (FROST); holds `WebRTCManager` with all FROST state (`frostDkg`, `signingInfo`, `signingCommitments` Map, `signingShares` Map). Background↔offscreen communicate via `chrome.runtime.sendMessage` wrapped in `{type: "fromBackground"|"fromOffscreen", payload}`.
+4. **Content + injected** — Injects an EIP-1193 provider into page context. `window.ethereum.personal_sign` → content script → `background.rpcHandler.handleSignMessageRequest`.
+
+### Signing pipeline (end-to-end)
+
+Each arrow crosses a runtime boundary unless noted:
+
+```
+dApp .personal_sign OR popup "Sign Message"
+   → background.rpcHandler / background.sessionManager
+   → sessionManager.createSigningSession builds SessionInfo
+   → wsClient.announceSession broadcasts on signal server
+   → signal server → session_available to ALL connected peers
+   → co-signer extensions: webSocketManager handles session_available
+      → signingNotifier.maybeNotify fires chrome.notifications
+      → popup "sessionAvailable" broadcast triggers auto-modal (Ext-3b)
+   → user clicks Join → joinDkgSession → wsClient.sendSessionStatusUpdate
+   → server re-broadcasts session_available with grown participants list
+   → webSocketManager.maybeTriggerCeremony sees participants.length >= threshold
+      → sessionReadyForSigning event sent to offscreen
+   → offscreen: loadKeystoreForSigning + initiateSigningCeremony
+      → frostDkg.signing_commit() → broadcast SigningCommitment over WebRTC mesh
+   → each peer: _handleSigningCommitment → frostDkg.add_signing_commitment
+   → threshold commitments received → _generateAndSendSignatureShare
+      → frostDkg.sign(messageHex) → broadcast SignatureShare
+   → each peer: _handleSignatureShare → frostDkg.add_signature_share
+   → threshold shares received → _aggregateSignatureAndBroadcast (aggregator only)
+      → frostDkg.aggregate_signature(messageHex) → broadcast AggregatedSignature
+   → all peers: onSigningComplete callback fires
+   → offscreen → background "signingComplete" event
+   → stateManager stashes appState.lastSignature + resolves RpcHandler pending
+      promise (for dApp flow) + broadcasts signingCompleted to popup
+   → popup renders SignatureComplete banner (Ext-2e)
+```
+
+### Wire protocol (extension ↔ signal server)
+
+Shape-compatible with TUI (see TUI's `command.rs`). Top-level serde tag `type`, `snake_case`.
+
+- `announce_session` / `session_available` — session-discovery broadcasts. Flat `session_type: "dkg" | "signing"` string; signing sessions carry top-level `wallet_name`, `group_public_key`, `blockchain`, `signing_message_hex` siblings. See `packages/@mpc-wallet/types/src/session.ts`. Parser in `src/utils/session-parse.ts` synthesizes `accepted_devices: []` (TUI omits it) so downstream can always index.
+- `request_active_sessions` / `sessions_for_device` — cold-start replay. Extension fires `requestActiveSessions()` 2s after WS open so sessions announced before our connect aren't missed.
+- `session_status_update` — outbound only; emitted on join.
+- `relay` (generic peer-to-peer, wraps `websocket_msg_type`) — used for WebRTCSignal, SessionProposal, SessionResponse, and `SigningDecline` (Ext-3c, explicit rejection without joining the mesh).
+
+### MV3 gotchas (have bitten us)
+
+- **Session-ephemeral state**: `pendingKeystoreJson`, `sessionInfo`, `dkgState` MUST reset on SW wake (`StateManager.loadPersistedState`). A stale `pending_sign_*` state causes DKG password prompt to misroute to UnlockWallet (fixed in 615da01).
+- **Offscreen idle termination**: offscreen document idles out ~30s. `KeepaliveController` (background) pings it every 25s during Initializing/Round1/Round2/Finalizing DKG states. Wire via `stateManager.addDkgStateListener`.
+- **chrome.action.openPopup**: Chromium-only; fallback to `chrome.tabs.create({url: popup.html})` for Firefox.
+- **navigator.clipboard** works in popup context but NOT in background SW or offscreen.
+
+### Key entry points for signing work
+
+| Layer | File | Key methods |
+|---|---|---|
+| Popup UI | `entrypoints/popup/App.svelte` | `buildSignPreview`, `confirmSignPreview`, `reviewSigningInvite`, `declineSigningInvite` |
+| Background RPC | `entrypoints/background/rpcHandler.ts` | `handleSignMessageRequest`, `approveDappSignature`, `handleSignatureComplete` |
+| Background session | `entrypoints/background/sessionManager.ts` | `createSigningSession`, `joinDkgSession` |
+| Background trigger | `entrypoints/background/webSocketManager.ts` | `maybeTriggerCeremony`, `relayToPeer` |
+| Background state | `entrypoints/background/stateManager.ts` | `case "signingComplete"`, `case "signingProgress"` |
+| Offscreen | `entrypoints/offscreen/webrtc.ts` | `loadKeystoreForSigning`, `initiateSigningCeremony`, `_handleSigningCommitment`, `_handleSignatureShare`, `_aggregateSignatureAndBroadcast` |
+
+WASM FROST methods actually called for signing: `signing_commit()` (returns hex), `add_signing_commitment(idx, hex)`, `sign(msgHex)` (returns hex), `add_signature_share(idx, hex)`, `aggregate_signature(msgHex)` (returns hex). Participant indices are 1-based; compute as `participants.indexOf(peerId) + 1`. `signing_commit()` stores our nonce internally — do NOT also add_signing_commitment for our own index (the other half of the nonce/commitment pair is kept by the instance for `sign()`).
+
+### Testing
+
+Signal-server live smoke tests need 3 browser instances — no bun harness exercises full FROST+WebRTC pairing. Unit coverage via `tests/entrypoints/background/` (regression suites: `dkgAutoTrigger`, `signingAutoTrigger`, `signingNotification`, `dappSignatureApproval`, `signingDecline`).
+
 ## Dependencies
 
 FROST: `frost-core` 2.2.0, `frost-ed25519` 2.2.0, `frost-secp256k1` 2.2.0 (ZCash implementations).

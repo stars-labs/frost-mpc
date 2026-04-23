@@ -26,14 +26,28 @@ The MPC Wallet has been successfully updated to implement the EIP-6963 standard 
   - Description: Wallet description
 
 ### 3. Supported RPC Methods
-- `eth_requestAccounts` - Request permission to access accounts
-- `eth_accounts` - Get currently connected accounts
-- `eth_chainId` - Get the current chain ID (default: 0x1 for Ethereum mainnet)
-- `net_version` - Get the network version
-- `eth_getBalance` - Get account balance
-- `eth_sendTransaction` - Send transactions
-- `personal_sign` - Sign messages
-- And more standard Ethereum RPC methods
+
+Real dispatch table in
+`src/entrypoints/background/rpcHandler.ts:100-135`:
+
+- `eth_requestAccounts` / `eth_accounts` — permission request / query
+- `eth_chainId` — returns the current network id via
+  `NetworkService.getCurrentNetwork()`. Earlier drafts claimed a
+  `default: 0x1 for Ethereum mainnet` fallback; the real handler
+  throws `"No current network found"` when no network is set (see
+  `handleChainIdRequest` at line 204). The `0x1` hardcode only
+  appears inside `eth_requestAccounts` at line 186 as the chainId
+  recorded in the permission ledger when no network has been
+  selected yet — not as a chainId-query default.
+- `net_version` — numeric-string network id (same source)
+- `eth_getBalance` / `eth_getTransactionCount` / `eth_gasPrice` /
+  `eth_estimateGas` — forwarded to the RPC provider
+- `eth_sendTransaction` — wraps the MPC signing flow
+- `eth_signMessage` / `personal_sign` — EIP-191 message signing
+  (threshold-signed via FROST, ecrecover-compatible)
+- Any other method: if `isReadOnlyMethod()` returns true, it's
+  forwarded to the RPC provider; otherwise the handler throws
+  `"Unsupported method: <method>"`.
 
 ### 4. Key Features
 - **Auto-connection**: Smooth connection flow for better UX

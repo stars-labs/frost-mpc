@@ -109,6 +109,42 @@ This document outlines the hybrid operational mode where some MPC participants o
 
 ## Implementation Components
 
+> **Scope note (partial retraction)**: the three code blocks below
+> mix real types with fabricated ones. The *real* hybrid layer
+> lives in `apps/tui-node/src/hybrid/` (two files: `transport.rs` +
+> `coordinator.rs`), but the sketches below invented wrapper types
+> that don't exist. Verifications:
+>
+> **Real types** (keep using these names):
+>   - `HybridCoordinator`  `src/hybrid/coordinator.rs:41`
+>   - `ParticipantInfo`    `src/hybrid/coordinator.rs:18`
+>   - `OnlineTransport`    `src/hybrid/transport.rs:9`
+>   - `OfflineTransport`   `src/hybrid/transport.rs:84`
+>   - `HybridMessage`      (re-exported from `src/hybrid/mod.rs:7`)
+>   - `SolanaTransactionBuilder`  `src/utils/solana_encoder.rs:53`
+>
+> **Fabricated types** (grep returns only this doc):
+>   - `NetworkSimulator` / `WebSocketHub` / `WebRTCMesh` (§ 1 block)
+>     — no such structs in source. `WebRTCMeshManager` IS real at
+>     `src/webrtc/mesh_manager.rs:136` but that's the in-process
+>     mesh simulator library, not a "WebRTCMesh" in hybrid/.
+>   - `SolanaTransaction` (§ 2 block) — real name is
+>     `SolanaTransactionBuilder`, and its method list differs:
+>     grep for the actual constructors in `solana_encoder.rs`.
+>   - `MessageQueue` struct — doesn't exist. Hybrid messaging rides
+>     the `Vec<HybridMessage>` return of
+>     `HybridCoordinator::receive_messages(participant_id)`
+>     (`coordinator.rs:145`).
+>   - `coordinate_dkg` / `coordinate_signing` / `bridge_online_offline`
+>     method names on `HybridCoordinator` — none exist. Real methods
+>     are `register_participant` / `send_message` /
+>     `broadcast_message` / `receive_messages` /
+>     `perform_sd_card_exchange` / `advance_round`
+>     / `simulate_network_failure` / `restore_network`.
+>
+> Treat the three sketches below as design-intent notation rather
+> than a literal API reference.
+
 ### 1. Network Simulator
 ```rust
 struct NetworkSimulator {

@@ -165,6 +165,11 @@ export class PopupMessageHandler {
                     await this.handleProposeSessionRequest(message, sendResponse);
                     break;
 
+                case MESSAGE_TYPES.CREATE_DKG_WALLET:
+                    console.log("🔐 [PopupMessageHandler] CREATE_DKG_WALLET: Creating new MPC wallet via DKG (TUI-compat announce)");
+                    await this.handleCreateDkgWalletRequest(message, sendResponse);
+                    break;
+
                 case MESSAGE_TYPES.ACCEPT_SESSION:
                     console.log("🔐 [PopupMessageHandler] ACCEPT_SESSION: Accepting MPC session invite");
                     await this.handleAcceptSessionRequest(message, sendResponse);
@@ -513,7 +518,7 @@ export class PopupMessageHandler {
     private async handleProposeSessionRequest(message: any, sendResponse: (response: any) => void): Promise<void> {
         if ('session_id' in message && 'total' in message && 'threshold' in message && 'participants' in message) {
             console.log("[PopupMessageHandler] Proposing session:", message.session_id);
-            
+
             const blockchain = message.blockchain || "solana";
 
             const result = await this.sessionManager.proposeSession(
@@ -528,6 +533,37 @@ export class PopupMessageHandler {
         } else {
             sendResponse({ success: false, error: "Invalid session proposal" });
         }
+    }
+
+    /**
+     * Ext-1b popup→background handler: user clicked "Create Wallet" in
+     * the popup with (name, total, threshold, curve). We delegate to
+     * sessionManager.createDkgWallet which builds the TUI-compatible
+     * SessionInfo, stashes it locally, and broadcasts via
+     * `announce_session`. The reply carries the generated session_id
+     * so the popup can transition to "waiting for joiners".
+     */
+    private async handleCreateDkgWalletRequest(
+        message: any,
+        sendResponse: (response: any) => void,
+    ): Promise<void> {
+        const total = Number(message.total);
+        const threshold = Number(message.threshold);
+        const curve = message.curve === "ed25519" ? "ed25519" : "secp256k1";
+        if (!Number.isFinite(total) || !Number.isFinite(threshold)) {
+            sendResponse({
+                success: false,
+                error: "total and threshold must be numbers",
+            });
+            return;
+        }
+        const result = await this.sessionManager.createDkgWallet({
+            name: typeof message.name === "string" ? message.name : undefined,
+            total,
+            threshold,
+            curve,
+        });
+        sendResponse(result);
     }
 
     private async handleAcceptSessionRequest(message: any, sendResponse: (response: any) => void): Promise<void> {

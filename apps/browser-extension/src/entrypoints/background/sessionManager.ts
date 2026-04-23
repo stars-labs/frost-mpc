@@ -16,6 +16,7 @@ import { DkgState } from "@mpc-wallet/types/dkg";
 import { WebSocketClient } from "./websocket";
 import { validateSessionProposal, validateSessionAcceptance } from "@mpc-wallet/types/messages";
 import type { BackgroundToPopupMessage, OffscreenMessage } from "@mpc-wallet/types/messages";
+import { buildWireSessionInfo } from "../../utils/session-parse";
 
 // Session persistence removed - sessions are ephemeral for security
 
@@ -422,4 +423,126 @@ export class SessionManager {
             return { success: false, error: (error as Error).message };
         }
     }
+
+    /**
+     * Ext-1b: create a new MPC wallet via DKG using the TUI-compatible
+     * announcement channel. Unlike `proposeSession` (which relays a
+     * `SessionProposal` to pre-selected peers), this broadcasts via
+     * `announce_session` — any client on the signal server can discover
+     * it and join up to the threshold.
+     *
+     * Steps:
+     *   1. Build a TUI-shaped SessionInfo with `participants: [self]`
+     *      (joiners append themselves when they accept).
+     *   2. Store locally as `appState.sessionInfo` + set
+     *      `dkgState = DkgState.Initializing` so the UI reflects the
+     *      creator-state.
+     *   3. Broadcast via `wsClient.announceSession(buildWireSessionInfo(...))`.
+     *
+     * Returns the generated `session_id` so the popup can show "waiting
+     * for joiners on session dkg_XXX…".
+     */
+    async createDkgWallet(config: {
+        name?: string;
+        total: number;
+        threshold: number;
+        curve: "secp256k1" | "ed25519";
+    }): Promise<{ success: boolean; sessionId?: string; error?: string }> {
+        if (!this.wsClient || this.wsClient.getReadyState() !== WebSocket.OPEN) {
+            return { success: false, error: "WebSocket not connected" };
+        }
+        if (!Number.isInteger(config.total) || config.total < 2) {
+            return { success: false, error: "total must be ≥2" };
+        }
+        if (
+            !Number.isInteger(config.threshold) ||
+            config.threshold < 1 ||
+            config.threshold > config.total
+        ) {
+            return { success: false, error: "threshold must be 1..total" };
+        }
+
+        const currentDeviceId = this.stateManager
+            ? this.stateManager.getState().deviceId
+            : this.appState.deviceId;
+
+        // Session id mirrors TUI's convention — loosely: `dkg_<12-hex>`
+        // (TUI uses a 4-hex suffix, which collides too easily; widen
+        // here. TUI still parses the id as an opaque string so length
+        // doesn't matter to it.)
+        const sessionId = `dkg_${cryptoHex(12)}`;
+
+        const sessionInfo: SessionInfo = {
+            session_id: sessionId,
+            proposer_id: currentDeviceId,
+            total: config.total,
+            threshold: config.threshold,
+            participants: [currentDeviceId],
+            session_type: "dkg",
+            curve_type: config.curve,
+            coordination_type: "Network",
+            accepted_devices: [currentDeviceId],
+        };
+
+        // Mirror TUI's `creating_wallet` state: the popup needs to
+        // know we're the creator so it shows "Waiting for joiners"
+        // rather than "Session received".
+        this.appState.sessionInfo = sessionInfo;
+        this.appState.invites = [
+            ...(this.appState.invites ?? []).filter(
+                (s) => s.session_id !== sessionId,
+            ),
+            sessionInfo,
+        ];
+        this.appState.dkgState = DkgState.Initializing;
+        if (this.stateManager) {
+            this.stateManager.updateState({
+                sessionInfo,
+                invites: this.appState.invites,
+                dkgState: DkgState.Initializing,
+                blockchain:
+                    config.curve === "secp256k1" ? "ethereum" : "solana",
+            });
+        }
+
+        try {
+            const wire = buildWireSessionInfo(sessionInfo);
+            this.wsClient.announceSession(wire);
+            console.log(
+                `[SessionManager] Created DKG wallet: ${sessionId} ` +
+                    `(${config.threshold}/${config.total} ${config.curve})`,
+            );
+            this.broadcastToPopup({
+                type: "dkgWalletCreated",
+                sessionInfo,
+            } as any);
+            return { success: true, sessionId };
+        } catch (error) {
+            console.error("[SessionManager] createDkgWallet failed:", error);
+            // Roll back state on failure so the user can retry cleanly.
+            this.appState.sessionInfo = null;
+            this.appState.dkgState = DkgState.Idle;
+            if (this.stateManager) {
+                this.stateManager.updateState({
+                    sessionInfo: null,
+                    dkgState: DkgState.Idle,
+                });
+            }
+            return { success: false, error: (error as Error).message };
+        }
+    }
+}
+
+/**
+ * 12-char hex helper for session ids. Uses WebCrypto — available in
+ * service workers and offscreen documents. Not cryptographically
+ * strong (we don't need that for session ids), just collision-resistant
+ * enough for "a few thousand sessions".
+ */
+function cryptoHex(bytes: number): string {
+    const buf = new Uint8Array(bytes);
+    crypto.getRandomValues(buf);
+    let out = "";
+    for (const b of buf) out += b.toString(16).padStart(2, "0");
+    return out;
 }

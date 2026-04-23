@@ -248,6 +248,13 @@ export const MESSAGE_TYPES = {
     LIST_DEVICES: "listDevices",
     PROPOSE_SESSION: "proposeSession",
     ACCEPT_SESSION: "acceptSession",
+    // Ext-1b: Create a new MPC wallet via DKG. Unlike PROPOSE_SESSION
+    // (legacy per-peer relay path), this emits a TUI-compatible
+    // `announce_session` broadcast so any client — extension or TUI —
+    // can discover and join. The payload carries config only (name,
+    // total, threshold, curve); background generates the session_id
+    // and device_id.
+    CREATE_DKG_WALLET: "createDkgWallet",
     RELAY: "relay",
     FROM_OFFSCREEN: "fromOffscreen",
     OFFSCREEN_READY: "offscreenReady",

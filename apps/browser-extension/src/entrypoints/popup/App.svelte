@@ -12,7 +12,12 @@
     import SignatureRequest from "../../components/SignatureRequest.svelte";
     import PasswordPrompt from "./components/PasswordPrompt.svelte";
     import WalletSelector from "./components/WalletSelector.svelte";
+    import CreateWalletForm from "../../components/CreateWalletForm.svelte";
     import { MESSAGE_TYPES } from "@mpc-wallet/types/messages";
+
+    // Ext-1b: toggled when the user clicks "+ Create Wallet". Shows
+    // the CreateWalletForm overlay until they submit or cancel.
+    let showCreateWallet = false;
 
     // Application state (consolidated from background) - the single source of truth
     let appState: AppState = { ...INITIAL_APP_STATE };
@@ -1108,6 +1113,26 @@
                 appState = { ...appState };
             }}
         />
+    {:else if showCreateWallet}
+        <!-- Ext-1b: DKG wallet creation form. Covers the popup while
+             the user configures threshold/total/curve. On success we
+             flip back to the main view; the session_available
+             broadcast will populate appState.sessionInfo and the
+             existing wallet-status banner will reflect the new state. -->
+        <CreateWalletForm
+            deviceId={appState.deviceId}
+            wsConnected={appState.wsConnected}
+            on:created={({ detail }) => {
+                console.log(
+                    "[UI] DKG wallet creation announced:",
+                    detail.sessionId,
+                );
+                showCreateWallet = false;
+            }}
+            on:cancel={() => {
+                showCreateWallet = false;
+            }}
+        />
     {:else if !keystoreStatus.initialized}
         <!-- Keystore not initialized -->
         <div class="text-center py-8">
@@ -1121,6 +1146,26 @@
             </button>
         </div>
     {:else}
+        <!-- Ext-1b: Create Wallet entry point. Shown whenever we're
+             not already in a DKG session or settings overlay. Clicking
+             opens the CreateWalletForm above which announces a TUI-
+             compatible `announce_session` broadcast. -->
+        {#if !appState.sessionInfo || appState.dkgState === DkgState.Complete || appState.dkgState === DkgState.KeystoreImported}
+            <div class="mb-3 flex justify-end">
+                <button
+                    type="button"
+                    class="rounded bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700"
+                    on:click={() => (showCreateWallet = true)}
+                    disabled={!appState.wsConnected}
+                    title={appState.wsConnected
+                        ? "Initiate a new DKG ceremony"
+                        : "Signal server not connected"}
+                >
+                    + Create Wallet
+                </button>
+            </div>
+        {/if}
+
         <!-- Wallet Status Banner -->
         <div class="mb-4 p-3 border rounded">
             <div class="mb-2">

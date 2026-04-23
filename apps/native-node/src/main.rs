@@ -161,7 +161,51 @@ async fn main() -> Result<()> {
             });
         });
     }
-    
+
+    // Signing: open the confirm modal from a hex message.
+    {
+        let adapter = adapter.clone();
+        window.on_sign_message(move |message_hex, chain| {
+            let adapter = adapter.clone();
+            let message_hex = message_hex.to_string();
+            let chain = chain.to_string();
+            tokio::spawn(async move {
+                if let Err(e) = adapter
+                    .request_signing(message_hex, chain, None)
+                    .await
+                {
+                    println!("Failed to request signing: {}", e);
+                }
+            });
+        });
+    }
+
+    {
+        let adapter = adapter.clone();
+        window.on_approve_signing(move |request_id| {
+            let adapter = adapter.clone();
+            let request_id = request_id.to_string();
+            tokio::spawn(async move {
+                if let Err(e) = adapter.approve_signing(request_id).await {
+                    println!("Failed to approve signing: {}", e);
+                }
+            });
+        });
+    }
+
+    {
+        let adapter = adapter.clone();
+        window.on_reject_signing(move |request_id| {
+            let adapter = adapter.clone();
+            let request_id = request_id.to_string();
+            tokio::spawn(async move {
+                if let Err(e) = adapter.reject_signing(request_id).await {
+                    println!("Failed to reject signing: {}", e);
+                }
+            });
+        });
+    }
+
     // Run the UI.
     //
     // The previous `adapter.initialize_demo()` call that lived here

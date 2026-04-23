@@ -7,6 +7,7 @@ use tui_node::core::{
     dkg_manager::DkgManager,
     offline_manager::OfflineManager,
     session_manager::SessionManager,
+    signing_manager::SigningManager,
     wallet_manager::WalletManager,
     CoreState, UICallback,
 };
@@ -22,6 +23,7 @@ pub struct CoreAdapter {
     pub dkg_manager: Arc<DkgManager>,
     pub wallet_manager: Arc<WalletManager>,
     pub offline_manager: Arc<OfflineManager>,
+    pub signing_manager: Arc<SigningManager>,
     ui_callback: Arc<dyn UICallback>,
 }
 
@@ -37,9 +39,43 @@ impl CoreAdapter {
             dkg_manager: Arc::new(DkgManager::new(state.clone(), ui_callback.clone())),
             wallet_manager: Arc::new(WalletManager::new(state.clone(), ui_callback.clone())),
             offline_manager: Arc::new(OfflineManager::new(state.clone(), ui_callback.clone())),
+            signing_manager: Arc::new(SigningManager::new(state.clone(), ui_callback.clone())),
             state,
             ui_callback,
         }
+    }
+
+    /// Create a new signing request. Typically called from a
+    /// "Sign Message" button in Settings; opens the confirm modal
+    /// via `UICallback::update_signing_request`. Returns the
+    /// request id so the caller can pair approve/reject later.
+    pub async fn request_signing(
+        &self,
+        message_hex: String,
+        chain: String,
+        display_label: Option<String>,
+    ) -> Result<String, String> {
+        self.signing_manager
+            .request_signing(message_hex, chain, display_label)
+            .await
+            .map_err(|e| e.to_string())
+    }
+
+    /// User approved the pending signing request from the confirm
+    /// modal. Drives state through commitment / share / aggregate.
+    pub async fn approve_signing(&self, request_id: String) -> Result<(), String> {
+        self.signing_manager
+            .approve(&request_id)
+            .await
+            .map_err(|e| e.to_string())
+    }
+
+    /// User rejected the pending signing request.
+    pub async fn reject_signing(&self, request_id: String) -> Result<(), String> {
+        self.signing_manager
+            .reject(&request_id)
+            .await
+            .map_err(|e| e.to_string())
     }
     
     /// Connect to WebSocket server

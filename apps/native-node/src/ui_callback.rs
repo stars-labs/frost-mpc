@@ -11,7 +11,8 @@ use async_trait::async_trait;
 use slint::{ComponentHandle, Model, ModelRc, VecModel, Weak};
 use tui_node::core::{
     ConnectionInfo, ConnectionStatus, OperationMode, ParticipantInfo, ParticipantStatus,
-    SDCardOperation, SessionInfo, SessionStatus, UICallback, WalletInfo,
+    SDCardOperation, SessionInfo, SessionStatus, SigningRequest, SigningState, UICallback,
+    WalletInfo,
 };
 
 use crate::slint_generatedMainWindow::{
@@ -251,6 +252,66 @@ impl UICallback for NativeUICallback {
             let state = window.global::<AppState>();
             let model = ModelRc::new(VecModel::from(slint_operations));
             state.set_pending_sd_operations(model);
+        });
+    }
+
+    async fn update_signing_request(&self, request: Option<SigningRequest>) {
+        // Slint doesn't have Option — flatten into a bool flag
+        // + scalar fields. When None, clear everything back to
+        // empty so the confirm modal (which gates on
+        // has_signing_request) closes cleanly.
+        let (has_request, id, preview, chain, label) = match request {
+            Some(r) => {
+                // Truncate the message preview for display —
+                // full hex strings are unreadable in the modal,
+                // and pushing the whole payload to Slint wastes
+                // memory on every state update.
+                let preview = if r.message_hex.len() > 120 {
+                    format!("{}…", &r.message_hex[..120])
+                } else {
+                    r.message_hex
+                };
+                (
+                    true,
+                    r.id,
+                    preview,
+                    r.chain,
+                    r.display_label.unwrap_or_default(),
+                )
+            }
+            None => (false, String::new(), String::new(), String::new(), String::new()),
+        };
+        dispatch(self.window.clone(), move |window| {
+            let state = window.global::<AppState>();
+            state.set_has_signing_request(has_request);
+            state.set_signing_request_id(id.into());
+            state.set_signing_message_preview(preview.into());
+            state.set_signing_chain(chain.into());
+            state.set_signing_label(label.into());
+        });
+    }
+
+    async fn update_signing_state(&self, state_enum: SigningState) {
+        // Stringify to match the Slint-side lowercase discriminants.
+        let s: &'static str = match state_enum {
+            SigningState::Idle => "idle",
+            SigningState::AwaitingApproval => "awaiting_approval",
+            SigningState::Commitment => "commitment",
+            SigningState::Share => "share",
+            SigningState::Aggregating => "aggregating",
+            SigningState::Complete => "complete",
+            SigningState::Failed(_) => "failed",
+        };
+        dispatch(self.window.clone(), move |window| {
+            let state = window.global::<AppState>();
+            state.set_signing_state(s.into());
+        });
+    }
+
+    async fn update_signing_complete(&self, signature_hex: String) {
+        dispatch(self.window.clone(), move |window| {
+            let state = window.global::<AppState>();
+            state.set_last_signature(signature_hex.into());
         });
     }
 

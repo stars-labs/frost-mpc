@@ -7,11 +7,17 @@ Documentation for the WebRTC signaling servers used by the MPC Wallet.
 - [`deployment/`](./deployment/) - Deployment guides and configurations
 
 Architecture specifics live as Rust doc comments on the public
-types in [`server/src/lib.rs`](../server/src/lib.rs) (`ServerMsg`,
-`DeviceId`, etc.). For the broader wire-protocol overview, see the
-top-of-repo `CLAUDE.md` § "Browser extension: threshold signing
-architecture" — the signal server's role is the unmodified
-message relay in that flow diagram.
+types in [`server/src/lib.rs`](../server/src/lib.rs) —
+`SessionInfo` (struct), `ServerMsg` (enum), `ClientMsg` (enum),
+plus the `session_manager` and `cloudflare_storage` modules.
+There is no `DeviceId` newtype; device identity is a plain
+`String` in the wire messages. Earlier drafts of this paragraph
+listed `DeviceId` as a public type — it doesn't exist.
+
+For the broader wire-protocol overview, see the top-of-repo
+`CLAUDE.md` § "Browser extension: threshold signing architecture"
+— the signal server's role is the unmodified message relay in
+that flow diagram.
 
 ## Overview
 

@@ -18,15 +18,25 @@ Event::Keyboard(KeyEvent {
 ```
 
 ### 2. Return Correct Message Types
-Each component must return the appropriate message type based on its purpose:
 
-| Component | Purpose | Correct Message on Enter |
-|-----------|---------|-------------------------|
-| ModeSelection | Select Online/Offline mode | `Message::SelectMode(mode)` |
-| CurveSelection | Select crypto curve | `Message::SelectCurve(curve)` |
-| ThresholdConfig | Configure threshold | `Message::ThresholdConfigConfirm` |
-| MainMenu | Select menu item | `Message::SelectItem { index }` |
-| JoinSession | Join a session | `Message::SelectItem { index }` |
+Each component must return the appropriate message variant from
+`src/elm/message.rs`. Verified against that file:
+
+| Component | Purpose | Correct Message |
+|-----------|---------|-----------------|
+| ModeSelection | Select Online/Offline mode | `Message::SelectMode(WalletMode)` |
+| ThresholdConfig | Set threshold value | `Message::SetThreshold(u16)` |
+| MainMenu | Select menu item | `Message::SelectItem { index: usize }` |
+| JoinSession | Join a session | `Message::SelectItem { index: usize }` |
+| WalletList | Pick wallet for unlock/sign | `Message::SelectItem { index: usize }` |
+
+Earlier drafts of this table listed a `CurveSelection` component
+returning `Message::SelectCurve(curve)`, and a
+`ThresholdConfigConfirm` variant. Neither exists — `grep` for
+either name returns zero hits. Curve selection is not a separate
+screen; it's a field on the Create Wallet form, and threshold
+confirmation is driven by `SetThreshold(u16)` + form submission
+through the usual `SelectItem`/Enter flow.
 
 ### 3. Component ID Must Match
 ```rust

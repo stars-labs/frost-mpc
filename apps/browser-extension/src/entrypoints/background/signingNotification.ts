@@ -36,7 +36,7 @@ export interface SigningNotifierDeps {
     notifications: {
         create: (
             notificationId: string,
-            options: chrome.notifications.NotificationOptions<true>,
+            options: chrome.notifications.NotificationOptions,
             callback?: (id: string) => void,
         ) => void;
     };

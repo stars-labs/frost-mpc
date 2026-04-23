@@ -58,7 +58,17 @@ export type WebRTCSignal =
 export type WebSocketMessagePayload =
   | ({ websocket_msg_type: 'SessionProposal' } & SessionProposal)
   | ({ websocket_msg_type: 'SessionResponse' } & SessionResponse)
-  | ({ websocket_msg_type: 'WebRTCSignal' } & WebRTCSignal);
+  | ({ websocket_msg_type: 'WebRTCSignal' } & WebRTCSignal)
+  // Ext-3c: peer-to-peer signing decline. Relayed via the signal
+  // server since the decliner hasn't joined the WebRTC mesh yet.
+  // Proposer receives as a `relay` frame and surfaces a toast.
+  | {
+      websocket_msg_type: 'SigningDecline';
+      signing_id: string;
+      /** Optional — older clients may omit it; proposer falls back
+       *  to `msg.from` from the wrapping relay frame. */
+      decliner_id?: string;
+    };
 
 /**
  * Messages sent FROM the server TO clients.

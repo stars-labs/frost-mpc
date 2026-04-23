@@ -68,7 +68,7 @@
             
         } catch (error) {
             console.error('[AccountManager] Error creating account:', error);
-            alert('Error creating account: ' + error.message);
+            alert('Error creating account: ' + (error instanceof Error ? error.message : String(error)));
         }
     }
     

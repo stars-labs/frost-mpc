@@ -308,7 +308,7 @@ export class ContentProvider {
                                 jsonrpc: '2.0',
                                 error: {
                                     code: -32603,
-                                    message: 'Internal error: ' + err.message
+                                    message: 'Internal error: ' + (err instanceof Error ? err.message : String(err))
                                 }
                             }
                         });

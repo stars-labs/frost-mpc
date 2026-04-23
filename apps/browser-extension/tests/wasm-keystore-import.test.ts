@@ -218,7 +218,7 @@ describe('WASM Keystore Import Integration Tests', () => {
 
 // Test the actual keystore data format from CLI
 describe('CLI Keystore Format Validation', () => {
-  test.skip('should match expected CLI keystore structure', () => {
+  test('should match expected CLI keystore structure', () => {
     const expectedCliData = {
       version: "1.0",
       curve: "Secp256k1Curve",
@@ -245,7 +245,7 @@ describe('CLI Keystore Format Validation', () => {
     expect(typeof parsed.group_public_key).toBe('string');
   });
 
-  test.skip('should validate hex-encoded key package format', () => {
+  test('should validate hex-encoded key package format', () => {
     const keystoreData = readFileSync(realisticKeystorePath, 'utf-8').trim();
     const parsed = JSON.parse(keystoreData);
     

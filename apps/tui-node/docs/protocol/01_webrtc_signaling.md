@@ -12,8 +12,14 @@ This document defines the JSON message types and protocol flow for negotiating a
 2. **Discovery:**  
    Nodes query the signaling server for available devices.
 
-3. **Session Negotiation & Mesh Formation:**  
-   Nodes coordinate session parameters (e.g., total participants, threshold, session ID) and build the mesh themselves. The signaling server does **not** store or manage session state.
+3. **Session Negotiation & Mesh Formation:**
+   Nodes coordinate session parameters (e.g., total participants,
+   threshold, session ID) and build the peer mesh themselves. The
+   signaling server tracks registered `device_id`s and session
+   announcements in memory (standalone server) or Durable Object
+   storage (Cloudflare Worker variant), and relays opaque peer-to-peer
+   envelopes — but it does not inspect or intermediate DKG/signing
+   protocol messages.
 
 4. **Signaling Exchange:**  
    Nodes exchange WebRTC signaling data (SDP offers/answers, ICE candidates) via the signaling server to establish direct device-to-device connections.
@@ -78,6 +84,36 @@ Relays signaling data from another device.
 ```
 Sent if an error occurs (e.g., unknown device).
 
+### 5. Session discovery
+
+The signal server also knows about session announcements — this
+enables cold-start rejoin + peer discovery without needing every
+participant to be online simultaneously at announce time.
+Authoritative enum: `ClientMsg` / `ServerMsg` in
+`apps/signal-server/server/src/lib.rs`.
+
+**Client → Server**
+```json
+{ "type": "announce_session", "session_info": { ... } }
+{ "type": "request_active_sessions" }
+{ "type": "session_status_update", "session_info": { ... } }
+{ "type": "query_my_active_sessions" }
+```
+
+**Server → Clients**
+```json
+{ "type": "session_available", "session_info": { ... } }
+{ "type": "sessions_for_device", "sessions": [ ... ] }
+{ "type": "session_list_request", "from": "<device_id>" }
+{ "type": "session_removed", "session_id": "<id>", "reason": "<text>" }
+```
+
+The `session_info` payload is a JSON blob whose shape is defined
+by the sender (browser extension, TUI, native-node all share it
+via `packages/@mpc-wallet/types/src/session.ts` on the TS side
+and ad-hoc on the Rust side). The signal server treats the inner
+payload as opaque.
+
 ---
 
 ## WebRTC (Device-to-Device) Message Types
@@ -139,11 +175,15 @@ Indicates a device has established connections to all other participants.
 
 ### 3. Distributed Key Generation (DKG)
 
+Authoritative enum: `WebRTCMessage<C>` in
+`apps/tui-node/src/protocal/signal.rs:204`. Serde tags use
+`snake_case` on the enum variant name — note the `_package` suffix.
+
 ```json
 {
-  "type": "dkg_round1",
+  "type": "dkg_round1_package",
   "payload": {
-    "package": "<serialized-package>"
+    "package": "<frost-core::keys::dkg::round1::Package>"
   }
 }
 ```
@@ -151,23 +191,21 @@ Sends DKG round 1 package (commitments) to other devices.
 
 ```json
 {
-  "type": "dkg_round2",
+  "type": "dkg_round2_package",
   "payload": {
-    "package": "<serialized-package>"
+    "package": "<frost-core::keys::dkg::round2::Package>"
   }
 }
 ```
 Sends DKG round 2 package (encrypted shares) to other devices.
 
-```json
-{
-  "type": "dkg_complete",
-  "payload": {
-    "group_pubkey": "<hex-encoded-key>"
-  }
-}
-```
-Notifies devices that DKG is complete with the final group public key.
+DKG finalization is entirely local — there is no `dkg_complete`
+wire message. Each participant runs `dkg::part3` on its received
+packages to produce its own `KeyPackage` + the shared
+`VerifyingKey` (group public key). Participants can cross-check
+the resulting group key out-of-band if needed. Earlier drafts of
+this doc listed a `dkg_complete` message broadcasting the
+group_pubkey — no such type exists in `WebRTCMessage`.
 
 ---
 

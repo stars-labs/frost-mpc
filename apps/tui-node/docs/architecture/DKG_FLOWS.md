@@ -34,10 +34,18 @@ The online DKG process uses WebRTC mesh networking for real-time coordination be
 
 ### Prerequisites
 
-- All participants must be online simultaneously
-- Stable internet connection
-- WebRTC-compatible network (no restrictive firewalls)
-- Synchronized system clocks (±5 minutes tolerance)
+- All participants online simultaneously for the duration of the
+  DKG ceremony
+- WebRTC-routable network: STUN is enough for most home NATs
+  (full-cone / restricted-cone / port-restricted-cone). Symmetric-NAT
+  peers may fail to connect because no TURN server ships with this
+  repo. If a participant is behind symmetric NAT, either run the
+  ceremony in offline mode over SD card, or stand up your own TURN
+  and point the clients at it.
+
+Earlier drafts of this section listed "Synchronized system clocks
+(±5 minutes tolerance)" as a prerequisite — FROST DKG is not
+time-sensitive; remove that from your checklist.
 
 ### Step-by-Step Process
 
@@ -61,10 +69,14 @@ The online DKG process uses WebRTC mesh networking for real-time coordination be
 │ ☑ charlie (online - 192.168.1.11)                  │
 │ ☐ dave (offline)                                   │
 │                                                     │
-│ Network Check:                                      │
-│ • Signal Server: ✅ Connected                       │
-│ • NAT Type: ✅ Symmetric (WebRTC compatible)       │
-│ • Bandwidth: ✅ Sufficient (>1 Mbps)               │
+│ (No pre-flight NAT/bandwidth check is run by the TUI.
+│ The Network Check panel in earlier drafts of this mockup
+│ claimed a "Symmetric NAT (WebRTC compatible)" status —
+│ backwards: symmetric NAT is the HARDEST case for WebRTC
+│ without TURN. Reality is that DKG is attempted directly
+│ over the peer mesh once signaling completes; failures
+│ surface as peer-connection timeouts, not a pre-flight
+│ "bandwidth insufficient" gate.)                     │
 │                                                     │
 │ [Start DKG] [Test Connection] [Cancel]             │
 └─────────────────────────────────────────────────────┘
@@ -532,64 +544,48 @@ The hybrid approach combines online coordination with offline key generation for
 
 ### Lost Key Share Recovery
 
-When a participant loses their key share:
+If a participant loses their key share, the only currently-shipping
+recovery path is restoring from backup:
 
-```
-┌─────────────────────────────────────────────────────┐
-│ Key Share Recovery Options                          │
-├─────────────────────────────────────────────────────┤
-│ Wallet: treasury-wallet (2-of-3)                   │
-│ Missing: bob's key share                           │
-│                                                     │
-│ Recovery Methods:                                   │
-│                                                     │
-│ 1. Restore from Backup                             │
-│    • Requires: Bob's encrypted backup              │
-│    • Security: Original password needed            │
-│                                                     │
-│ 2. Threshold Recovery (Recommended)                │
-│    • Requires: 2 other participants               │
-│    • Process: Generate new 2-of-3 wallet          │
-│    • Result: Bob gets new share                    │
-│                                                     │
-│ 3. Share Refresh Protocol                          │
-│    • Requires: All participants                    │
-│    • Process: Redistribute shares                  │
-│    • Result: Same wallet, new shares              │
-│                                                     │
-│ [Select Method] [View Requirements]                │
-└─────────────────────────────────────────────────────┘
-```
+- **Restore from backup**: Decrypt an exported keystore file
+  (`.json`+`.dat` pair from `~/.frost_keystore/`, or an extension-format
+  export) with the original password. Works provided the participant
+  kept a copy. The extension/TUI round-trip is test-covered
+  (`extension_compat.rs`).
 
-### Emergency Access Procedures
+Earlier drafts of this section offered two more recovery methods
+that do NOT exist in source today:
 
-For emergency situations requiring immediate access:
+- **"Threshold Recovery: generate a new 2-of-3 wallet, Bob gets a new
+  share"** — this is cryptographically incoherent. Re-running DKG
+  produces a completely new group public key (and therefore a
+  completely different on-chain address); it does not reissue a
+  lost share for an existing key. A new DKG == a new wallet.
+- **"Share Refresh Protocol"** — FROST supports proactive share
+  refresh in principle (updating shares so the same group key is
+  preserved while old shares become useless), but this crate does
+  not implement it. Adding refresh is open work, tracked as a
+  future item.
 
-```
-┌─────────────────────────────────────────────────────┐
-│ ⚠️  Emergency Wallet Access                         │
-├─────────────────────────────────────────────────────┤
-│ Wallet: critical-operations (3-of-5)                │
-│ Available Participants: 2 of 5                      │
-│                                                     │
-│ Emergency Options:                                  │
-│                                                     │
-│ 1. Contact Missing Participants                     │
-│    • Alice: Last seen 2 hours ago                 │
-│    • Dave: Offline mode (check schedule)          │
-│    • Eve: Different timezone (sleeping)            │
-│                                                     │
-│ 2. Use Time-Locked Recovery                        │
-│    • Status: Not configured                        │
-│    • Recommendation: Set up for future            │
-│                                                     │
-│ 3. Social Recovery Protocol                        │
-│    • Requires: Pre-configured trustees            │
-│    • Available: 3 of 4 trustees online            │
-│                                                     │
-│ [Initiate Social Recovery] [Contact List]          │
-└─────────────────────────────────────────────────────┘
-```
+If a share is lost and no backup exists, the participant is out of
+the threshold. If the remaining participants still hit the threshold
+`t`, the wallet can still sign; if they don't, the funds under that
+group key are permanently inaccessible — standard threshold-signature
+failure mode.
+
+### Emergency access
+
+The TUI displays no presence / last-seen / timezone information for
+participants. Earlier drafts of this section showed a panel with
+"Alice: Last seen 2 hours ago" / "Time-Locked Recovery" / "Social
+Recovery Protocol: 3 of 4 trustees online" — none of those features
+exist. The only emergency options today are:
+
+1. Gather threshold participants (possibly out-of-band) and sign the
+   required transaction through the normal signing flow.
+2. If threshold participation is impossible, the funds are
+   inaccessible. Plan for this by keeping encrypted backups of every
+   share in safe places ahead of time.
 
 ## Security Considerations
 
@@ -627,8 +623,8 @@ For emergency situations requiring immediate access:
 | Network eavesdropping | Metadata leak | TLS/DTLS encryption |
 | Commitment manipulation | Protocol failure | Cryptographic verification |
 | Denial of service | DKG failure | Timeout and retry mechanisms |
-| Key share theft | Partial compromise | Encrypted storage, HSM support |
-| Replay attacks | Double signing | Nonce tracking, session IDs |
+| Key share theft | Partial compromise | Encrypted storage (AES-256-GCM + PBKDF2). No HSM integration — earlier drafts claimed HSM support; none exists. |
+| Replay attacks | Double signing | FROST nonces are randomly generated per-signing; no separate nonce-tracking or explicit session-id validation layer is applied on top of the protocol. |
 
 ## Troubleshooting
 

@@ -45,7 +45,7 @@ describe('KeystoreService', () => {
         });
 
         it('should have no wallets initially', async () => {
-            chrome.storage.local.get.mockResolvedValue({});
+            (chrome.storage.local.get as any).mockResolvedValue({});
             const wallets = keystore.getWallets();
             expect(wallets).toEqual([]);
         });
@@ -143,8 +143,8 @@ describe('KeystoreService', () => {
             (crypto.subtle.decrypt as any).mockResolvedValue(
                 new TextEncoder().encode(JSON.stringify(mockKeyShareData)).buffer
             );
-            chrome.storage.local.set.mockResolvedValue(undefined);
-            chrome.storage.local.get.mockResolvedValue({});
+            (chrome.storage.local.set as any).mockResolvedValue(undefined);
+            (chrome.storage.local.get as any).mockResolvedValue({});
             
             // Unlock keystore
             await keystore.initialize(deviceId);
@@ -289,8 +289,8 @@ describe('KeystoreService', () => {
             (crypto.subtle.decrypt as any).mockResolvedValue(
                 new TextEncoder().encode(JSON.stringify(mockWallets[0].keyShare)).buffer
             );
-            chrome.storage.local.set.mockResolvedValue(undefined);
-            chrome.storage.local.get.mockResolvedValue({});
+            (chrome.storage.local.set as any).mockResolvedValue(undefined);
+            (chrome.storage.local.get as any).mockResolvedValue({});
             
             await keystore.initialize(deviceId);
             await keystore.unlock(password);

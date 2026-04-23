@@ -616,28 +616,15 @@ pub trait FrostProtocol {
 
 ## Appendices
 
-### A. Configuration File Format
+### A. Configuration
 
-```toml
-[general]
-device_id = "alice-node"
-keystore_path = "~/.mpc-wallet/keystore"
-
-[network]
-websocket_url = "wss://xiongchenyu.dpdns.org"
-reconnect_interval = 5000
-max_reconnect_attempts = 10
-
-[ui]
-theme = "dark"
-refresh_rate = 60
-show_animations = true
-
-[security]
-auto_lock_minutes = 15
-require_password = true
-enable_audit_log = true
-```
+The TUI has no config file today — runtime settings come from CLI
+flags only. See `apps/tui-node/src/bin/mpc-wallet-tui.rs` for the
+authoritative `clap::Args` struct, or `apps/tui-node/docs/README.md`
+§ Configuration for the summary. The TOML schema originally sketched
+here described features that were never implemented (theme, auto-lock,
+audit log, reconnect tuning); removed so nobody follows it and
+discovers the flags silently do nothing.
 
 ### B. Error Codes
 

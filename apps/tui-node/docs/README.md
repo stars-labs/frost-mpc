@@ -143,39 +143,35 @@ Device B ──► Export ──► USB ──► Device A
 
 ## Configuration
 
-### Configuration File
+The TUI has no config-file support today — all runtime settings are
+passed as CLI flags. Keystore location is fixed at `~/.frost_keystore`.
 
-Location: `~/.mpc-wallet/config.toml`
+### CLI Flags
 
-```toml
-[network]
-signal_server = "wss://xiongchenyu.dpdns.org"
-stun_servers = ["stun:stun.l.google.com:19302"]
-enable_turn = false
-
-[keystore]
-path = "~/.mpc-wallet/keystores"
-encryption = "aes-256-gcm"
-auto_backup = true
-
-[ui]
-theme = "dark"
-refresh_rate = 60
-show_animations = true
-
-[security]
-require_password = true
-session_timeout = 900
-max_login_attempts = 3
 ```
+--device-id <ID>            Device identity in the FROST mesh.
+                            Defaults to the machine hostname.
+--signal-server <URL>       WebSocket signal server.
+                            Default: wss://xiongchenyu.dpdns.org
+--offline                   Run without network (SD-card DKG mode).
+--log-location <PATH>       Log file path.
+                            Default: ~/.frost_keystore/logs/mpc-wallet.log
+--log-level <LEVEL>         error | warn | info | debug | trace
+                            Default: info
+```
+
+See `apps/tui-node/src/bin/mpc-wallet-tui.rs` for the authoritative
+definitions.
 
 ### Environment Variables
 
-```bash
-export MPC_WALLET_CONFIG=/path/to/config.toml
-export MPC_WALLET_KEYSTORE=/secure/location
-export RUST_LOG=info
-```
+Only two env vars are consulted:
+
+| Variable           | Effect                                       |
+|--------------------|----------------------------------------------|
+| `HOME`             | Used to compute the keystore path.           |
+| `PERF_MONITORING`  | If set (any value), enables perf counters.   |
+| `RUST_LOG`         | Standard tracing-subscriber directive.       |
 
 ## Advanced Features
 

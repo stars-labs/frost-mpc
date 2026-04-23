@@ -281,27 +281,14 @@ Every feature is accessible via keyboard:
 
 ## Customization
 
-### Custom Keybindings
+Keybindings are hardcoded in the Elm update layer (`src/elm/update.rs`
+and the per-screen components in `src/elm/components/`) — there is no
+runtime configuration file. To remap a key, edit the corresponding
+`KeyCode` match arms and rebuild.
 
-Edit `~/.mpc-wallet/keybindings.toml`:
-
-```toml
-[navigation]
-up = ["Up", "k"]
-down = ["Down", "j"]
-left = ["Left", "h"]
-right = ["Right", "l"]
-select = ["Enter", "Space"]
-
-[actions]
-new_wallet = ["n", "Ctrl+n"]
-join_session = ["j", "Ctrl+j"]
-quit = ["Ctrl+q", "Ctrl+c"]
-
-[custom]
-quick_sign = "Ctrl+s"
-toggle_offline = "Ctrl+o"
-```
+Proposed future work: load keybinding overrides from a TOML file at
+startup. See the existing hotkey definitions in code as the authoritative
+source until that lands.
 
 ### Disable Shortcuts
 

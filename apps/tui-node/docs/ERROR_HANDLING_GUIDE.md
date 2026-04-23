@@ -516,16 +516,11 @@ Maintain a database of all error codes with:
 
 ### Support Tools
 
-```bash
-# Generate error report
-mpc-wallet-tui --debug-report N001
-
-# Analyze error patterns
-mpc-wallet-tui --analyze-errors ~/.mpc-wallet/logs/
-
-# Test error recovery
-mpc-wallet-tui --inject-error N001 --recover
-```
+The TUI binary does not currently expose `--debug-report`,
+`--analyze-errors`, or `--inject-error` flags — the support-tooling
+story is "run with `--log-level debug` and send the log file". See
+`apps/tui-node/src/bin/mpc-wallet-tui.rs` for the real flag list. A
+dedicated debug-report bundler is tracked as future work.
 
 ## Monitoring & Analytics
 

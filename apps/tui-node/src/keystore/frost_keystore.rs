@@ -184,7 +184,7 @@ impl FrostKeystoreManager {
         
         // For Ethereum address, we'd need to properly serialize the key
         // For now, use a placeholder address
-        let eth_address = format!("0x{}", hex::encode(&[0u8; 20]));
+        let eth_address = format!("0x{}", hex::encode([0u8; 20]));
         
         // Create keystore structure
         let keystore = FrostKeystore {

@@ -856,7 +856,7 @@ impl Command {
                         .public_key_package
                         .as_ref()
                         .and_then(|pkg| pkg.verifying_key().serialize().ok())
-                        .map(|bytes| hex::encode(bytes))
+                        .map(hex::encode)
                 };
                 if let Some(hex) = group_key_hex {
                     let _ = tx.send(Message::DKGKeyGenerated {
@@ -2284,7 +2284,7 @@ mod tests {
         let (secret_shares, pubkey_package): (
             std::collections::BTreeMap<Identifier, _>,
             PKP,
-        ) = generate_with_dealer(3, 2, IdentifierList::Default, &mut rng)
+        ) = generate_with_dealer(3, 2, IdentifierList::Default, rng)
             .expect("trusted-dealer keygen");
 
         let (id, secret_share) = secret_shares.iter().next().unwrap();

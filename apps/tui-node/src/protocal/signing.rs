@@ -631,7 +631,7 @@ mod tests {
     fn trusted_2_of_3() -> (KeyPkgMap, PKP) {
         let mut rng = OsRng;
         let (shares, pkp) =
-            generate_with_dealer(3, 2, IdentifierList::Default, &mut rng).expect("keygen");
+            generate_with_dealer(3, 2, IdentifierList::Default, rng).expect("keygen");
         let mut kps = KeyPkgMap::new();
         for (id, share) in shares {
             kps.insert(id, share.try_into().expect("share→KP"));

@@ -127,12 +127,12 @@ where
     // Generate real FROST DKG round 1
     // Use the frost_ed25519 rand_core for compatibility
     use frost_ed25519::rand_core::OsRng;
-    let mut rng = OsRng;
+    let rng = OsRng;
     let (round1_secret_package, round1_public_package) = match frost_core::keys::dkg::part1(
         my_identifier,
         session.total,
         session.threshold,
-        &mut rng,
+        rng,
     ) {
         Ok(pair) => pair,
         Err(e) => {

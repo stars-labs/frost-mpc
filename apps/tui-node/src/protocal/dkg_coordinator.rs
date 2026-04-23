@@ -89,8 +89,8 @@ impl<C: Ciphersuite> DKGParticipant<C> {
         // implements `rand_core 0.6`'s `RngCore + CryptoRng`. `frost_core`
         // doesn't re-export rand_core, but `frost-ed25519` does (same rand_core
         // version since they share it transitively).
-        let mut rng = frost_ed25519::rand_core::OsRng;
-        let (secret, package) = part1(self.id, self.max_signers, self.min_signers, &mut rng)
+        let rng = frost_ed25519::rand_core::OsRng;
+        let (secret, package) = part1(self.id, self.max_signers, self.min_signers, rng)
             .map_err(|e| anyhow!("Failed to generate Round 1 package: {:?}", e))?;
         
         // Store our packages

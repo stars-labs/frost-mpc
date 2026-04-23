@@ -33,7 +33,7 @@ impl WalletManager {
         
         // Generate wallet ID and address (placeholder)
         let wallet_id = format!("wallet_{}", uuid::Uuid::new_v4());
-        let address = format!("0x{}", hex::encode(&[0u8; 20])); // Placeholder address
+        let address = format!("0x{}", hex::encode([0u8; 20])); // Placeholder address
         
         let wallet = WalletInfo {
             id: wallet_id.clone(),

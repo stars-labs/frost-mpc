@@ -166,7 +166,7 @@ pub fn generate_address_for_chain(
             // Sui addresses are derived from the public key
             use sha3::{Digest, Sha3_256};
             let mut hasher = Sha3_256::new();
-            hasher.update(&[0x00]); // Sui signature scheme flag for ed25519
+            hasher.update([0x00]); // Sui signature scheme flag for ed25519
             hasher.update(group_public_key);
             let hash = hasher.finalize();
             Ok(format!("0x{}", hex::encode(&hash[..32])))
@@ -178,7 +178,7 @@ pub fn generate_address_for_chain(
             use sha3::{Digest, Sha3_256};
             let mut hasher = Sha3_256::new();
             hasher.update(group_public_key);
-            hasher.update(&[0x00]); // Single signature scheme
+            hasher.update([0x00]); // Single signature scheme
             let hash = hasher.finalize();
             Ok(format!("0x{}", hex::encode(&hash[..32])))
         }

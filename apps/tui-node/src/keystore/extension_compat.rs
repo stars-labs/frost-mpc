@@ -480,8 +480,8 @@ pub fn encrypt_for_extension(
     Ok(ExtensionEncryptedKeyShare {
         wallet_id: wallet_id.to_string(),
         algorithm: "AES-GCM".to_string(),
-        salt: general_purpose::STANDARD.encode(&salt),
-        iv: general_purpose::STANDARD.encode(&iv),
+        salt: general_purpose::STANDARD.encode(salt),
+        iv: general_purpose::STANDARD.encode(iv),
         ciphertext: general_purpose::STANDARD.encode(&ciphertext),
         auth_tag: None, // Included in ciphertext for AES-GCM
     })

@@ -1,66 +1,95 @@
 # Testing Guide
 
-## Test Organization
+Covers the browser-extension test suite. For the Rust side, see
+`cargo test --workspace` plus `apps/tui-node/docs/RUN_TEST_INSTRUCTIONS.md`
+for the 3-node manual mesh smoke test.
 
-All tests are now consolidated in the `/tests` directory with the following structure:
+## Where tests live
+
+The extension test tree is rooted at
+`apps/browser-extension/tests/` and has colocated `.test.ts` files
+next to the modules they exercise (e.g.
+`src/services/walletClient.test.ts`).
 
 ```
-tests/
-├── components/        # UI component tests
-├── config/           # Configuration tests  
-├── entrypoints/      # Extension entrypoint tests
-│   ├── background/   # Background service worker tests
-│   └── offscreen/    # Offscreen document tests (WebRTC, FROST)
-├── integration/      # Integration tests
-├── services/         # Service layer tests
-├── setup.ts          # Test setup and global mocks
-└── README.md         # Test documentation
+apps/browser-extension/
+├── tests/
+│   ├── config/            # Configuration tests
+│   ├── entrypoints/
+│   │   ├── background/    # Service-worker regression suites
+│   │   └── offscreen/     # WebRTC + FROST / WASM tests
+│   ├── integration/       # Cross-component integration
+│   ├── services/          # Service-layer unit tests
+│   ├── utils/             # Test helpers
+│   ├── __mocks__/         # Manual mocks
+│   ├── setup-bun.ts       # Bun test setup + global mocks
+│   ├── wxt-imports-mock.ts
+│   └── README.md          # Test-tree doc
+└── src/**/*.test.ts       # Colocated unit tests
 ```
 
-## Available Test Scripts
+## Test runner
+
+This repo uses **Bun's built-in test runner**, not Vitest, not Jest.
+Test files import from `bun:test`:
+
+```ts
+import { describe, expect, test, beforeEach } from "bun:test";
+```
+
+Coverage configuration is in `bunfig.toml` at the extension root;
+see [COVERAGE.md](COVERAGE.md) for the caveats about Bun's
+coverage-exclusion limitations.
+
+## Running tests
+
+From the repo root:
 
 ```bash
-# Development
-npm run dev              # Start dev server
-npm run build            # Build extension
-npm run build:wasm       # Build WASM modules
-
-# Testing
-npm run test             # Run all tests
-npm run test:watch       # Run tests in watch mode
-npm run test:coverage    # Run tests with coverage
-npm run test:ui          # Open Vitest UI
-npm run test:unit        # Run unit tests only
-npm run test:integration # Run integration tests only
-npm run test:webrtc      # Run WebRTC tests (uses Bun)
-
-# Utilities
-npm run check            # Run Svelte type checking
-npm run clean            # Clean build artifacts
+bun run test              # -> ./scripts/test-all.sh (all workspace tests)
+bun run test:extension    # -> cd apps/browser-extension && bun test
 ```
 
-## Test Runners
-
-- **Vitest**: Primary test runner for most tests
-- **Bun**: Used specifically for WebRTC tests due to WASM requirements
-
-## Writing Tests
-
-1. Place test files in appropriate directory under `/tests`
-2. Use `.test.ts` extension
-3. Import test utilities from `vitest`
-4. Mock external dependencies appropriately
-5. Follow existing patterns in the codebase
-
-## Running Specific Tests
+From inside `apps/browser-extension/`:
 
 ```bash
-# Run a specific test file
-npm test path/to/test.test.ts
-
-# Run tests matching a pattern
-npm test -- --grep "signing"
-
-# Run tests for a specific service
-npm test tests/services/walletController.test.ts
+bun test                                   # run full suite
+bun test tests/services/walletClient.test.ts
+bun test --watch                           # watch mode
+bun test --coverage                        # coverage report
 ```
+
+No `npm run test:watch`, `test:ui`, `test:coverage`, `test:unit`, or
+`test:integration` script exists in `package.json` — Bun's flag-based
+invocations replace those.
+
+## Writing tests
+
+1. Place test files under `apps/browser-extension/tests/` (or colocate
+   next to the module as `<name>.test.ts`).
+2. Import from `bun:test`, not `vitest` or `@jest/globals`.
+3. Use existing mock patterns from `tests/__mocks__/` and
+   `tests/setup-bun.ts`.
+4. For WebRTC / WASM-touching tests, mirror the patterns in
+   `src/entrypoints/offscreen/webrtc.test.ts` and
+   `tests/entrypoints/offscreen/`.
+5. For signing / DKG regression suites, see
+   `tests/entrypoints/background/` — existing suites cover
+   `dkgAutoTrigger`, `signingAutoTrigger`, `signingNotification`,
+   `dappSignatureApproval`, and `signingDecline`.
+
+## Svelte type checking
+
+Separate from tests. Run from inside the extension directory:
+
+```bash
+cd apps/browser-extension && bun run check
+```
+
+## Live signal-server smoke tests
+
+No automated harness exercises the full FROST + WebRTC pairing against
+a real signal server — that needs three browser instances driving the
+extension. See `apps/browser-extension/tests/README.md` for the
+current status and `docs/testing/E2E_TEST_IMPLEMENTATION_PLAN.md` for
+the open plan to harness it.

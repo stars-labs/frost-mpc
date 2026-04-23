@@ -35,7 +35,8 @@ const mockWebSocketManager = {
     onConnectionChange: mock((callback: Function) => {})
 };
 
-const mockSessionManager = {
+// Typed loosely — same reason as mockSigningManager above.
+const mockSessionManager: any = {
     createSession: mock(async (params: any) => ({ sessionId: 'test-session', success: true })),
     joinSession: mock(async (sessionId: string) => ({ success: true })),
     leaveSession: mock(async (sessionId: string) => ({ success: true })),
@@ -51,7 +52,11 @@ const mockDKGManager = {
     onDKGUpdate: mock((callback: Function) => {})
 };
 
-const mockSigningManager = {
+// Typed loosely because tests override mockResolvedValueOnce with
+// various response shapes (success + signingId, success + error,
+// etc.). Lockdown typing would make the test-specific override
+// shapes collide with the inferred default shape.
+const mockSigningManager: any = {
     initiateTransaction: mock(async (params: any) => ({ success: true, signingId: 'test-sign-123' })),
     handleSigningMessage: mock(async (message: any) => ({ success: true })),
     getSigningStatus: mock(() => ({ status: 'idle', pending: [] })),

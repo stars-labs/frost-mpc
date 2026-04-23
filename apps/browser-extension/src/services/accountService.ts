@@ -471,6 +471,15 @@ class AccountService {
         this.changeCallbacks = this.changeCallbacks.filter(cb => cb !== callback);
     }
 
+    /**
+     * Symmetric with `onAccountChange` — the on/off naming pair
+     * is what most listener APIs expose (EventTarget, Node EE).
+     * Delegates to removeAccountChangeListener for the same effect.
+     */
+    public offAccountChange(callback: AccountChangeCallback): void {
+        this.removeAccountChangeListener(callback);
+    }
+
     private notifyAccountChange(account: Account | null): void {
         this.changeCallbacks.forEach(callback => callback(account));
     }

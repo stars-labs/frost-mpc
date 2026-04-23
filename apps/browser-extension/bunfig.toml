@@ -5,9 +5,7 @@ coverage = true
 coverageSkipTestFiles = true
 # Generate both text and lcov coverage reports
 coverageReporter = ["text", "lcov"]
-
-# Path mapping for module resolution
-[test]
+# Preload test setup (mocks chrome.*, FROST WASM init, etc.)
 preload = ["./tests/setup-bun.ts"]
 
 # Module resolution paths

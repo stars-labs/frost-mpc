@@ -46,10 +46,6 @@ export default defineConfig({
         "32": "assets/icon-32.png"
       }
     },
-    // options_ui: {
-    //   page: "options.html",
-    //   open_in_tab: true
-    // },
     content_scripts: [
       {
         matches: ['<all_urls>'],
@@ -70,7 +66,5 @@ export default defineConfig({
         matches: ['<all_urls>']
       }
     ],
-
-    default_locale: 'en',
   },
 });

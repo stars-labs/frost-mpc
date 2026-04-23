@@ -18,7 +18,7 @@
     "test": "bun test --preload ./tests/setup-bun.ts",
     "test:watch": "bun test --watch --preload ./tests/setup-bun.ts",
     "test:coverage": "bun test --coverage --preload ./tests/setup-bun.ts",
-    "test:unit": "bun test tests/services tests/components tests/config --preload ./tests/setup-bun.ts",
+    "test:unit": "bun test tests/services tests/config --preload ./tests/setup-bun.ts",
     "test:integration": "bun test tests/integration --preload ./tests/setup-bun.ts",
     "test:webrtc": "bun test tests/entrypoints/offscreen/webrtc.*.test.ts --preload ./tests/setup-bun.ts",
     "clean": "rm -rf dist .wxt",

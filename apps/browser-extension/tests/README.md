@@ -25,7 +25,7 @@ tests/
 ```bash
 bun test                    # all tests
 bun test --watch            # watch mode
-bun test:unit               # services + components + config only
+bun test:unit               # services + config only
 bun test:integration        # integration tests
 bun test:webrtc             # offscreen webrtc.*.test.ts
 bun test:coverage           # with coverage

@@ -1235,16 +1235,17 @@ netstat -an | grep -E ":9000"
 
 The codebase does not currently expose stable numeric error codes
 (`E001` etc.). Errors surface as strongly-typed variants in the Rust
-crates — real types live per-domain: `KeystoreError` in
+crates and as descriptive strings in the browser extension. Real
+Rust types live per-domain: `KeystoreError` in
 `apps/tui-node/src/keystore/mod.rs:24`, `FrostKeystoreError` in
 `src/keystore/frost_keystore.rs:19`, `OfflineError` in
 `src/offline/mod.rs:24`, `CoreError` in `src/core/mod.rs:21`; plus
 upstream `FrostError` from `packages/@mpc-wallet/frost-core` with
 `SigningError` / other variants. No top-level `src/errors.rs`
 umbrella file exists.
-and as descriptive strings in the browser extension. Future work: a
-shared error-code registry across Rust + TypeScript so operator-facing
-logs carry machine-grep-able identifiers.
+
+Future work: a shared error-code registry across Rust + TypeScript
+so operator-facing logs carry machine-grep-able identifiers.
 
 ---
 

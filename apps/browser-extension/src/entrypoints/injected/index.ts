@@ -490,7 +490,11 @@ export default defineUnlistedScript(() => {
         });
     }, 1000);
     
-    const injectedProvider = new Proxy(provider, {
+    // Typed as `any` so we can attach EIP-1193-legacy properties
+    // (sendAsync, send, networkVersion, isStarLabWallet, _chainId,
+    // _metamask) that aren't on PageProvider's declared surface but
+    // are expected by MetaMask-style dApp compatibility shims.
+    const injectedProvider: any = new Proxy(provider, {
         deleteProperty: (target, prop) => {
             if (typeof prop === 'string' && ['on'].includes(prop)) {
                 // @ts-ignore

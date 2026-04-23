@@ -144,14 +144,23 @@ export interface ExtensionWalletMetadata {
     blockchain: string; // Primary blockchain
     address: string; // The primary address
     session_id: string; // Links to KeyShareData
-    
+
     // Visual
     color?: string; // For UI identification
     icon?: string; // Custom icon
-    
+
     // Status
     isActive: boolean; // Whether this wallet is currently usable
     hasBackup: boolean; // Whether user has backed up this wallet
+
+    // Timing
+    /** Unix timestamp (ms) when this wallet was added. Optional for
+     *  backward-compat with older stored metadata that predates the
+     *  field — code should default to `wallet.createdAt ?? 0`. */
+    createdAt?: number;
+    /** Unix timestamp (ms) of the last time this wallet was used
+     *  for a signing operation. Updates lazily on signingComplete. */
+    lastUsed?: number;
 }
 
 /**

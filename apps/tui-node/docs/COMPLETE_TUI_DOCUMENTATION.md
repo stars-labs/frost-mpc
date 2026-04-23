@@ -202,53 +202,66 @@ pub struct Model {
 
 ### Component Structure
 
-Each component implements:
+Each UI screen is a tui-realm `Component` — the trait comes from
+upstream tuirealm, not a custom trait defined here:
+
 ```rust
-pub trait Component {
-    fn update(&mut self, msg: Message) -> Option<Command>;
-    fn view(&self) -> Element;
-    fn handle_event(&mut self, event: Event) -> Option<Message>;
+// From tuirealm
+impl Component<Message, UserEvent> for MainMenu {
+    fn on(&mut self, event: Event<UserEvent>) -> Option<Message> { /* … */ }
+    fn view(&mut self, frame: &mut Frame, area: Rect) { /* … */ }
+    // plus state/props accessors
 }
 ```
+
+The `MpcWalletComponent` extension trait in
+`src/elm/components/mod.rs` adds an `id()` method that returns the
+`Id` enum variant so `Application::mount` knows which screen it's
+wiring up.
 
 ### Core Components
 
 #### MainMenu
-- Displays wallet count
-- Quick actions
-- Navigation to major features
-- Keyboard navigation with wrap-around
+- Shows "Create New Wallet" / "Join Session" / "Manage Wallets" /
+  "Sign Transaction" / "Settings" / "Exit" (the last two always;
+  Manage & Sign only when `wallets > 0`).
+- Arrow-key navigation; Enter activates. Wallet count drives which
+  items appear.
 
 #### WalletList
-- Sortable by name/date/balance
-- Quick actions per wallet
-- Pagination for large lists
-- Search/filter capabilities
+- Shows the set of wallets stored under
+  `~/.frost_keystore/<device_id>/<curve>/` via the keystore's
+  cached `Vec<WalletMetadata>`.
+- Earlier drafts of this doc claimed sort-by-balance, pagination,
+  and search/filter features — none of those exist. No balance
+  data is fetched, and the list renders with a simple scroll
+  offset (not pagination). Filtering is not implemented.
 
-#### CreateWallet
-- Multi-step wizard
-- Validation at each step
-- Progress persistence
-- Rollback capability
+#### CreateWallet / Mode+Curve+Threshold flow
+- Single-screen mode selection (Online/Offline) → curve selection
+  (secp256k1/ed25519) → threshold config → DKG ceremony.
+- Not a multi-step wizard with rollback/progress persistence —
+  each screen is discrete and `Esc` backs out without saving
+  partial state.
 
-#### DKGProcess
-- Real-time participant status
-- Round progress visualization
-- Error recovery options
-- Detailed logs panel
+#### DKGProgress
+- Gauge-based progress display during the DKG ceremony.
+- No "Error recovery options" button ships — if DKG fails you
+  return to the main menu and start over.
 
 #### JoinSession
-- Session discovery
-- Participant preview
-- Requirements validation
-- Quick join/reject
+- Shows announced sessions from the signal server's
+  `session_available` broadcasts.
+- Enter joins; Esc goes back. No preview / requirements validation
+  / quick-reject UI beyond that.
 
 ### Component Communication
 
 ```
-User Input → Component → Message → Update → Model → Component → View
-                ↑                                          ↓
-                └──────────── Command Execution ←──────────┘
+User Input → tuirealm Event → Component::on → Message → update() →
+             (Model delta) + Vec<Command<C>> → Command::execute →
+             (async work emitting Messages) → update() → ...
+             → Component::view → Ratatui draw
 ```
 
 ---
@@ -293,57 +306,61 @@ pub struct Model {
 
 ### State Persistence
 
-```rust
-// Auto-save every 30 seconds
-// Manual save on significant operations
-// Crash recovery from last checkpoint
-```
+In-memory `Model` lives for the duration of the process. On-disk
+persistence:
+
+- **Keystore files**: wallet metadata + encrypted key share at
+  `~/.frost_keystore/<device_id>/<curve>/<wallet_id>.{json,dat}`
+  — written on DKG completion, re-read on startup.
+- **Signal-server log**: append-only `tracing` output at
+  `--log-location` (default
+  `~/.frost_keystore/logs/mpc-wallet.log`).
+
+No auto-save loop, no checkpoint-based crash recovery — earlier
+drafts of this section promised "Auto-save every 30 seconds" +
+"Crash recovery from last checkpoint"; neither is implemented.
+On crash, anything not already persisted via the keystore is lost.
 
 ---
 
 ## 7. Security Model
 
-### Key Protection
+For the authoritative security picture see
+[`architecture/SECURITY.md`](./architecture/SECURITY.md), which
+was rewritten in 89e9054 / 6d7fd5a / 333c97f to remove the same
+fabrications this section inherited. In brief:
 
-#### Encryption
-- **Algorithm**: AES-256-GCM
-- **Key Derivation**: PBKDF2-SHA256
-- **Iterations**: 100,000
-- **Salt**: 32 bytes random
+### Key protection
 
-#### Storage
-- Encrypted keystore files
-- Memory protection (zeroization)
-- No swap file exposure
-- Secure deletion
+- **At rest**: AES-256-GCM + PBKDF2-HMAC-SHA256, 100_000 iterations,
+  SALT_LEN = 16 bytes (not 32), NONCE_LEN = 12 bytes. Authoritative
+  constants in `src/keystore/encryption.rs:20-21`.
+- **Memory zeroization**: only
+  `packages/@mpc-wallet/frost-core/src/root_secret.rs` uses
+  `zeroize::Zeroize`. Key shares and decrypted keystore blobs are
+  not zeroed on drop today. No swap-file exclusion, no secure-delete
+  integration — earlier drafts listed these; none implemented.
 
-### Network Security
+### Network security
 
-#### WebSocket
-- TLS 1.3 required
-- Certificate validation
-- Reconnection with backoff
-- Message authentication
+- WSS for signal-server connections; TLS version + cipher selection
+  is delegated to the platform TLS stack (this app doesn't pin
+  anything).
+- WebRTC data channels use DTLS-SRTP; version/cipher is whatever
+  the `webrtc` crate negotiates.
+- No certificate pinning, no application-layer HMAC, no SDP
+  sanitization, no TURN-server authentication (no TURN infra
+  ships).
 
-#### WebRTC
-- DTLS 1.3 for data channels
-- SRTP for media (future)
-- ICE candidate filtering
-- TURN server authentication
+### Operational security
 
-### Operational Security
-
-#### Offline Mode
-- Complete air-gap operation
-- SD card data exchange
-- Manual verification steps
-- Audit trail generation
-
-#### Access Control
-- Password protection
-- Session timeouts
-- Rate limiting
-- Failed attempt tracking
+- **Offline mode** activated via `--offline` CLI flag; SD-card
+  export/import wraps FROST packages in the `OfflineData` envelope
+  (`src/offline/types.rs`). No automatic audit-trail generation —
+  earlier drafts claimed this.
+- **Access control**: password prompt for keystore unlock. No
+  session timeouts, rate limiting, or failed-attempt tracking —
+  earlier drafts listed these; none exist.
 
 ---
 
@@ -351,20 +368,17 @@ pub struct Model {
 
 ### Unit Tests
 
-```rust
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn test_adaptive_event_loop() {
-        // Test interval adjustments
-    }
-    
-    #[test]
-    fn test_differential_updates() {
-        // Test update detection
-    }
-}
+Unit tests live inside each module as `#[cfg(test)] mod tests`
+blocks. Run the whole suite:
+
+```bash
+cargo test -p tui-node
 ```
+
+Earlier drafts of this section showed sample tests for
+`test_adaptive_event_loop` and `test_differential_updates` —
+those tests don't exist because the features they'd test don't
+exist (see § 2 Performance Optimizations).
 
 ### Integration Tests
 

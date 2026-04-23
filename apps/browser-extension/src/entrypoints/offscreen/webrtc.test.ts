@@ -94,22 +94,20 @@ describe('WebRTCManager mesh readiness', () => {
     });
 });
 
-// These tests drive the full multi-round FROST DKG ceremony inside
-// the WebRTCManager by constructing peer `FrostDkgEd25519` /
+// SKIPPED — these tests drive the full multi-round FROST DKG ceremony
+// inside the WebRTCManager by constructing peer `FrostDkgEd25519` /
 // `FrostDkgSecp256k1` instances and exchanging packages manually.
-// That approach diverges from the actual FROST protocol contract in
-// at least one observable way: `can_start_round2()` returns false
-// even after all round-1 packages have been ingested, because the
-// packages come from independently-seeded WASM instances that the
-// receiving instance doesn't recognize as cryptographically
-// coherent round-1 output. Fixing this would require either seeding
-// the WASM instances from a shared source or replacing the test
-// harness with a true end-to-end run through three browser contexts
-// (which is what tests/integration/extensionCliInterop.test.ts
-// approximates at the keystore level). Until then: skip. The
-// business flow IS exercised by the live smoke-tests described in
-// CLAUDE.md ("Signal-server live smoke tests need 3 browser
-// instances") plus unit tests in tests/entrypoints/background/.
+// That collides with an asymmetry in the core-wasm binding:
+// `can_start_round2()` returns true only when `round1_packages.len()
+// == total` (all n, including self), but `generate_round2()` passes
+// that same map to FROST's `dkg_part2`, which per the frost-core
+// contract expects n-1 packages excluding self. So any local fix that
+// satisfies can_start_round2 breaks generate_round2, and vice versa.
+// Unblocking these tests needs a coordinated change in
+// packages/@mpc-wallet/core-wasm (either filter self out inside
+// generate_round2, or adjust can_start_round2's threshold to
+// total - 1) followed by a WASM rebuild. Until then, the flow is
+// verified by the live 3-browser smoke tests described in CLAUDE.md.
 describe.skip('WebRTCManager DKG Process', () => {
     const sessionInfo = {
         session_id: 'test-session',

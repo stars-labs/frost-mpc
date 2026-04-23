@@ -341,7 +341,23 @@ class NetworkService {
         this.notifyNetworkChange(this.currentNetworks[blockchain]);
     }
 
-    public async setCurrentNetwork(blockchain: 'ethereum' | 'solana', chainId: number): Promise<void> {
+    /**
+     * Overloads so callers can pass either a chainId (legacy — the
+     * original signature was `chainId: number`) or a full Chain
+     * object (more ergonomic when you just pulled one from
+     * getNetworks().find(...)). Both paths look up via id and
+     * validate the network is registered for this blockchain.
+     */
+    public async setCurrentNetwork(blockchain: 'ethereum' | 'solana', chainId: number): Promise<void>;
+    public async setCurrentNetwork(blockchain: 'ethereum' | 'solana', network: Chain): Promise<void>;
+    public async setCurrentNetwork(
+        blockchain: 'ethereum' | 'solana',
+        chainIdOrNetwork: number | Chain,
+    ): Promise<void> {
+        const chainId =
+            typeof chainIdOrNetwork === 'number'
+                ? chainIdOrNetwork
+                : chainIdOrNetwork.id;
         const network = this.networks[blockchain].find(n => n.id === chainId);
         if (!network) {
             throw new Error('Network not found');

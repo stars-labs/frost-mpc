@@ -603,9 +603,13 @@ export class WebRTCManager {
           this._log(`🔄 Replaying Round 1 package from ${fromPeerId}`);
           this._log(`🔄 Package data type: ${typeof packageData}, preview: ${JSON.stringify(packageData).substring(0, 100)}...`);
           
-          // Skip our own package (already included in FROST DKG)
+          // Skip our own package. frost-core's dkg::part2 contract
+          // (see frost-core keys/dkg.rs:505) expects exactly n-1
+          // round-1 packages in round1_packages — the signer's own
+          // is held as a secret_package on the WASM instance and
+          // must NOT be re-added via add_round1_package.
           if (fromPeerId === this.localPeerId) {
-            this._log(`🔄 Skipping own Round 1 package during replay (already included)`);
+            this._log(`🔄 Skipping own Round 1 package during replay (per frost-core n-1 contract)`);
             this.receivedRound1Packages.add(fromPeerId);
             continue;
           }
@@ -1235,10 +1239,15 @@ export class WebRTCManager {
   private async _handleDkgRound1Package(fromPeerId: string, packageData: any): Promise<void> {
     this._log(`Handling DKG Round 1 package from ${fromPeerId}`);
 
-    // Skip processing our own Round 1 package - it's already included in FROST DKG when generate_round1() was called
+    // Skip processing our own Round 1 package. Our secret side is
+    // held by the WASM instance from generate_round1(); frost-core's
+    // dkg::part2 then expects exactly n-1 peer packages to ingest,
+    // NOT our own — if we added self here, can_start_round2 (which
+    // checks len == total - 1) would flip false and block progress.
     if (fromPeerId === this.localPeerId) {
-      this._log(`Skipping own Round 1 package processing (already included in FROST DKG)`);
-      // Just add to received packages set for counting purposes
+      this._log(`Skipping own Round 1 package (dkg::part2 takes n-1 peer packages only)`);
+      // Still record our own in the JS-side set so UI progress
+      // indicators show the right count.
       if (this.dkgState !== DkgState.Idle) {
         this.receivedRound1Packages.add(fromPeerId);
         this._log(`Added own package to received set. Total: ${this.receivedRound1Packages.size}`);
@@ -2098,10 +2107,11 @@ export class WebRTCManager {
    * Ext-2d-offscreen-rounds: real FROST round-1 commitment handler.
    * Replaces the pre-existing mock that just stored opaque blobs.
    *
-   * Per FROST: our OWN commitment was registered inside
-   * signing_commit() on our local instance (side-effect of that call
-   * — nonce paired with commitment, kept internal). Peers' commitments
-   * must be explicitly registered via add_signing_commitment(i, hex)
+   * Per FROST: signing_commit() auto-registers our OWN commitment
+   * in the WASM instance's signing_commitments map (required by
+   * frost-core's round2::sign — see round2.rs:135,
+   * Error::MissingCommitment). Peers' commitments must be
+   * explicitly registered via add_signing_commitment(i, hex)
    * before sign() can produce a share using them.
    *
    * Index convention: FROST participants are 1-indexed. Convert from
@@ -2173,9 +2183,11 @@ export class WebRTCManager {
    * Ext-2d-offscreen-rounds: real FROST round-2 share handler.
    * Replaces the pre-existing mock that stored opaque blobs.
    *
-   * Per FROST: our OWN share was registered inside sign() (side-
-   * effect). Peers' shares must be added via
-   * add_signature_share(i, hex).
+   * Per FROST: sign() auto-registers our OWN share in the WASM
+   * instance's signature_shares map (required by frost-core's
+   * aggregate — the length-match check on signing_commitments vs
+   * signature_shares in frost-core/src/lib.rs would fail otherwise).
+   * Peers' shares must be added via add_signature_share(i, hex).
    */
   private _handleSignatureShare(fromPeerId: string, message: any): void {
     this._log(`Handling signature share from ${fromPeerId}`);

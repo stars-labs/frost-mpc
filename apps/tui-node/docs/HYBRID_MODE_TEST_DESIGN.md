@@ -246,7 +246,14 @@ impl HybridCoordinator {
 3. **Hybrid Operation**: Seamless online/offline coordination
 4. **Multi-Chain**: Both Ethereum and Solana transactions work
 5. **Security**: No key material leakage between online/offline
-6. **Performance**: < 5 seconds for online, < 30 seconds for hybrid
+6. **Performance targets** (not measured — no benchmark harness
+   ships; see the Performance Considerations section in the main
+   ARCHITECTURE.md for context): aim for online-only completion
+   well under typical human-interaction cadence, and hybrid
+   completion dominated by SD-card handoff rather than compute.
+   Earlier drafts of this bullet listed specific numbers
+   (`< 5 seconds for online, < 30 seconds for hybrid`); those
+   numbers had no source and have been removed.
 
 ## Expected Output
 
@@ -286,18 +293,27 @@ Summary: All tests passed!
 
 ## Implementation Files
 
+Real layout (verified against `find apps/tui-node -name '*.rs'`):
+
 ```
 apps/tui-node/
 ├── src/
 │   ├── hybrid/
 │   │   ├── mod.rs
-│   │   ├── coordinator.rs
-│   │   ├── online_transport.rs
-│   │   └── offline_transport.rs
-│   └── solana/
-│       ├── mod.rs
-│       ├── transaction.rs
-│       └── spl_token.rs
+│   │   ├── coordinator.rs      # HybridCoordinator + ParticipantInfo
+│   │   └── transport.rs        # OnlineTransport + OfflineTransport
+│   │                           # + HybridMessage (ONE file, not two)
+│   └── utils/
+│       └── solana_encoder.rs   # SolanaTransactionBuilder, SPL token
+│                               # encoding — there is NO `src/solana/`
+│                               # directory; everything is here.
 └── examples/
     └── hybrid_mode_e2e_test.rs
 ```
+
+Earlier drafts of this tree invented four files that don't exist:
+`src/hybrid/online_transport.rs`, `src/hybrid/offline_transport.rs`
+(both `OnlineTransport` and `OfflineTransport` live together in
+`transport.rs`); and the trio `src/solana/{mod,transaction,spl_token}.rs`
+(the whole `src/solana/` directory never existed — Solana encoding
+is a single file inside `src/utils/`).

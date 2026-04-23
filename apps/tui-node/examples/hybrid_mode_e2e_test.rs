@@ -69,7 +69,7 @@ fn perform_hybrid_dkg_secp256k1(
     println!("╚════════════════════════════════════════╝");
     
     let total = participants.len() as u16;
-    let mut rng = OsRng;
+    let rng = OsRng;
     
     // Round 1: Generate commitments
     println!("\n📝 Round 1: Generating commitments");
@@ -198,7 +198,7 @@ fn perform_hybrid_dkg_ed25519(
     println!("╚════════════════════════════════════════╝");
     
     let total = participants.len() as u16;
-    let mut rng = OsRng;
+    let rng = OsRng;
     
     // Similar to secp256k1 but using ed25519
     println!("\n📝 Round 1: Generating commitments");

@@ -676,7 +676,12 @@ where
                     info!("Generated {} address: {}", chain_id, address);
                     
                     // Create BlockchainInfo for UI display
-                    // Map chain_id to proper chain ID for EVM chains
+                    // Map chain_id to proper chain ID for EVM chains.
+                    // `chain_id` is &&String here (from iterator of
+                    // &(String, _)); `.as_ref()` is needed to deref down
+                    // to &str for matching against the string literals
+                    // below. Clippy's `useless_asref` misses this.
+                    #[allow(clippy::useless_asref)]
                     let chain_id_num = match chain_id.as_ref() {
                         "ethereum" => Some(1u64),
                         "bsc" => Some(56u64),

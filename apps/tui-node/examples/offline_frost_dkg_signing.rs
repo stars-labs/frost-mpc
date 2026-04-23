@@ -130,7 +130,7 @@ impl FrostParticipant {
     fn dkg_round1(&mut self, threshold: u16, total_participants: u16) {
         println!("\n[P{}] 🔑 DKG Round 1: Generating commitments", self.id);
         
-        let mut rng = OsRng;
+        let rng = OsRng;
         
         // Generate round 1 packages using real FROST
         let (secret_package, public_package) = dkg::part1(

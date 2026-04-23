@@ -110,7 +110,7 @@ impl MeshTopology {
             return false;
         }
         
-        for (_peer, connections) in &self.connections {
+        for connections in self.connections.values() {
             if connections.len() != self.total_peers - 1 {
                 return false;
             }

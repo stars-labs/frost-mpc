@@ -72,7 +72,7 @@ async fn run_dkg_with_disconnections(
     
     let threshold = 2u16;
     let total = participants.len() as u16;
-    let mut rng = OsRng;
+    let rng = OsRng;
     
     // Round 1: Generate commitments
     println!("\n📝 Round 1: Generating commitments");

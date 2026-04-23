@@ -395,12 +395,10 @@ impl<C: Ciphersuite> SigningState<C> {
 
     /// Check if a signing process is currently active (not idle or complete)
     pub fn is_active(&self) -> bool {
-        match self {
-            SigningState::Idle => false,
-            SigningState::Complete { .. } => false,
-            SigningState::Failed { .. } => false,
-            _ => true,
-        }
+        !matches!(
+            self,
+            SigningState::Idle | SigningState::Complete { .. } | SigningState::Failed { .. }
+        )
     }
 
     pub fn get_signing_id(&self) -> Option<&str> {

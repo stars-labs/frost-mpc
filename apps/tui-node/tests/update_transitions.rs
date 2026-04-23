@@ -2008,11 +2008,10 @@ fn scroll_down_on_manage_wallets_advances_wallet_list_selection() {
         ),
     ];
 
-    assert!(model
+    assert!(!model
         .ui_state
         .selected_indices
-        .get(&ComponentId::WalletList)
-        .is_none());
+        .contains_key(&ComponentId::WalletList));
 
     let _ = update(&mut model, Message::ScrollDown);
     assert_eq!(

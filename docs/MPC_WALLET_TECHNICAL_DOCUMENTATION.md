@@ -1242,12 +1242,20 @@ net.ipv4.tcp_wmem = 4096 65536 134217728
 net.core.netdev_max_backlog = 5000
 ```
 
-#### Chrome Flags for WebRTC
-```
---enable-webrtc-stun-origin
---enforce-webrtc-ip-permission-check
---webrtc-max-cpu-consumption-percentage=50
-```
+#### WebRTC debugging
+
+`chrome://webrtc-internals/` is the canonical inspection surface —
+it exposes active peer connections, ICE candidate gathering,
+SDP exchange, data-channel state, and per-stream stats. Firefox
+has `about:webrtc` for the same purpose.
+
+Earlier drafts of this section listed three speculative Chrome
+launch flags (`--enable-webrtc-stun-origin`,
+`--enforce-webrtc-ip-permission-check`,
+`--webrtc-max-cpu-consumption-percentage=50`). Not all of these
+correspond to stable Chrome switches, and none are required for
+this project — left as an open "flag-level tuning" TODO for
+operators who actually need it.
 
 ### E. References
 
@@ -1260,19 +1268,14 @@ net.core.netdev_max_backlog = 5000
 
 ## Conclusion
 
-The MPC Wallet represents a significant advancement in distributed key management, providing enterprise-grade security without sacrificing usability. Through its modular architecture, robust cryptographic foundation, and comprehensive tooling, it enables secure multi-party control of digital assets across multiple platforms.
+This repo implements a t-of-n FROST threshold wallet with three
+frontends (browser extension, Slint desktop, Ratatui TUI) that share
+a common `frost-core` backend and interoperate over a WebRTC mesh
+established by a small signal server. It's early-stage development
+software — no tagged release, no third-party security audit, no
+hardware-wallet integration, no benchmarks. For the latest state see
+the repository at [github.com/hecoinfo/mpc-wallet](https://github.com/hecoinfo/mpc-wallet).
 
-The system's design prioritizes security, scalability, and developer experience, making it suitable for both individual users requiring enhanced security and organizations implementing custody solutions. As the project continues to evolve, the architecture is positioned to adapt to new requirements while maintaining its core security guarantees.
-
-For the latest updates and contributions, visit the project repository at [github.com/hecoinfo/mpc-wallet](https://github.com/hecoinfo/mpc-wallet).
-
----
-
-**Document Version**: 2.0.0  
-**Last Updated**: January 2025  
-**Next Review**: April 2025  
-**Status**: Production Ready
-
----
-
-*This document is maintained by the MPC Wallet development team. For corrections or clarifications, please submit a pull request or contact the maintainers.*
+Open contributions tracked in the repo rather than in this doc —
+check `git log` and the `CLAUDE.md` file at the workspace root for
+the live architecture notes.

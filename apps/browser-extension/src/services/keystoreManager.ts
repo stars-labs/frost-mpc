@@ -97,21 +97,27 @@ export class KeystoreManager {
     }
     
     /**
-     * Create a new keystore with password
+     * Create a new keystore with password. Optional deviceId lets
+     * callers bootstrap a new device's keystore before a session
+     * exists (e.g. the first-wallet-on-this-device flow); if
+     * omitted we reuse any session-known deviceId or fall back to
+     * 'default'.
      */
-    public async createKeystore(password: string): Promise<boolean> {
+    public async createKeystore(password: string, deviceId?: string): Promise<boolean> {
         try {
+            const resolvedDeviceId =
+                deviceId || this.session?.deviceId || 'default';
             // Initialize keystore service
-            await this.keystoreService.initialize(this.session?.deviceId || 'default');
-            
+            await this.keystoreService.initialize(resolvedDeviceId);
+
             // Set the password and unlock
             const success = await this.keystoreService.unlock(password);
-            
+
             if (success) {
                 this.session = {
                     unlocked: true,
                     unlockedAt: Date.now(),
-                    deviceId: this.session?.deviceId || 'default',
+                    deviceId: resolvedDeviceId,
                     sessionTimeout: this.DEFAULT_SESSION_TIMEOUT
                 };
                 

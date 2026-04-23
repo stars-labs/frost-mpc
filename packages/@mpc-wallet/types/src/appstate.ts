@@ -16,12 +16,28 @@ export interface AppState {
   deviceId: string;
   connecteddevices: string[];
   wsConnected: boolean;
+  /** Last WebSocket error; cleared when connection re-establishes. */
+  wsError?: string;
   sessionInfo: SessionInfo | null;
   invites: SessionInfo[];
   meshStatus: MeshStatus;
   dkgState: DkgState;
   webrtcConnections: Record<string, boolean>;
   blockchain?: "ethereum" | "solana";
+  /**
+   * FROST ciphersuite selection for the current wallet. Historically
+   * tracked alongside `blockchain` for legacy code paths; setters
+   * derive one from the other (secp256k1 ↔ ethereum, ed25519 ↔ solana).
+   * Writers: StateManager.setBlockchain / setCurve.
+   * Readers: StateManager.getCurve / getBlockchain.
+   */
+  curve?: "secp256k1" | "ed25519";
+  /**
+   * User-facing "chain" alias for blockchain. Some older code paths
+   * persist + read this key; kept as an alias field so both work.
+   * New code should prefer `blockchain`.
+   */
+  chain?: "ethereum" | "solana";
 }
 
 export const INITIAL_APP_STATE: AppState = {

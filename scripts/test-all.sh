@@ -15,7 +15,13 @@ cd ../..
 # Exclude native-node: its binary pulls the graphics-stack feature
 # set which is inappropriate for a headless test run. (The crate
 # still gets `cargo build`'d in build-all.sh on a workstation.)
+#
+# `--lib --tests` covers both the per-crate unit tests (67 in
+# tui-node::lib) AND the separate integration-test binaries under
+# apps/tui-node/tests/ (component_rendering.rs: 13 tests;
+# update_transitions.rs: 88 tests). Without `--tests` those 101
+# tests get silently skipped.
 echo "🦀 Testing Rust workspace..."
-cargo test --workspace --lib --exclude mpc-wallet-native
+cargo test --workspace --lib --tests --exclude mpc-wallet-native
 
 echo "✅ All tests complete!"

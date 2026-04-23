@@ -1,132 +1,120 @@
-# FROST MPC TUI Wallet Documentation
+# MPC Wallet TUI Documentation
 
-Welcome to the documentation for the FROST MPC TUI Wallet - a professional Terminal User Interface based Multi-Party Computation wallet for secure threshold signatures and distributed key management.
+Terminal UI for the MPC Wallet — a t-of-n FROST threshold wallet
+with distributed key generation and threshold signing, built on
+Ratatui + tui-realm in the Elm architecture.
 
-## 🎯 What is FROST MPC TUI Wallet?
+## What it is
 
-The FROST MPC TUI Wallet transforms traditional command-line cryptocurrency operations into an intuitive, menu-driven experience. Built with enterprise-grade security similar to BitGo, it provides distributed key management through a beautiful terminal interface that requires zero command-line expertise.
+- Full keyboard-driven TUI — no REPL, no typed commands. Navigate
+  with arrow keys, confirm with Enter, back out with Esc.
+- Runs as the standalone `mpc-wallet-tui` binary. Reuses the same
+  `frost-core` backend as the browser extension and native desktop
+  app, so TUI participants can co-sign with extension or native
+  participants in the same mesh.
+- Supports both online (WebRTC mesh) and offline (SD-card air-gap)
+  DKG and signing flows.
 
-### Key Differentiators
+## Documentation Structure
 
-- **Full Terminal UI**: Navigate with arrow keys, no commands to memorize
-- **Enterprise MPC**: True multi-party computation with threshold signatures
-- **Visual Workflows**: Clear progress indicators and status updates
-- **Dual Mode Operation**: 
-  - 🌐 **Online Mode**: Real-time coordination via WebSocket/WebRTC
-  - 🔒 **Offline Mode**: Air-gapped security with SD card data exchange
-- **Professional Grade**: Audit trails, compliance features, and enterprise security
+### [User Guides](./guides/)
+- **[User Guide](./guides/USER_GUIDE.md)** — walkthrough
+- **[Offline Mode Guide](./guides/offline-mode.md)** — air-gapped ceremony procedure
 
-## 📚 Documentation Structure
+### [Architecture Documentation](./architecture/)
+- **[Architecture Overview](./architecture/ARCHITECTURE.md)**
+- **[Elm Architecture](./architecture/ELM_ARCHITECTURE.md)**
+- **[DKG Flows](./architecture/DKG_FLOWS.md)**
+- **[Security Model](./architecture/SECURITY.md)**
+- **[Keystore Design](./architecture/keystore_design.md)**
 
-### 📁 [User Guides](./guides/)
-- **[User Guide](./guides/USER_GUIDE.md)** - Comprehensive user manual with visual examples
-- **[Offline Mode Guide](./guides/offline-mode.md)** - Air-gapped operation procedures
+### [Protocol Specifications](./protocol/)
+- **[WebRTC Signaling](./protocol/01_webrtc_signaling.md)**
 
-### 📁 [Architecture Documentation](./architecture/)
-- **[Architecture Overview](./architecture/ARCHITECTURE.md)** - Technical design and system components
-- **[Elm Architecture](./architecture/ELM_ARCHITECTURE.md)** - Model/Update/View pattern used in the TUI
-- **[DKG Flows](./architecture/DKG_FLOWS.md)** - Distributed key generation procedures
-- **[Security Model](./architecture/SECURITY.md)** - Security analysis and best practices
-- **[Keystore Design](./architecture/keystore_design.md)** - Keystore architecture details
+### Other references in this directory
+- [Top-level README](./README.md) — quick-start + CLI flags
+- [`KEYBOARD_NAVIGATION_GUIDE.md`](./KEYBOARD_NAVIGATION_GUIDE.md)
+- [`KEYBOARD_HANDLING_GUIDE.md`](./KEYBOARD_HANDLING_GUIDE.md) — for developers adding new screens
+- [`ERROR_HANDLING_GUIDE.md`](./ERROR_HANDLING_GUIDE.md)
+- [`MPC_WALLET_TUI_ARCHITECTURE.md`](./MPC_WALLET_TUI_ARCHITECTURE.md) — deeper state-machine writeup
+- [`WEBRTC_MESH_IMPLEMENTATION.md`](./WEBRTC_MESH_IMPLEMENTATION.md)
+- [`OFFLINE_DKG_GUIDE.md`](./OFFLINE_DKG_GUIDE.md) — manual ceremony procedure
+- [`COMPLETE_OFFLINE_WORKFLOW.md`](./COMPLETE_OFFLINE_WORKFLOW.md)
+- [`DEPLOYMENT_GUIDE.md`](./DEPLOYMENT_GUIDE.md)
+- Test-design specs: [`E2E_TEST_DESIGN.md`](./E2E_TEST_DESIGN.md), [`HYBRID_MODE_TEST_DESIGN.md`](./HYBRID_MODE_TEST_DESIGN.md), [`WEBRTC_MESH_TEST_DESIGN.md`](./WEBRTC_MESH_TEST_DESIGN.md), [`KEYSTORE_E2E_TEST_PLAN.md`](./KEYSTORE_E2E_TEST_PLAN.md)
+- [`archive/`](./archive/) — historical design docs, dev-journal retrospectives
 
-### 📁 [Protocol Specifications](./protocol/)
-- **[WebRTC Signaling](./protocol/01_webrtc_signaling.md)** - P2P communication protocol
-
-## 🚀 Quick Start
+## Quick Start
 
 ```bash
-# Build and run from the monorepo
+# From the repo root
 cargo run --bin mpc-wallet-tui -p tui-node -- --device-id alice
-
-# Navigate the TUI
-↑/↓     Navigate menus
-Enter   Select option
-Esc     Go back
-?       Show help
 ```
 
-## 🔑 Core Features
+Keyboard basics:
 
-### Multi-Party Computation
-- **Distributed Key Generation**: No single party ever has the complete private key
-- **Threshold Signatures**: Flexible schemes (2-of-3, 3-of-5, etc.)
-- **Multi-Blockchain**: Native support for Ethereum and Solana
+| Keys  | Action                |
+|-------|-----------------------|
+| ↑ / ↓ | Navigate menu items   |
+| Enter | Select / confirm      |
+| Esc   | Go back / cancel      |
+| Tab   | Move focus within a screen |
 
-### Professional UI
-- **Menu-Driven Interface**: No command memorization required
-- **Real-Time Status**: Live updates on participant connectivity
-- **Visual Progress**: Clear indicators for all operations
-- **Context Help**: Press `?` anywhere for guidance
+The full key map per screen is in [`KEYBOARD_NAVIGATION_GUIDE.md`](./KEYBOARD_NAVIGATION_GUIDE.md).
+There is no global help key (`?`) — the shortcut listed in earlier
+drafts of this page was not actually implemented.
 
-### Enterprise Security
+## Feature overview
 
-Choose your security posture based on your requirements:
+### Multi-party computation
 
-#### 🌐 Online/Hot-Wallet Mode
-- **WebRTC Mesh Network**: Secure peer-to-peer communication
-- **TLS 1.3 Encryption**: End-to-end encrypted channels
-- **Real-time Coordination**: Instant multi-party operations
-- **Best For**: Daily operations, trading, regular transactions
+- **DKG**: FROST distributed key generation for t-of-n schemes
+  (2-of-3, 3-of-5, etc.) via the ZCash `frost-core 2.2` crates.
+- **Threshold signing**: any `t`-subset of participants can
+  collaboratively produce a valid signature — no single device ever
+  holds the complete private key.
+- **Multi-chain**: secp256k1 → Ethereum (+ L2s that share the
+  address format), ed25519 → Solana.
 
-#### 🔒 Offline/Cold-Wallet Mode  
-- **Complete Air-Gap**: No network interfaces active
-- **SD Card Transfer**: Physical media for data exchange
-- **Maximum Security**: Eliminates network attack vectors
-- **Best For**: Cold storage, high-value assets, regulatory compliance
+### Online mode
 
-#### Both Modes Feature
-- **Encrypted Storage**: AES-256-GCM encryption for key shares
-- **Audit Trails**: Complete logging for compliance
-- **Same Cryptography**: Identical FROST protocol implementation
-- **Interoperability**: Seamless switching between modes
+- WebRTC full-mesh between participants, using the signal server at
+  `wss://xiongchenyu.dpdns.org` (Cloudflare Worker — see
+  `docs/deployment/CLOUDFLARE_DEPLOYMENT.md`) to bootstrap.
+- Peer-to-peer DKG / signing traffic rides DTLS-encrypted WebRTC
+  data channels. The signal server only sees session announcements
+  and opaque relay envelopes once the mesh is up.
 
-## 🏗️ Architecture Overview
+### Offline mode
 
-```
-┌─────────────────────────────────────────┐
-│          Terminal UI Layer              │
-│    (Ratatui + Event System)            │
-├─────────────────────────────────────────┤
-│        Business Logic Layer             │
-│  (Session, Wallet, Transaction Mgmt)    │
-├─────────────────────────────────────────┤
-│          Network Layer                  │
-│   (WebSocket, WebRTC, Offline)         │
-├─────────────────────────────────────────┤
-│       Cryptographic Core                │
-│    (FROST Protocol, Keystore)          │
-└─────────────────────────────────────────┘
-```
+- Complete air-gap — no network interfaces consulted. DKG / signing
+  rounds exchanged via SD card (or any physical media). Each round
+  exports a JSON bundle on the coordinator, imports on participants,
+  then re-exports for the next round.
+- See [`OFFLINE_DKG_GUIDE.md`](./OFFLINE_DKG_GUIDE.md) for the
+  operator procedure and [`COMPLETE_OFFLINE_WORKFLOW.md`](./COMPLETE_OFFLINE_WORKFLOW.md)
+  for the combined DKG + signing flow.
 
-## 🔐 Security Highlights
+### Keystore
 
-- **Zero Trust Architecture**: No single point of failure
-- **Threshold Security**: Minimum participants required for any operation
-- **Defense in Depth**: Multiple layers of security controls
-- **Compliance Ready**: SOC 2, ISO 27001, GDPR support
+- Key shares at rest are PBKDF2-HMAC-SHA256 (100k iterations) +
+  AES-256-GCM. Stored under
+  `~/.frost_keystore/<device_id>/<curve>/<wallet_id>.{json,dat}` —
+  `.json` is plaintext metadata, `.dat` is the encrypted share.
+- Import/export round-trips with the browser extension keystore
+  (same format), covered by the interop tests under
+  `apps/browser-extension/tests/`.
 
-## 🤝 Use Cases
+## Security
 
-### Enterprise Treasury
-- Secure multi-signature wallets
-- Distributed approval workflows
-- Complete audit trails
+Security claims are deliberately conservative. Threshold cryptography
+gives you one strong property (compromise of fewer than `t` shares
+can't sign), and DTLS+AES-GCM cover transport and at-rest encryption.
+No third-party audit has been performed on this codebase. See
+[`SECURITY.md`](./architecture/SECURITY.md) for what the implementation
+actually provides vs. what's open hardening work.
 
-### Institutional Custody
-- Cold wallet operations
-- Regulatory compliance
-- Disaster recovery
-
-### DeFi Operations
-- Protocol governance
-- Treasury management
-- Cross-chain operations
-
-## 📞 Support
+## Support
 
 - **Issues**: [GitHub Issues](https://github.com/hecoinfo/mpc-wallet/issues)
 - **Security**: [GitHub Security Advisories](https://github.com/hecoinfo/mpc-wallet/security/advisories/new)
-
----
-
-*Building the future of secure, distributed cryptocurrency management through beautiful terminal interfaces.*

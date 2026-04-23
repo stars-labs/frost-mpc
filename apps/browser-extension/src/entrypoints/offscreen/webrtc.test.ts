@@ -10,32 +10,22 @@ function hexEncode(str: string): string {
 // Initialize WASM once before all tests
 let wasmInitialized = false;
 
-// Helper function to convert participant index to the hex key format used in DKG package maps
-function participantIndexToHexKey(index: number, isSecp256k1: boolean): string {
-    const buffer = Buffer.alloc(32); // FROST identifiers are 32 bytes
-    if (isSecp256k1) {
-        // For Secp256k1, observed keys are like "00...0001" for index 1.
-        // This implies index is treated as u32 big-endian at the end of the buffer for secp256k1 based on typical C implementations or specific library choices.
-        // Let's try u32 big-endian, as u16 might be too small if participant count grows, though current examples show small indices.
-        // The error log showed "0000...0001" for participant 1, which is more like a 4-byte representation if it's at the end.
-        buffer.writeUInt32BE(index, 28); // Write 4 bytes (u32) at offset 28 for a 32-byte buffer
-    } else {
-        // For Ed25519, observed keys are like "010000..." for index 1.
-        // This implies index is treated as u16 little-endian at the start of the buffer.
-        buffer.writeUInt16LE(index, 0);  // Write 2 bytes (u16) at offset 0
-    }
-    return buffer.toString('hex');
-}
-
-// Helper function to extract a specific participant's package from a Round 2 map
-function extractPackageFromMap(recipientIndex: number, packageMapHex: string, isSecp256k1: boolean): string {
+// Helper function to extract a specific participant's package from a Round 2 map.
+//
+// The WASM emits the Round 2 package map as hex-encoded JSON where keys
+// are the numeric u16 participant indices (stringified by JSON). The
+// inner values are themselves hex-encoded JSON of the FROST round2
+// Package. So:
+//   outer hex → JSON → { "1": "7b...", "2": "7b...", ... }
+//   inner hex (already in that form) is what add_round2_package expects.
+function extractPackageFromMap(recipientIndex: number, packageMapHex: string, _isSecp256k1: boolean): string {
     const packageMap = JSON.parse(Buffer.from(packageMapHex, 'hex').toString());
-    const hexKey = participantIndexToHexKey(recipientIndex, isSecp256k1);
-    const individualPackage = packageMap[hexKey];
-    if (!individualPackage) {
-        throw new Error(`Package for recipient ${recipientIndex} (key ${hexKey}, isSecp256k1: ${isSecp256k1}) not found in map ${JSON.stringify(packageMap)}`);
+    const key = String(recipientIndex);
+    const individualPackageHex = packageMap[key];
+    if (!individualPackageHex) {
+        throw new Error(`Package for recipient ${recipientIndex} (key "${key}") not found in map ${JSON.stringify(packageMap)}`);
     }
-    return Buffer.from(JSON.stringify(individualPackage)).toString('hex');
+    return individualPackageHex;
 }
 
 beforeAll(async () => {
@@ -94,18 +84,7 @@ describe('WebRTCManager mesh readiness', () => {
     });
 });
 
-// SKIPPED — blocked by a mismatch between generate_round2 (returns
-// plain JSON of a map whose keys are u16 participant indices) and the
-// WebRTC consumer which hex-decodes the return value before JSON-parsing
-// (webrtc.ts _generateAndBroadcastRound2). Round 1 returns hex-encoded
-// JSON; Round 2 does not. Unblocking these tests additionally needs
-// either (a) generate_round2 to wrap its output in hex::encode to
-// match generate_round1's format, or (b) the WebRTC consumer to stop
-// hex-decoding when reading the Round 2 package map. Both touch
-// production crypto paths so need careful integration testing. The
-// can_start_round2 fix landed in core-wasm (n-1 per FROST spec) is
-// independent and retained.
-describe.skip('WebRTCManager DKG Process', () => {
+describe('WebRTCManager DKG Process', () => {
     const sessionInfo = {
         session_id: 'test-session',
         participants: ['a', 'b', 'c'],
@@ -764,12 +743,20 @@ describe.skip('WebRTCManager DKG Process', () => {
 
 
             console.log('\\\\n=== ROUND 3: FINALIZATION PHASE ===');
-            // Finalize DKG and get group public keys
-            const groupPublicKeyA = frostDkgA!.finalize_dkg();
+            // Finalize DKG. finalize_dkg() returns the full per-participant
+            // keystore JSON (includes participant_index, signing_share,
+            // etc. — so comparing these across participants would always
+            // fail). Use get_group_public_key() to extract the shared
+            // verifying_key, which IS identical across participants.
+            frostDkgA!.finalize_dkg();
+            frostDkgB!.finalize_dkg();
+            frostDkgC!.finalize_dkg();
+
+            const groupPublicKeyA = frostDkgA!.get_group_public_key();
             (managerA as any).groupPublicKey = groupPublicKeyA;
-            const groupPublicKeyB = frostDkgB!.finalize_dkg();
+            const groupPublicKeyB = frostDkgB!.get_group_public_key();
             (managerB as any).groupPublicKey = groupPublicKeyB;
-            const groupPublicKeyC = frostDkgC!.finalize_dkg();
+            const groupPublicKeyC = frostDkgC!.get_group_public_key();
             (managerC as any).groupPublicKey = groupPublicKeyC;
 
             // Get Solana addresses
@@ -791,7 +778,8 @@ describe.skip('WebRTCManager DKG Process', () => {
             console.log(`🔐 Each participant holds a threshold key share`);
             console.log(`✅ Any 2 of 3 participants can now create valid Solana signatures`);
 
-            // Verify all participants generated identical results
+            // Verify all participants generated identical GROUP public key
+            // (their individual key shares/packages differ by design).
             expect(groupPublicKeyA).toBe(groupPublicKeyB);
             expect(groupPublicKeyB).toBe(groupPublicKeyC);
             expect(solanaAddressA_val).toBe(solanaAddressB_val);
@@ -1005,12 +993,19 @@ describe.skip('WebRTCManager DKG Process', () => {
 
 
             console.log('\\\\n=== ROUND 3: FINALIZATION PHASE ===');
-            // Finalize DKG and get group public keys
-            const groupPublicKeyA = frostDkgA!.finalize_dkg();
+            // Finalize DKG. See note in the Ed25519 version above —
+            // finalize_dkg() returns full per-participant keystore,
+            // so compare the shared verifying_key via
+            // get_group_public_key() instead.
+            frostDkgA!.finalize_dkg();
+            frostDkgB!.finalize_dkg();
+            frostDkgC!.finalize_dkg();
+
+            const groupPublicKeyA = frostDkgA!.get_group_public_key();
             (managerA as any).groupPublicKey = groupPublicKeyA;
-            const groupPublicKeyB = frostDkgB!.finalize_dkg();
+            const groupPublicKeyB = frostDkgB!.get_group_public_key();
             (managerB as any).groupPublicKey = groupPublicKeyB;
-            const groupPublicKeyC = frostDkgC!.finalize_dkg();
+            const groupPublicKeyC = frostDkgC!.get_group_public_key();
             (managerC as any).groupPublicKey = groupPublicKeyC;
 
             // Get Ethereum addresses from group public keys (secp256k1 uses Ethereum)

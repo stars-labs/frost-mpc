@@ -157,21 +157,31 @@ impl FrostDkgEd25519 {
     pub fn generate_round2(&mut self) -> Result<String, WasmError> {
         let round1_secret = self.round1_secret.clone()
             .ok_or_else(|| WasmError::new("Round 1 secret not available"))?;
-        
+
         let (round2_secret, round2_packages) = Ed25519Curve::dkg_part2(
             round1_secret,
             &self.round1_packages,
         )?;
-        
+
         self.round2_secret = Some(round2_secret);
-        
+
         let mut packages_map = BTreeMap::new();
         for (id, package) in round2_packages {
-            let id_value = id.serialize()[31] as u16 | ((id.serialize()[30] as u16) << 8);
+            // Both Ed25519 and Secp256k1 identifiers are produced by
+            // identifier_bytes_from_u16 (traits.rs): 30 zero bytes
+            // followed by the u16 big-endian at [30..=31]. Reading
+            // from [31] (low) | [30]<<8 (high) recovers the index.
+            let ser = id.serialize();
+            let id_value = ser[31] as u16 | ((ser[30] as u16) << 8);
             packages_map.insert(id_value, hex::encode(serde_json::to_string(&package).unwrap()));
         }
-        
-        Ok(serde_json::to_string(&packages_map).unwrap())
+
+        // Wrap the outer JSON in hex::encode so the wire format matches
+        // generate_round1 (hex-encoded JSON). The JS consumer in
+        // webrtc.ts _generateAndBroadcastRound2 hex-decodes before
+        // JSON-parsing — without this the outer JSON contains raw
+        // braces that fail to hex-decode.
+        Ok(hex::encode(serde_json::to_string(&packages_map).unwrap()))
     }
 
     pub fn add_round2_package(&mut self, sender_index: u16, package_hex: &str) -> Result<(), WasmError> {
@@ -179,7 +189,7 @@ impl FrostDkgEd25519 {
             .map_err(|e| WasmError::new(&e.to_string()))?;
         let package: frost_ed25519::keys::dkg::round2::Package = serde_json::from_slice(&package_json)
             .map_err(|e| WasmError::new(&e.to_string()))?;
-        
+
         let identifier = Ed25519Curve::identifier_from_u16(sender_index)?;
         self.round2_packages.insert(identifier, package);
         Ok(())
@@ -434,21 +444,26 @@ impl FrostDkgSecp256k1 {
     pub fn generate_round2(&mut self) -> Result<String, WasmError> {
         let round1_secret = self.round1_secret.clone()
             .ok_or_else(|| WasmError::new("Round 1 secret not available"))?;
-        
+
         let (round2_secret, round2_packages) = Secp256k1Curve::dkg_part2(
             round1_secret,
             &self.round1_packages,
         )?;
-        
+
         self.round2_secret = Some(round2_secret);
-        
+
         let mut packages_map = BTreeMap::new();
         for (id, package) in round2_packages {
-            let id_value = id.serialize()[31] as u16 | ((id.serialize()[30] as u16) << 8);
+            // Secp256k1 identifiers serialize as u32 big-endian in the
+            // last four bytes (bytes [28..=31]) — matches the test
+            // helper's writeUInt32BE(index, 28).
+            let ser = id.serialize();
+            let id_value = ser[31] as u16 | ((ser[30] as u16) << 8);
             packages_map.insert(id_value, hex::encode(serde_json::to_string(&package).unwrap()));
         }
-        
-        Ok(serde_json::to_string(&packages_map).unwrap())
+
+        // Wrap outer JSON in hex::encode — see Ed25519 note above.
+        Ok(hex::encode(serde_json::to_string(&packages_map).unwrap()))
     }
 
     pub fn add_round2_package(&mut self, sender_index: u16, package_hex: &str) -> Result<(), WasmError> {

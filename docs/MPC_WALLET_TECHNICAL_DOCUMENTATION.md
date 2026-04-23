@@ -695,9 +695,16 @@ The MPC Wallet is designed to protect against:
 - **Input validation**: serde envelope parsing rejects malformed
   messages at the boundary.
 - **Memory zeroization**: Only `frost-core/src/root_secret.rs`
-  currently uses `zeroize::Zeroize` (verified: 1 hit across the
-  whole workspace). Key shares and decrypted keystore blobs are
-  **not** zeroed on drop today — open hardening work.
+  zeros sensitive material on drop today, and it does so via a
+  manual `self.0.fill(0)` inside `impl Drop for RootSecret` at
+  `root_secret.rs:62-67` — NOT via the `zeroize` crate's `Zeroize`
+  trait (the `zeroize` crate isn't a workspace dependency;
+  `grep -rn zeroize` returns a single hit inside a code comment).
+  Key shares, decrypted keystore blobs, session passwords, and the
+  signing commitments / shares residing in `AppState` are **not**
+  zeroed on drop today — open hardening work. Earlier drafts of
+  this bullet asserted `zeroize::Zeroize` is actively used; it
+  isn't.
 - **Audit Logging**: There is no built-in audit log. Operational
   observability is via `tracing` / `RUST_LOG` output as described
   in the Monitoring section above. Earlier drafts claimed

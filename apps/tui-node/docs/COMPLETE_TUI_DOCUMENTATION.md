@@ -338,10 +338,13 @@ fabrications this section inherited. In brief:
   SALT_LEN = 16 bytes (not 32), NONCE_LEN = 12 bytes. Authoritative
   constants in `src/keystore/encryption.rs:20-21`.
 - **Memory zeroization**: only
-  `packages/@mpc-wallet/frost-core/src/root_secret.rs` uses
-  `zeroize::Zeroize`. Key shares and decrypted keystore blobs are
-  not zeroed on drop today. No swap-file exclusion, no secure-delete
-  integration — earlier drafts listed these; none implemented.
+  `packages/@mpc-wallet/frost-core/src/root_secret.rs` zeros on
+  drop, via a manual `self.0.fill(0)` in its `Drop` impl
+  (`root_secret.rs:62-67`) — NOT via the `zeroize` crate (which
+  isn't a workspace dependency). Key shares and decrypted keystore
+  blobs are not zeroed on drop today. No swap-file exclusion, no
+  secure-delete integration — earlier drafts listed these and
+  asserted `zeroize::Zeroize` is in use; neither is true.
 
 ### Network security
 

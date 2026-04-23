@@ -449,9 +449,12 @@ public API today.
 - Keystore encryption at rest (PBKDF2 + AES-256-GCM, 100k iterations)
 - Secure random via `rand_core::OsRng` + `rand_chacha::ChaCha20Rng`
 - **No** systematic memory zeroization — only
-  `frost-core/src/root_secret.rs` uses `zeroize::Zeroize`; key
-  shares and decrypted keystore blobs are not zeroed on drop
-  (open hardening work, matching the d854239 fix elsewhere)
+  `frost-core/src/root_secret.rs` zeros on drop, and it does so
+  via a manual `self.0.fill(0)` inside `impl Drop`
+  (`root_secret.rs:62-67`), NOT via the `zeroize` crate (which is
+  not a workspace dependency). Key shares and decrypted keystore
+  blobs are not zeroed on drop (open hardening work, matching the
+  d854239 fix elsewhere)
 
 #### Operational Security
 - Offline mode for air-gapped signing (`--offline` CLI flag)

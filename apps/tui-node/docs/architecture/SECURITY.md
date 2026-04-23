@@ -230,12 +230,17 @@ the write format).
 ### Memory Protection
 
 Today only `packages/@mpc-wallet/frost-core/src/root_secret.rs`
-uses `zeroize::Zeroize` (grep: 1 hit across the whole workspace).
-Key shares, decrypted keystore blobs, passwords entered into the
-PasswordPrompt screen, and signing intermediate state are NOT
-zeroed on drop. Earlier drafts of this doc showed a
-`#[zeroize(drop)] SensitiveData` struct with automatic wiping —
-that pattern is not applied anywhere in the current tree.
+zeros sensitive material on drop, and it does so via a manual
+`self.0.fill(0)` inside `impl Drop for RootSecret` at
+`root_secret.rs:62-67` — NOT via the `zeroize` crate (`zeroize`
+is not a workspace dependency; `grep -rn zeroize` returns a
+single match, and that's inside a code comment on the `.fill(0)`
+line). Key shares, decrypted keystore blobs, passwords entered
+into the PasswordPrompt screen, and signing intermediate state
+are NOT zeroed on drop. Earlier drafts of this doc showed a
+`#[zeroize(drop)] SensitiveData` struct with automatic wiping
+and even asserted `zeroize::Zeroize` was in use — neither is
+true in the current tree.
 
 Adding systematic zeroization (at minimum to: `key_package`,
 `group_public_key`, `frost_nonces`, `frost_commitments`,

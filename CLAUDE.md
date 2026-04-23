@@ -171,7 +171,7 @@ ui/*.slint (Slint 1.x)  <---callbacks--->  src/main.rs  <--->  src/core_adapter.
 ## Dependencies
 
 FROST: `frost-core` 2.2.0, `frost-ed25519` 2.2.0, `frost-secp256k1` 2.2.0 (ZCash implementations).
-Crypto: `sha2`, `sha3`, `hmac`, `hkdf`, `aes-gcm`, `argon2`, `k256`, `ed25519-dalek`.
+Crypto: `sha2`, `sha3`, `k256`, `aes-gcm`, `argon2`, `pbkdf2` (keystore KDF in tui-node), `hkdf` + `hmac` (root-secret HKDF in frost-core). No direct `ed25519-dalek` — ed25519 curve ops go through `frost-ed25519` which pulls `curve25519-dalek` transitively.
 Dev environment: Nix flake (`nix develop`) provides all system deps including graphics libs.
 
 ## Workspace Layout

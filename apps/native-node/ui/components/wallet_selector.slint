@@ -60,8 +60,7 @@ export component WalletSelector inherits Rectangle {
                     VerticalBox {
                         padding-left: 8px;
                         spacing: 2px;
-                        vertical-alignment: center;
-                        
+
                         Text {
                             text: wallets[selected_index].name;
                             color: white;
@@ -70,12 +69,15 @@ export component WalletSelector inherits Rectangle {
                         }
                         
                         Text {
-                            text: wallets[selected_index].address.length > 20 ? 
-                                  wallets[selected_index].address.substring(0, 6) + "..." + 
-                                  wallets[selected_index].address.substring(wallets[selected_index].address.length - 4, wallets[selected_index].address.length) :
-                                  wallets[selected_index].address;
+                            // Slint 1.x strings have no `.length` or
+                            // `.substring`; callers wanting truncated
+                            // display text compute it on the Rust side
+                            // and push a pre-formatted string via
+                            // WalletInfo.address.
+                            text: wallets[selected_index].address;
                             color: #64748B;
                             font-size: 11px;
+                            overflow: elide;
                         }
                     }
                     
@@ -90,13 +92,14 @@ export component WalletSelector inherits Rectangle {
                         vertical-alignment: center;
                     }
                     
-                    // Dropdown arrow
+                    // Dropdown arrow. Text can't carry padding in
+                    // Slint 1.x; the parent HorizontalBox handles
+                    // horizontal spacing.
                     Text {
                         text: "▼";
                         color: #64748B;
                         font-size: 10px;
                         vertical-alignment: center;
-                        padding-left: 8px;
                     }
                 }
                 
@@ -127,8 +130,7 @@ export component WalletSelector inherits Rectangle {
         // Action buttons
         HorizontalBox {
             spacing: 8px;
-            vertical-alignment: center;
-            
+
             Button {
                 text: "Create";
                 enabled: true;

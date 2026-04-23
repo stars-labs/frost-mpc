@@ -52,9 +52,11 @@ export component ConnectionStatus inherits Rectangle {
             }
         }
         
-        // Connection grid
-        GridBox {
-            Row {
+        // Connection row. GridBox + Row don't support `if` children
+        // in Slint 1.x; a HorizontalBox does, so use that to keep the
+        // conditional SD Card indicator.
+        HorizontalBox {
+            spacing: 12px;
                 // WebSocket status
                 Rectangle {
                     width: 180px;
@@ -74,7 +76,6 @@ export component ConnectionStatus inherits Rectangle {
                             height: 8px;
                             border-radius: 4px;
                             background: websocket_connected ? #10B981 : #64748B;
-                            vertical-alignment: center;
                         }
                         
                         Text {
@@ -114,7 +115,6 @@ export component ConnectionStatus inherits Rectangle {
                             height: 8px;
                             border-radius: 4px;
                             background: webrtc_connected ? #10B981 : #64748B;
-                            vertical-alignment: center;
                         }
                         
                         Text {
@@ -155,7 +155,6 @@ export component ConnectionStatus inherits Rectangle {
                             height: 8px;
                             border-radius: 4px;
                             background: #F59E0B;
-                            vertical-alignment: center;
                         }
                         
                         Text {
@@ -175,7 +174,6 @@ export component ConnectionStatus inherits Rectangle {
                         }
                     }
                 }
-            }
         }
     }
 }

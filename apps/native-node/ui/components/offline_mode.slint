@@ -74,7 +74,6 @@ export component OfflineMode inherits Rectangle {
                     height: 8px;
                     border-radius: 4px;
                     background: sd_card_detected ? #10B981 : #EF4444;
-                    vertical-alignment: center;
                 }
                 
                 Text {
@@ -89,17 +88,20 @@ export component OfflineMode inherits Rectangle {
         if offline_enabled: VerticalBox {
             spacing: 16px;
             
-            // Instructions
+            // Instructions. Rectangle doesn't accept `padding`; push
+            // it to the inner VerticalBox which is a layout element.
             Rectangle {
-                padding: 12px;
                 border-radius: 6px;
                 background: #0F172A;
-                
-                Text {
-                    text: "In offline mode, all network connections are disabled. Use SD card to exchange data between participants.";
-                    color: #94A3B8;
-                    font-size: 12px;
-                    wrap: word-wrap;
+
+                VerticalBox {
+                    padding: 12px;
+                    Text {
+                        text: "In offline mode, all network connections are disabled. Use SD card to exchange data between participants.";
+                        color: #94A3B8;
+                        font-size: 12px;
+                        wrap: word-wrap;
+                    }
                 }
             }
             
@@ -157,7 +159,11 @@ export component OfflineMode inherits Rectangle {
                         padding: 8px;
                         spacing: 4px;
                         
-                        for op in pending_operations.slice(0, 3): HorizontalBox {
+                        // Slint arrays lack `.slice`. Iterate over all
+                        // pending operations and rely on the parent
+                        // ScrollView (or Rust-side trimming) for
+                        // bounded display.
+                        for op in pending_operations: HorizontalBox {
                             spacing: 8px;
                             
                             // Operation type icon
@@ -185,10 +191,12 @@ export component OfflineMode inherits Rectangle {
                         }
                         
                         if pending_operations.length > 3: Text {
+                            // Text doesn't accept padding-* in Slint 1.x;
+                            // the parent VerticalBox `spacing` handles
+                            // vertical gap.
                             text: "... and " + (pending_operations.length - 3) + " more";
                             color: #64748B;
                             font-size: 11px;
-                            padding-top: 4px;
                         }
                     }
                 }
@@ -203,15 +211,16 @@ export component OfflineMode inherits Rectangle {
                     width: 16px;
                     height: 16px;
                     
-                    Image {
-                        source: @image-url("spinner.svg");
-                        rotation-angle: 360deg;
-                        
-                        animate rotation-angle {
-                            duration: 1s;
-                            loop: true;
-                            easing: linear;
-                        }
+                    // Static phase indicator. Slint 1.x renamed
+                    // `rotation-angle` to `rotation` on Image and the
+                    // animate block no longer supports `loop: true`.
+                    // The original rotated spinner.svg isn't checked in
+                    // anyway — use a solid dot as a phase indicator.
+                    Rectangle {
+                        width: 12px;
+                        height: 12px;
+                        border-radius: 6px;
+                        background: #3B82F6;
                     }
                 }
                 

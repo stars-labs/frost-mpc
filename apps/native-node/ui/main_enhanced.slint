@@ -68,7 +68,7 @@ export component MainWindow inherits Window {
         // Header
         Rectangle {
             height: 80px;
-            background: linear-gradient(90deg, #1E293B, #334155);
+            background: @linear-gradient(90deg, #1E293B 0%, #334155 100%);
             
             HorizontalBox {
                 padding: 20px;
@@ -86,8 +86,7 @@ export component MainWindow inherits Window {
                     
                     VerticalBox {
                         spacing: 2px;
-                        vertical-alignment: center;
-                        
+
                         Text {
                             text: "MPC Wallet";
                             color: white;
@@ -109,8 +108,7 @@ export component MainWindow inherits Window {
                 // Device ID
                 HorizontalBox {
                     spacing: 8px;
-                    vertical-alignment: center;
-                    
+
                     Text {
                         text: "Device:";
                         color: #94A3B8;
@@ -131,7 +129,6 @@ export component MainWindow inherits Window {
                     height: 32px;
                     border-radius: 16px;
                     background: #1E293B;
-                    vertical-alignment: center;
                     
                     Text {
                         text: AppState.status_message;
@@ -253,13 +250,20 @@ export component MainWindow inherits Window {
                     
                     Tab {
                         title: "Logs";
-                        
+
+                        // Slint 1.x doesn't expose String.join on [string]
+                        // and TextEdit has no font-family property. Render
+                        // each log line as a Text inside a scrollable
+                        // VerticalBox instead.
                         ScrollView {
-                            TextEdit {
-                                text: AppState.log_messages.join("\n");
-                                read-only: true;
-                                font-family: "monospace";
-                                font-size: 11px;
+                            VerticalBox {
+                                padding: 4px;
+                                spacing: 0px;
+                                for line in AppState.log_messages: Text {
+                                    text: line;
+                                    font-size: 11px;
+                                    color: #CBD5E1;
+                                }
                             }
                         }
                     }

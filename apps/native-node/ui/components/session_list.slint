@@ -64,13 +64,14 @@ export component SessionList inherits Rectangle {
             }
         }
         
-        // Active session
+        // Active session. Rectangle doesn't accept `padding` in
+        // Slint 1.x — move it to the inner VerticalBox.
         if has_active_session: Rectangle {
-            padding: 12px;
             border-radius: 8px;
-            background: linear-gradient(135deg, #10B981, #059669);
-            
+            background: @linear-gradient(135deg, #10B981 0%, #059669 100%);
+
             VerticalBox {
+                padding: 12px;
                 spacing: 8px;
                 
                 HorizontalBox {
@@ -177,24 +178,23 @@ export component SessionList inherits Rectangle {
                                     border-radius: 4px;
                                     background: session.status == "waiting" ? #F59E0B :
                                                session.status == "in_progress" ? #3B82F6 : #10B981;
-                                    vertical-alignment: center;
                                 }
-                                
+
                                 // Session info
                                 VerticalBox {
                                     spacing: 4px;
-                                    vertical-alignment: center;
                                     
                                     HorizontalBox {
                                         spacing: 8px;
                                         
                                         Text {
-                                            text: session.session_id.length > 12 ? 
-                                                  session.session_id.substring(0, 12) + "..." :
-                                                  session.session_id;
+                                            // Full session_id, let layout
+                                            // overflow handle truncation.
+                                            text: session.session_id;
                                             color: white;
                                             font-size: 13px;
                                             font-weight: 500;
+                                            overflow: elide;
                                         }
                                         
                                         Text {
@@ -233,7 +233,6 @@ export component SessionList inherits Rectangle {
                                 if !has_active_session && session.status == "waiting": TouchArea {
                                     width: 60px;
                                     height: 28px;
-                                    vertical-alignment: center;
                                     
                                     Rectangle {
                                         border-radius: 4px;

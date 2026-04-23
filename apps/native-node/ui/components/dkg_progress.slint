@@ -46,12 +46,13 @@ export component DkgProgress inherits Rectangle {
                 vertical-alignment: center;
             }
             
+            // Visual separator. Slint 1.x Rectangle doesn't accept
+            // margin-* properties; use spacing on the parent
+            // HorizontalBox plus a plain 1px rule.
             Rectangle {
                 width: 1px;
                 height: 16px;
                 background: #334155;
-                margin-left: 12px;
-                margin-right: 12px;
             }
             
             Text {
@@ -92,7 +93,7 @@ export component DkgProgress inherits Rectangle {
                     width: parent.width * progress;
                     height: parent.height;
                     border-radius: parent.border-radius;
-                    background: linear-gradient(90deg, #10B981, #059669);
+                    background: @linear-gradient(90deg, #10B981 0%, #059669 100%);
                     
                     animate width { duration: 500ms; easing: ease-in-out; }
                 }
@@ -163,7 +164,6 @@ export component DkgProgress inherits Rectangle {
                                            participant.status == "processing" ? #3B82F6 :
                                            participant.status == "failed" ? #EF4444 :
                                            participant.status == "offline" ? #F59E0B : #64748B;
-                                vertical-alignment: center;
                             }
                             
                             Text {

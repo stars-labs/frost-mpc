@@ -1,16 +1,21 @@
-//! UICallback implementation for native Slint UI
+//! UICallback implementation for native Slint UI.
+//!
+//! Slint's `MainWindow` is `!Send` (its generated struct holds
+//! `Cell` / `UnsafeCell` fields), so capturing a strong handle into
+//! closures passed to `slint::invoke_from_event_loop` — which
+//! requires `Send` — does not compile. We therefore clone the
+//! `Weak<MainWindow>` (which IS `Send`) before each closure and
+//! upgrade inside, bailing silently if the window is already gone.
 
 use async_trait::async_trait;
-use slint::{ComponentHandle, ModelRc, VecModel, Weak};
-use std::sync::Arc;
-use tokio::sync::Mutex;
+use slint::{ComponentHandle, Model, ModelRc, VecModel, Weak};
 use tui_node::core::{
     ConnectionInfo, ConnectionStatus, OperationMode, ParticipantInfo, ParticipantStatus,
     SDCardOperation, SessionInfo, SessionStatus, UICallback, WalletInfo,
 };
 
 use crate::slint_generatedMainWindow::{
-    AppState, ConnectionInfo as SlintConnectionInfo, MainWindow, 
+    AppState, ConnectionInfo as SlintConnectionInfo, MainWindow,
     Participant as SlintParticipant, SDCardOperation as SlintSDCardOperation,
     SessionInfo as SlintSessionInfo, WalletInfo as SlintWalletInfo,
 };
@@ -24,7 +29,7 @@ impl NativeUICallback {
     pub fn new(window: Weak<MainWindow>) -> Self {
         Self { window }
     }
-    
+
     /// Convert core ConnectionInfo to Slint ConnectionInfo
     fn to_slint_connection(conn: &ConnectionInfo) -> SlintConnectionInfo {
         SlintConnectionInfo {
@@ -39,19 +44,31 @@ impl NativeUICallback {
             quality: conn.quality,
         }
     }
-    
+
     /// Convert core WalletInfo to Slint WalletInfo
     fn to_slint_wallet(wallet: &WalletInfo) -> SlintWalletInfo {
+        // Produce a short-form address for display since Slint 1.x
+        // strings can't be sliced inside the UI. Prefix + suffix is
+        // the idiomatic wallet address rendering.
+        let display_address = if wallet.address.len() > 20 {
+            format!(
+                "{}...{}",
+                &wallet.address[..6],
+                &wallet.address[wallet.address.len() - 4..]
+            )
+        } else {
+            wallet.address.clone()
+        };
         SlintWalletInfo {
             id: wallet.id.clone().into(),
             name: wallet.name.clone().into(),
-            address: wallet.address.clone().into(),
+            address: display_address.into(),
             balance: wallet.balance.clone().into(),
             chain: wallet.chain.clone().into(),
             threshold: wallet.threshold.clone().into(),
         }
     }
-    
+
     /// Convert core SessionInfo to Slint SessionInfo
     fn to_slint_session(session: &SessionInfo) -> SlintSessionInfo {
         SlintSessionInfo {
@@ -68,7 +85,7 @@ impl NativeUICallback {
             created_at: session.created_at.clone().into(),
         }
     }
-    
+
     /// Convert core ParticipantInfo to Slint Participant
     fn to_slint_participant(participant: &ParticipantInfo) -> SlintParticipant {
         SlintParticipant {
@@ -84,7 +101,7 @@ impl NativeUICallback {
             round_completed: participant.round_completed as i32,
         }
     }
-    
+
     /// Convert core SDCardOperation to Slint SDCardOperation
     fn to_slint_sd_operation(op: &SDCardOperation) -> SlintSDCardOperation {
         SlintSDCardOperation {
@@ -99,206 +116,181 @@ impl NativeUICallback {
     }
 }
 
+/// Helper: run a UI closure on the Slint event loop, upgrading the
+/// weak handle inside the closure so the body can remain !Send-free.
+fn dispatch<F>(window_weak: Weak<MainWindow>, body: F)
+where
+    F: FnOnce(MainWindow) + Send + 'static,
+{
+    if let Err(e) = slint::invoke_from_event_loop(move || {
+        if let Some(window) = window_weak.upgrade() {
+            body(window);
+        }
+    }) {
+        eprintln!("[NativeUI] invoke_from_event_loop failed: {e}");
+    }
+}
+
 #[async_trait]
 impl UICallback for NativeUICallback {
     async fn update_connection_status(&self, websocket: bool, webrtc: bool) {
-        if let Some(window) = self.window.upgrade() {
-            slint::invoke_from_event_loop(move || {
-                let state = window.global::<AppState>();
-                state.set_websocket_connected(websocket);
-                state.set_webrtc_connected(webrtc);
-            })
-            .unwrap();
-        }
+        dispatch(self.window.clone(), move |window| {
+            let state = window.global::<AppState>();
+            state.set_websocket_connected(websocket);
+            state.set_webrtc_connected(webrtc);
+        });
     }
-    
+
     async fn update_mesh_connections(&self, connections: Vec<ConnectionInfo>) {
-        if let Some(window) = self.window.upgrade() {
-            let slint_connections: Vec<SlintConnectionInfo> = connections
-                .iter()
-                .map(Self::to_slint_connection)
-                .collect();
-            
-            slint::invoke_from_event_loop(move || {
-                let state = window.global::<AppState>();
-                let model = ModelRc::new(VecModel::from(slint_connections));
-                state.set_mesh_connections(model);
-            })
-            .unwrap();
-        }
+        let slint_connections: Vec<SlintConnectionInfo> = connections
+            .iter()
+            .map(Self::to_slint_connection)
+            .collect();
+        dispatch(self.window.clone(), move |window| {
+            let state = window.global::<AppState>();
+            let model = ModelRc::new(VecModel::from(slint_connections));
+            state.set_mesh_connections(model);
+        });
     }
-    
+
     async fn update_operation_mode(&self, mode: OperationMode) {
-        if let Some(window) = self.window.upgrade() {
-            let mode_str = match mode {
-                OperationMode::Online => "online",
-                OperationMode::Offline => "offline",
-                OperationMode::Hybrid => "hybrid",
-            };
-            
-            slint::invoke_from_event_loop(move || {
-                let state = window.global::<AppState>();
-                state.set_operation_mode(mode_str.into());
-            })
-            .unwrap();
-        }
+        let mode_str: &'static str = match mode {
+            OperationMode::Online => "online",
+            OperationMode::Offline => "offline",
+            OperationMode::Hybrid => "hybrid",
+        };
+        dispatch(self.window.clone(), move |window| {
+            let state = window.global::<AppState>();
+            state.set_operation_mode(mode_str.into());
+        });
     }
-    
+
     async fn update_wallets(&self, wallets: Vec<WalletInfo>) {
-        if let Some(window) = self.window.upgrade() {
-            let slint_wallets: Vec<SlintWalletInfo> = wallets
-                .iter()
-                .map(Self::to_slint_wallet)
-                .collect();
-            
-            slint::invoke_from_event_loop(move || {
-                let state = window.global::<AppState>();
-                let model = ModelRc::new(VecModel::from(slint_wallets));
-                state.set_wallets(model);
-                state.set_has_keystore(!wallets.is_empty());
-            })
-            .unwrap();
-        }
+        let slint_wallets: Vec<SlintWalletInfo> = wallets
+            .iter()
+            .map(Self::to_slint_wallet)
+            .collect();
+        let has_keystore = !wallets.is_empty();
+        dispatch(self.window.clone(), move |window| {
+            let state = window.global::<AppState>();
+            let model = ModelRc::new(VecModel::from(slint_wallets));
+            state.set_wallets(model);
+            state.set_has_keystore(has_keystore);
+        });
     }
-    
+
     async fn update_active_wallet(&self, index: usize) {
-        if let Some(window) = self.window.upgrade() {
-            slint::invoke_from_event_loop(move || {
-                let state = window.global::<AppState>();
-                state.set_active_wallet_index(index as i32);
-            })
-            .unwrap();
-        }
+        let idx = index as i32;
+        dispatch(self.window.clone(), move |window| {
+            let state = window.global::<AppState>();
+            state.set_active_wallet_index(idx);
+        });
     }
-    
+
     async fn update_available_sessions(&self, sessions: Vec<SessionInfo>) {
-        if let Some(window) = self.window.upgrade() {
-            let slint_sessions: Vec<SlintSessionInfo> = sessions
-                .iter()
-                .map(Self::to_slint_session)
-                .collect();
-            
-            slint::invoke_from_event_loop(move || {
-                let state = window.global::<AppState>();
-                let model = ModelRc::new(VecModel::from(slint_sessions));
-                state.set_available_sessions(model);
-            })
-            .unwrap();
-        }
+        let slint_sessions: Vec<SlintSessionInfo> = sessions
+            .iter()
+            .map(Self::to_slint_session)
+            .collect();
+        dispatch(self.window.clone(), move |window| {
+            let state = window.global::<AppState>();
+            let model = ModelRc::new(VecModel::from(slint_sessions));
+            state.set_available_sessions(model);
+        });
     }
-    
+
     async fn update_active_session(&self, session: Option<SessionInfo>) {
-        if let Some(window) = self.window.upgrade() {
-            slint::invoke_from_event_loop(move || {
-                let state = window.global::<AppState>();
-                
-                if let Some(session) = session {
-                    let slint_session = Self::to_slint_session(&session);
-                    state.set_active_session(slint_session);
-                    state.set_has_active_session(true);
-                } else {
-                    state.set_has_active_session(false);
-                }
-            })
-            .unwrap();
-        }
+        let slint_session = session.as_ref().map(Self::to_slint_session);
+        dispatch(self.window.clone(), move |window| {
+            let state = window.global::<AppState>();
+            if let Some(s) = slint_session {
+                state.set_active_session(s);
+                state.set_has_active_session(true);
+            } else {
+                state.set_has_active_session(false);
+            }
+        });
     }
-    
+
     async fn update_dkg_status(&self, active: bool, round: u8, progress: f32) {
-        if let Some(window) = self.window.upgrade() {
-            slint::invoke_from_event_loop(move || {
-                let state = window.global::<AppState>();
-                state.set_dkg_active(active);
-                state.set_dkg_current_round(round as i32);
-                state.set_dkg_progress(progress);
-            })
-            .unwrap();
-        }
+        let r = round as i32;
+        dispatch(self.window.clone(), move |window| {
+            let state = window.global::<AppState>();
+            state.set_dkg_active(active);
+            state.set_dkg_current_round(r);
+            state.set_dkg_progress(progress);
+        });
     }
-    
+
     async fn update_dkg_participants(&self, participants: Vec<ParticipantInfo>) {
-        if let Some(window) = self.window.upgrade() {
-            let slint_participants: Vec<SlintParticipant> = participants
-                .iter()
-                .map(Self::to_slint_participant)
-                .collect();
-            
-            slint::invoke_from_event_loop(move || {
-                let state = window.global::<AppState>();
-                let model = ModelRc::new(VecModel::from(slint_participants));
-                state.set_dkg_participants(model);
-            })
-            .unwrap();
-        }
+        let slint_participants: Vec<SlintParticipant> = participants
+            .iter()
+            .map(Self::to_slint_participant)
+            .collect();
+        dispatch(self.window.clone(), move |window| {
+            let state = window.global::<AppState>();
+            let model = ModelRc::new(VecModel::from(slint_participants));
+            state.set_dkg_participants(model);
+        });
     }
-    
+
     async fn update_offline_status(&self, enabled: bool, sd_card_detected: bool) {
-        if let Some(window) = self.window.upgrade() {
-            slint::invoke_from_event_loop(move || {
-                let state = window.global::<AppState>();
-                state.set_offline_enabled(enabled);
-                state.set_sd_card_detected(sd_card_detected);
-            })
-            .unwrap();
-        }
+        dispatch(self.window.clone(), move |window| {
+            let state = window.global::<AppState>();
+            state.set_offline_enabled(enabled);
+            state.set_sd_card_detected(sd_card_detected);
+        });
     }
-    
+
     async fn update_sd_operations(&self, operations: Vec<SDCardOperation>) {
-        if let Some(window) = self.window.upgrade() {
-            let slint_operations: Vec<SlintSDCardOperation> = operations
-                .iter()
-                .map(Self::to_slint_sd_operation)
-                .collect();
-            
-            slint::invoke_from_event_loop(move || {
-                let state = window.global::<AppState>();
-                let model = ModelRc::new(VecModel::from(slint_operations));
-                state.set_pending_sd_operations(model);
-            })
-            .unwrap();
-        }
+        let slint_operations: Vec<SlintSDCardOperation> = operations
+            .iter()
+            .map(Self::to_slint_sd_operation)
+            .collect();
+        dispatch(self.window.clone(), move |window| {
+            let state = window.global::<AppState>();
+            let model = ModelRc::new(VecModel::from(slint_operations));
+            state.set_pending_sd_operations(model);
+        });
     }
-    
+
     async fn show_message(&self, message: String, is_error: bool) {
-        if let Some(window) = self.window.upgrade() {
-            slint::invoke_from_event_loop(move || {
-                let state = window.global::<AppState>();
-                
-                // Update status message
-                state.set_status_message(message.clone().into());
-                
-                // Add to log messages
-                let mut logs = state.get_log_messages().iter().collect::<Vec<_>>();
-                let prefix = if is_error { "[ERROR] " } else { "[INFO] " };
-                let timestamp = chrono::Local::now().format("%H:%M:%S").to_string();
-                let log_entry = format!("{} {} {}", timestamp, prefix, message);
-                logs.push(log_entry.into());
-                
-                // Keep only last 100 messages
-                if logs.len() > 100 {
-                    logs.drain(0..logs.len() - 100);
-                }
-                
-                let model = ModelRc::new(VecModel::from(logs));
-                state.set_log_messages(model);
-            })
-            .unwrap();
-        }
+        let timestamp = chrono::Local::now().format("%H:%M:%S").to_string();
+        let prefix = if is_error { "[ERROR]" } else { "[INFO]" };
+        let log_entry = format!("{timestamp} {prefix} {message}");
+        dispatch(self.window.clone(), move |window| {
+            let state = window.global::<AppState>();
+            state.set_status_message(message.clone().into());
+
+            // Model trait exposes row_count/row_data — materialize into a
+            // Vec so we can push + drain, then re-wrap into a VecModel.
+            let existing = state.get_log_messages();
+            let mut logs: Vec<slint::SharedString> = (0..existing.row_count())
+                .filter_map(|i| existing.row_data(i))
+                .collect();
+            logs.push(log_entry.into());
+            // Keep only last 100 messages
+            let overflow = logs.len().saturating_sub(100);
+            if overflow > 0 {
+                logs.drain(0..overflow);
+            }
+            let model = ModelRc::new(VecModel::from(logs));
+            state.set_log_messages(model);
+        });
     }
-    
+
     async fn show_progress(&self, title: String, progress: f32) {
-        if let Some(window) = self.window.upgrade() {
-            slint::invoke_from_event_loop(move || {
-                let state = window.global::<AppState>();
-                state.set_status_message(format!("{}: {:.0}%", title, progress * 100.0).into());
-            })
-            .unwrap();
-        }
+        let text = format!("{}: {:.0}%", title, progress * 100.0);
+        dispatch(self.window.clone(), move |window| {
+            let state = window.global::<AppState>();
+            state.set_status_message(text.into());
+        });
     }
-    
-    async fn request_confirmation(&self, message: String) -> bool {
-        // For now, auto-confirm. In a real implementation, this would show a dialog
-        // and wait for user response
+
+    async fn request_confirmation(&self, _message: String) -> bool {
+        // For now, auto-confirm. In a real implementation, this would
+        // show a modal and await the user's response via a oneshot
+        // channel.
         true
     }
 }

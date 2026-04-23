@@ -21,7 +21,7 @@ rand = "0.10.1"
 # getrandom is the direct system-CSPRNG shim (calls `getrandom(2)` / `BCryptGenRandom`
 # / equivalent on each OS). We use it directly for one-shot random fills
 # (salts, nonces) so the code is immune to churn in the higher-level `rand` API.
-getrandom = "0.4"
+getrandom.workspace = true
 solana-sdk = "4.0.1"
 solana-client = "3.0.1"
 solana-system-program = "3.0.1"

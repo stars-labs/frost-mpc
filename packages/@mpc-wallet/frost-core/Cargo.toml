@@ -37,7 +37,11 @@ ed25519-dalek = "2.1.1"
 #     OsRng + `rand_chacha::ChaCha20Rng` directly.
 rand_core = { version = "0.6", features = ["getrandom"] }
 rand_chacha = "0.3"
-getrandom = { version = "0.4", features = [] }
+# Inherits workspace-level version + wasm_js feature. This crate is
+# compiled into both native (TUI) and wasm32 (core-wasm) targets, so
+# the js backend needs to be activated centrally to avoid rebuilding
+# with inconsistent features per target.
+getrandom.workspace = true
 hkdf = "0.13"
 
 # Encryption for keystore

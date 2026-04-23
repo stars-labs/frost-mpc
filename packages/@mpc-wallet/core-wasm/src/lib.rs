@@ -7,7 +7,10 @@ use mpc_wallet_frost_core::{
     root_secret::RootSecret,
     unified_dkg::{UnifiedDkg, UnifiedRound1Package},
 };
-use rand::rngs::OsRng;
+// In rand 0.9+ `rngs::OsRng` moved to `rand_core` (it's the same type;
+// the `rand` crate's re-export was dropped). Match frost-core's usage
+// for consistency.
+use rand_core::OsRng;
 use std::collections::BTreeMap;
 
 // Re-export specific FROST types needed by WASM

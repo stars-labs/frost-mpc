@@ -263,22 +263,35 @@ All 3 tests passed!
 - Automatic reconnection
 - Message persistence
 
-## 🛡️ Security Considerations
+## 🛡️ Security Considerations (aspirational)
+
+This section is a wishlist of hardening work for the mesh layer,
+not a description of currently-shipping controls. For the honest
+accounting of what's actually in source see
+[`architecture/SECURITY.md`](./architecture/SECURITY.md).
 
 ### Network Security
-- All connections should use DTLS in production
-- Implement proper STUN/TURN for NAT traversal
-- Rate limiting for rejoin attempts
+- WebRTC data channels use DTLS already (handled by the `webrtc`
+  crate — nothing to configure in this project)
+- Public STUN is used out of the box; no TURN server ships with
+  this repo, so symmetric-NAT peers may fail to connect
+- **Not implemented**: rate limiting for rejoin attempts
 
 ### State Security
-- Cryptographic verification of rejoining peers
-- Secure message buffering with encryption
-- Time-bounded session validity
+- **Not implemented**: cryptographic verification of rejoining
+  peers (beyond the trust implied by the signal server treating
+  a `Register` message as identity assertion)
+- **Not implemented**: encrypted message buffering for offline
+  peers
+- **Not implemented**: time-bounded session validity
 
 ### Operational Security
-- Monitoring and alerting for disconnections
-- Audit logging for all rejoin events
-- Threshold enforcement validation
+- Structured disconnection events + rejoin logs go through
+  `tracing` — operators can ship them to their own monitoring /
+  alerting infrastructure
+- **Not implemented**: built-in audit logging for rejoin events
+- FROST enforces the threshold automatically; no additional
+  threshold-validation layer is needed in the mesh code
 
 ## 📈 Next Steps
 

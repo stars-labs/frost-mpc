@@ -300,11 +300,19 @@ recommendation.
 │   ☐ Firewall configured                               │
 │   ☐ Antivirus/EDR installed                          │
 │                                                         │
-│ ☐ Application Configuration                             │
-│   ☐ Strong passwords enforced                         │
-│   ☐ Audit logging enabled                             │
-│   ☐ Network timeouts configured                       │
-│   ☐ Rate limiting enabled                             │
+│ ☐ Application Configuration (operator-side)             │
+│   ☐ Strong keystore password chosen (no policy is      │
+│     enforced in code — pick a strong one yourself)     │
+│   ☐ Signal-server URL trusted / under your control     │
+│     (--signal-server flag; default is the upstream     │
+│     Cloudflare Worker)                                 │
+│   ☐ Log file location set (--log-location) + log       │
+│     rotation/retention managed by operator tooling     │
+│   Note: the TUI does not enforce password complexity,  │
+│   emit structured audit logs, configure network        │
+│   timeouts, or rate-limit connections. Earlier drafts  │
+│   of this checklist listed those as "enabled /         │
+│   configured" items — none are application features.   │
 │                                                         │
 │ ☐ Physical Security                                     │
 │   ☐ Device in secure location                         │

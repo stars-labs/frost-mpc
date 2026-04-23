@@ -84,7 +84,7 @@ bun run dev
 - **Multi-Chain Support**: Ethereum (secp256k1) and Solana (ed25519)
 - **Web3 Provider**: EIP-1193 compatible provider for dApps
 - **P2P Communication**: Direct WebRTC connections between participants
-- **Keystore Management**: Import/export compatible with CLI wallet
+- **Keystore Management**: Import/export compatible with the TUI wallet
 
 ### User Experience
 - **Simple Setup**: One-click wallet creation
@@ -214,11 +214,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 ## Resources
 
 - [Main Project Documentation](../../../docs/README.md)
-- [API Reference](api/)
-- [Architecture Details](architecture/)
 - [UI Documentation](ui/)
 - [Chrome Extension Docs](https://developer.chrome.com/docs/extensions/mv3/)
 - [WXT Framework](https://wxt.dev/)
+
+For extension architecture and the FROST-over-WebRTC message flow,
+see the top-of-repo `CLAUDE.md` (§ "Browser extension: threshold
+signing architecture"), which is the single source of truth.
 
 ## Support
 
@@ -226,7 +228,3 @@ For issues and questions:
 - [GitHub Issues](https://github.com/your-org/mpc-wallet/issues)
 - [Discord Community](https://discord.gg/mpc-wallet)
 - [Documentation](../../../docs/)
-
----
-
-[← Back to Apps](../../README.md) | [→ Architecture](architecture/)

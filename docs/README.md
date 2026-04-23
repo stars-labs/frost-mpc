@@ -96,9 +96,8 @@ cargo run -p native-node
 - [Offline Mode](../apps/tui-node/docs/guides/offline-mode.md) - Air-gapped operation guide
 
 #### Native Desktop Application
-- [Native App Guide](../apps/native-node/docs/README.md) - Desktop application documentation
-- [Architecture](../apps/native-node/docs/architecture/) - Native app architecture
-- [UI Guide](../apps/native-node/docs/ui/) - Slint UI framework documentation
+- [Native App README](../apps/native-node/README.md) - Architecture diagram, feature-parity matrix, build + run instructions
+- [Docs subtree](../apps/native-node/docs/README.md) - Additional native-node documentation
 
 #### Signal Server
 - [Signal Server Guide](../apps/signal-server/docs/README.md) - WebRTC signaling server

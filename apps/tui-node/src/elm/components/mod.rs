@@ -19,8 +19,6 @@ pub mod password_prompt;
 
 // DKG components
 pub mod dkg_progress;
-pub mod offline_dkg_process;
-pub mod sd_card_manager;
 pub mod wallet_complete;
 
 // Signing components (Phase C)
@@ -43,8 +41,6 @@ pub use password_prompt::PasswordPromptComponent;
 
 // DKG components
 pub use dkg_progress::DKGProgressComponent;
-pub use offline_dkg_process::{OfflineDKGProcessComponent, ParticipantRole};
-pub use sd_card_manager::SDCardManagerComponent;
 pub use wallet_complete::WalletCompleteComponent;
 pub use sign_transaction::SignTransactionComponent;
 pub use signature_complete::SignatureCompleteComponent;
@@ -76,9 +72,7 @@ pub enum Id {
     ModeSelection,
     ThresholdConfig,
     JoinSession,
-    OfflineDKGProcess,
     DKGProgress,
-    SDCardManager,
     /// Mount slot for the pre-DKG password-capture component.
     PasswordPrompt,
     /// Mount slot for the post-DKG success screen that shows the group

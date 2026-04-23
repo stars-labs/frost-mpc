@@ -6,19 +6,33 @@ This directory contains all tests for the MPC Wallet browser extension.
 
 ```
 tests/
-├── __mocks__/        # Module-level mocks (WXT #imports, etc.)
-├── components/       # UI component tests
-├── config/           # Configuration tests
-├── entrypoints/      # Extension entrypoint tests
-│   ├── background/   # Background service worker tests
-│   └── offscreen/    # Offscreen document tests (WebRTC, FROST)
-├── integration/      # Integration tests
-├── services/         # Service layer tests
-├── utils/            # Utility tests
-├── setup-bun.ts      # Preload: Chrome + crypto mocks, exports
-│                     # REAL_WEBCRYPTO for roundtrip tests
-└── wxt-imports-mock.ts
+├── __mocks__/                    # Module-level mocks (WXT #imports)
+├── config/                       # Configuration tests
+├── entrypoints/                  # Extension entrypoint tests
+│   ├── background/               # Background service worker tests
+│   └── offscreen/                # Offscreen document tests
+│                                 # (WebRTC, FROST)
+├── integration/                  # Integration tests
+├── services/                     # Service layer tests
+├── utils/                        # Utility tests
+├── setup-bun.ts                  # Preload: Chrome + crypto mocks,
+│                                 # exports REAL_WEBCRYPTO for
+│                                 # roundtrip tests
+├── wxt-imports-mock.ts
+│
+├── cli-chrome-comparison.test.ts # top-level cross-runtime parity tests
+├── import-cli-keystore.test.ts
+├── keystore-format.test.ts
+├── keystore-import.test.ts
+├── wasm-cli-import.test.ts
+├── wasm-frost-contracts.test.ts
+└── wasm-keystore-import.test.ts
 ```
+
+Earlier drafts of this listing included a `components/` subdirectory —
+that dir does not exist. UI-component unit tests either colocate
+next to their Svelte source as `.test.ts` (when they exist) or
+are absent; there's no dedicated component-test tree.
 
 ## Running Tests
 

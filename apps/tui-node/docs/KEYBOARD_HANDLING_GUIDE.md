@@ -153,7 +153,7 @@ When modifying keyboard handling:
 | KeyModifiers::NONE | Keys don't work | Use `..` pattern |
 | Wrong message type | Enter doesn't proceed | Return correct Message variant |
 | Wrong component ID | Component not found | Fix `fn id()` return value |
-| Missing subscriptions | No events received | Check subscription_manager.rs |
+| Missing subscriptions | No events received | Subscriptions are attached at `Application::mount(...)` — search for the call site that mounts the affected component in `src/elm/app.rs` (there is no `subscription_manager.rs` file in this tree) |
 | No debug logging | Hard to debug | Add tracing::debug calls |
 
 ## Prevention Script

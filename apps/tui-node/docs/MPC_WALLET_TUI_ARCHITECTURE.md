@@ -260,24 +260,33 @@ WebRTCMessage (Data channel layer)
 
 ### 3. Command Dispatch Pattern
 
+Illustrative (real variant names verified against
+`src/utils/state.rs` — note: `ProcessSessionProposal` is NOT a
+real variant; the dispatch from an inbound `WebSocketMessage::
+SessionProposal` goes directly to the handler which then emits
+`AcceptSessionProposal(id)` after user consent):
+
 ```rust
-// External message triggers internal command
+// External message arrives via the signal-server relay
 WebSocketMessage::SessionProposal(proposal) => {
-    InternalCommand::ProcessSessionProposal { proposal }
+    // The handler stashes the proposal in AppState and waits for
+    // user consent. No single InternalCommand variant wraps this
+    // step — it's inline in the signaling handler.
 }
 
-// Internal command updates state and triggers follow-up
-InternalCommand::AcceptSessionProposal(id) => {
+// Internal command fires after user accepts (real variant at
+// src/utils/state.rs:70 — `AcceptSessionProposal(String)`):
+InternalCommand::AcceptSessionProposal(session_id) => {
     1. Update session state
     2. Send SessionResponse via WebSocket
-    3. Trigger InternalCommand::InitiateWebRTCConnections
+    3. Trigger InternalCommand::InitiateWebRTCConnections  // line 79
 }
 
-// Follow-up command continues the flow
+// Follow-up command continues the flow (line 79):
 InternalCommand::InitiateWebRTCConnections => {
     1. Create P2P connections
     2. Open data channels
-    3. Trigger InternalCommand::ReportChannelOpen per connection
+    3. Trigger InternalCommand::ReportChannelOpen per connection  // line 82
 }
 ```
 

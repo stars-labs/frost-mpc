@@ -493,8 +493,11 @@ methods that serialize to JSON — none exist. Persistence surface:
 - **Keystore files**: wallet metadata (plaintext) +
   encrypted key share (AES-256-GCM blob) per wallet, at
   `~/.frost_keystore/<device_id>/<curve>/<wallet_id>.{json,dat}`.
-  Written when `Command::SaveWallet` fires; re-read via
-  `Keystore::load_wallet(wallet_id, password)`.
+  Written when `Command::SaveWallet` fires (real variant at
+  `src/elm/command.rs:36`); re-read via
+  `Keystore::load_wallet_file(wallet_id, password)` at
+  `src/keystore/storage.rs:251` — earlier drafts called the
+  re-read method `load_wallet` which does not exist.
 - **Tracing log file**: append-only at `--log-location` (default
   `~/.frost_keystore/logs/mpc-wallet.log`).
 

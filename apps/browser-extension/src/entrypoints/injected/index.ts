@@ -222,10 +222,16 @@ class PageProvider {
     }
 
     // Clean up when PageProvider is destroyed
-    
-    // Cache property values
-    private cachedAccounts: string[] | null = null;
-    private cachedChainId: string | null = null;
+
+    // Cache property values. Not marked `private` because the
+    // factory code below (line ~466) intentionally seeds
+    // cachedAccounts before the async real-accounts fetch completes,
+    // and the same factory clears it to force re-fetch after
+    // initial delay. That external seeding is the documented
+    // initialization path — marking these `private` was a type-
+    // surface bug, not an API contract.
+    cachedAccounts: string[] | null = null;
+    cachedChainId: string | null = null;
     
     // Network-related methods
     getChainId = async (): Promise<string> => {

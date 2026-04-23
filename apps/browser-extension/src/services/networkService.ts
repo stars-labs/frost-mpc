@@ -372,38 +372,57 @@ class NetworkService {
         this.changeCallbacks.forEach(callback => callback(network));
     }
 
-    // Helper method to get a public client for the current network
-    public getPublicClient() {
-        if (this.currentBlockchain !== 'ethereum') {
+    /**
+     * viem PublicClient cache keyed by chain id. Tests rely on
+     * repeated calls with the same network returning the same
+     * client instance; without caching, a fresh HTTP transport
+     * would spin up per call and invalidate connection reuse.
+     */
+    private publicClientCache: Map<number, ReturnType<typeof createPublicClient>> = new Map();
+
+    /**
+     * Helper method to get a viem PublicClient for either the
+     * current network (when called with no args) or a specific
+     * network (when passed a Chain). Cached per-chain-id so
+     * repeat calls return the same instance.
+     */
+    public getPublicClient(network?: Chain): ReturnType<typeof createPublicClient> {
+        const target = network ?? this.currentNetworks.ethereum;
+        if (!target) {
+            throw new Error('No current Ethereum network selected');
+        }
+        // Current-network path still gates on blockchain check; explicit
+        // network overrides the gate (caller knows what they want).
+        if (!network && this.currentBlockchain !== 'ethereum') {
             throw new Error('Public client is only available for Ethereum networks');
         }
 
-        const currentNetwork = this.currentNetworks.ethereum;
-        if (!currentNetwork) {
-            throw new Error('No current Ethereum network selected');
-        }
+        const cached = this.publicClientCache.get(target.id);
+        if (cached) return cached;
 
         // Convert our Chain to viem's Chain format
         const viemChain: any = {
-            id: currentNetwork.id,
-            name: currentNetwork.name,
-            network: currentNetwork.network,
-            nativeCurrency: currentNetwork.nativeCurrency || {
+            id: target.id,
+            name: target.name,
+            network: target.network,
+            nativeCurrency: target.nativeCurrency || {
                 name: 'Ether',
                 symbol: 'ETH',
                 decimals: 18
             },
-            rpcUrls: currentNetwork.rpcUrls || {
+            rpcUrls: target.rpcUrls || {
                 default: { http: [] },
                 public: { http: [] }
             },
-            blockExplorers: currentNetwork.blockExplorers
+            blockExplorers: target.blockExplorers
         };
 
-        return createPublicClient({
+        const client = createPublicClient({
             chain: viemChain,
             transport: http()
         });
+        this.publicClientCache.set(target.id, client);
+        return client;
     }
 
     // ===================================================================

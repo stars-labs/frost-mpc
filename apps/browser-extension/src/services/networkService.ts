@@ -221,6 +221,25 @@ class NetworkService {
         }
     }
 
+    /**
+     * Alias for `addNetwork`. Some callers prefer the "Custom" name
+     * to emphasize that they're adding a user-defined network on
+     * top of the built-in list; semantically identical.
+     */
+    public async addCustomNetwork(blockchain: 'ethereum' | 'solana', network: Chain): Promise<void> {
+        return this.addNetwork(blockchain, network);
+    }
+
+    /**
+     * Alias for `removeNetwork`. Same semantics — built-in networks
+     * protected via PROTECTED_NETWORK_IDS are rejected, custom ones
+     * (which is in practice what you'd be calling this on) are
+     * removable.
+     */
+    public async removeCustomNetwork(blockchain: 'ethereum' | 'solana', chainId: number): Promise<void> {
+        return this.removeNetwork(blockchain, chainId);
+    }
+
     public async addNetwork(blockchain: 'ethereum' | 'solana', network: Chain): Promise<void> {
         // Validate network structure
         if (!network || typeof network !== 'object') {

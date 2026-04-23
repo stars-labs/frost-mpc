@@ -2855,14 +2855,21 @@
     {/if}
 </main>
 
-<!-- Password Prompt Modal -->
+<!-- Password Prompt Modal. Handler slot wrappers coerce the
+     nullable `onSubmit`/`onCancel` config fields into plain void
+     handlers that Svelte's on:* directive expects (the originals
+     can be async — return value is discarded). -->
 {#if showPasswordPrompt}
     <PasswordPrompt
         title={passwordPromptConfig.title}
         message={passwordPromptConfig.message}
         confirmMode={passwordPromptConfig.confirmMode}
-        on:submit={passwordPromptConfig.onSubmit}
-        on:cancel={passwordPromptConfig.onCancel}
+        on:submit={(e: CustomEvent) => {
+            passwordPromptConfig.onSubmit?.(e);
+        }}
+        on:cancel={() => {
+            passwordPromptConfig.onCancel?.();
+        }}
     />
 {/if}
 

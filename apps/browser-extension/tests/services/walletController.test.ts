@@ -256,7 +256,7 @@ describe('WalletController', () => {
 
             await walletController.addAccount(account);
 
-            const balance = await walletController.getBalance(account.address);
+            const balance = await walletController.getBalance(account.address as `0x${string}`);
 
             // Should return a balance bigint
             expect(typeof balance).toBe('bigint');
@@ -283,7 +283,7 @@ describe('WalletController', () => {
             const message = 'Test message to sign';
 
             try {
-                const signature = await walletController.signMessage(message);
+                const signature = await walletController.signMessage(message as any);
                 expect(typeof signature).toBe('string');
             } catch (error) {
                 // Expected if no actual wallet connection

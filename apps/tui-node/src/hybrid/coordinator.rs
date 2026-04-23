@@ -103,7 +103,7 @@ impl HybridCoordinator {
                 // Simulate WebSocket/WebRTC delivery
                 println!("  📡 Sending message from P{} to P{} via WebSocket", from, to);
                 let mut queue = self.online_queue.lock().unwrap();
-                queue.entry(to).or_insert_with(Vec::new).push(message);
+                queue.entry(to).or_default().push(message);
                 Ok(())
             }
             ParticipantMode::Offline => {

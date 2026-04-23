@@ -7,6 +7,12 @@ pub struct SolanaHandler {
     // Can add configuration here if needed
 }
 
+impl Default for SolanaHandler {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SolanaHandler {
     pub fn new() -> Self {
         Self {}

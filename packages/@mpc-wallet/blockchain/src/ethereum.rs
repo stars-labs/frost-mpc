@@ -6,6 +6,12 @@ pub struct EthereumHandler {
     // Can add configuration here if needed
 }
 
+impl Default for EthereumHandler {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl EthereumHandler {
     pub fn new() -> Self {
         Self {}

@@ -1138,7 +1138,7 @@ pub fn update(model: &mut Model, msg: Message) -> Option<Command> {
                     .filter(|p| **p != model.device_id)
                     .filter(|p| {
                         model.network_state.participant_webrtc_status.get(*p)
-                            .map_or(false, |(_, data_channel_open)| *data_channel_open)
+                            .is_some_and(|(_, data_channel_open)| *data_channel_open)
                     })
                     .count();
                 
@@ -1539,7 +1539,7 @@ pub fn update(model: &mut Model, msg: Message) -> Option<Command> {
                     .filter(|p| **p != model.device_id)
                     .filter(|p| {
                         model.network_state.participant_webrtc_status.get(*p)
-                            .map_or(false, |(_, data_channel_open)| *data_channel_open)
+                            .is_some_and(|(_, data_channel_open)| *data_channel_open)
                     })
                     .count();
 

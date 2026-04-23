@@ -469,6 +469,12 @@ pub struct ReconnectionTracker {
     max_attempts: usize,
 }
 
+impl Default for ReconnectionTracker {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ReconnectionTracker {
     pub fn new() -> Self {
         ReconnectionTracker {

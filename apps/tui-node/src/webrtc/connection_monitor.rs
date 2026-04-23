@@ -22,6 +22,12 @@ pub struct ConnectionQuality {
     pub score: u8,
 }
 
+impl Default for ConnectionQuality {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ConnectionQuality {
     pub fn new() -> Self {
         Self {

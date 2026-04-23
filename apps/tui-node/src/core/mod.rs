@@ -208,6 +208,12 @@ pub struct CoreState {
     pub last_signature: Arc<Mutex<Option<String>>>,
 }
 
+impl Default for CoreState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl CoreState {
     pub fn new() -> Self {
         Self {

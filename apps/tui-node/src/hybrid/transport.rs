@@ -64,7 +64,7 @@ impl OnlineTransport {
             .lock()
             .unwrap()
             .entry(to)
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(data);
         
         Ok(())

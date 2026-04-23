@@ -92,8 +92,8 @@ impl MeshTopology {
     }
 
     pub fn add_connection(&mut self, peer1: PeerId, peer2: PeerId) {
-        self.connections.entry(peer1).or_insert_with(HashSet::new).insert(peer2);
-        self.connections.entry(peer2).or_insert_with(HashSet::new).insert(peer1);
+        self.connections.entry(peer1).or_default().insert(peer2);
+        self.connections.entry(peer2).or_default().insert(peer1);
     }
 
     pub fn remove_connection(&mut self, peer1: PeerId, peer2: PeerId) {
@@ -235,7 +235,7 @@ impl WebRTCMeshManager {
         self.mesh_topology.lock().unwrap().remove_connection(self.local_peer, peer);
         
         // Buffer messages for this peer
-        self.message_buffer.lock().unwrap().entry(peer).or_insert_with(Vec::new);
+        self.message_buffer.lock().unwrap().entry(peer).or_default();
     }
 
     /// Handles peer rejoin
@@ -284,7 +284,7 @@ impl WebRTCMeshManager {
             Some(ConnectionState::Disconnected) | Some(ConnectionState::Failed(_)) => {
                 // Buffer the message
                 let mut buffer = self.message_buffer.lock().unwrap();
-                buffer.entry(to).or_insert_with(Vec::new).push(message);
+                buffer.entry(to).or_default().push(message);
                 println!("  💾 Buffered message for offline peer {}", to);
                 Ok(())
             }

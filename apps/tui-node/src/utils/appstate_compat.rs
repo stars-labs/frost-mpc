@@ -96,6 +96,16 @@ pub struct AppState<C: Ciphersuite> {
     pub ice_candidate_queue: Arc<tokio::sync::Mutex<std::collections::HashMap<String, Vec<webrtc::ice_transport::ice_candidate::RTCIceCandidateInit>>>>,
 }
 
+impl<C: Ciphersuite + Send + Sync + 'static> Default for AppState<C>
+where
+    <<C as Ciphersuite>::Group as frost_core::Group>::Element: Send + Sync,
+    <<<C as Ciphersuite>::Group as frost_core::Group>::Field as frost_core::Field>::Scalar: Send + Sync,
+ {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<C: Ciphersuite + Send + Sync + 'static> AppState<C> 
 where
     <<C as Ciphersuite>::Group as frost_core::Group>::Element: Send + Sync,

@@ -12,6 +12,12 @@ pub enum BitcoinNetwork {
     Testnet,
 }
 
+impl Default for BitcoinHandler {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl BitcoinHandler {
     pub fn new() -> Self {
         Self {

@@ -383,7 +383,7 @@ where
                         .filter(|p| **p != self.model.device_id) // Exclude self
                         .filter(|p| {
                             self.model.network_state.participant_webrtc_status.get(*p)
-                                .map_or(false, |(_, data_channel_open)| *data_channel_open)
+                                .is_some_and(|(_, data_channel_open)| *data_channel_open)
                         })
                         .count();
                     

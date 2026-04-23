@@ -167,7 +167,7 @@ async fn main() {
                                                 if let Some(participant_id) = p.as_str() {
                                                     let entry = device_sessions_guard
                                                         .entry(participant_id.to_string())
-                                                        .or_insert_with(Vec::new);
+                                                        .or_default();
                                                     if !entry.contains(&session_id.to_string()) {
                                                         entry.push(session_id.to_string());
                                                         println!("Added session '{}' to device '{}' session list", session_id, participant_id);
@@ -218,7 +218,7 @@ async fn main() {
                                                 if let Some(participant_id) = p.as_str() {
                                                     let entry = device_sessions_guard
                                                         .entry(participant_id.to_string())
-                                                        .or_insert_with(Vec::new);
+                                                        .or_default();
                                                     if !entry.contains(&session_id.to_string()) {
                                                         entry.push(session_id.to_string());
                                                     }
@@ -300,7 +300,7 @@ async fn main() {
                                         let mut device_sessions_guard = device_sessions.lock().unwrap();
                                         device_sessions_guard
                                             .entry(device.clone())
-                                            .or_insert_with(Vec::new)
+                                            .or_default()
                                             .push(session_key.clone());
                                         drop(device_sessions_guard);
                                         

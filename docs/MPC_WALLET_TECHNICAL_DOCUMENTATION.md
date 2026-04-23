@@ -565,60 +565,53 @@ The MPC Wallet uses WebRTC for direct peer-to-peer communication:
 
 ### Signal Server Architecture
 
-#### WebSocket Signal Server
+Two deployable variants — standalone tokio server + Cloudflare Worker —
+share wire-type definitions in
+`apps/signal-server/server/src/lib.rs`.
+
+#### Wire-protocol envelope types
 
 ```rust
-pub struct SignalServer {
-    sessions: Arc<RwLock<HashMap<SessionId, Session>>>,
-    connections: Arc<RwLock<HashMap<DeviceId, Connection>>>,
+// Client → Server
+pub enum ClientMsg {
+    Register { device_id: String },
+    ListDevices,
+    Relay { to: String, data: serde_json::Value },
+    AnnounceSession { session_info: serde_json::Value },
+    RequestActiveSessions,
+    SessionStatusUpdate { session_info: serde_json::Value },
+    QueryMyActiveSessions,
 }
 
-impl SignalServer {
-    pub async fn handle_message(
-        &self,
-        device_id: DeviceId,
-        message: SignalMessage
-    ) -> Result<()> {
-        match message {
-            SignalMessage::CreateSession(params) => {
-                self.create_session(device_id, params).await
-            },
-            SignalMessage::JoinSession(session_id) => {
-                self.join_session(device_id, session_id).await
-            },
-            SignalMessage::Signal(signal) => {
-                self.relay_signal(device_id, signal).await
-            }
-        }
-    }
+// Server → Clients
+pub enum ServerMsg {
+    Devices { devices: Vec<String> },
+    Relay { from: String, data: serde_json::Value },
+    Error { error: String },
+    SessionAvailable { session_info: serde_json::Value },
+    SessionListRequest { from: String },
+    SessionsForDevice { sessions: Vec<serde_json::Value> },
+    SessionRemoved { session_id: String, reason: String },
 }
 ```
 
-#### Cloudflare Worker Deployment
+Serde tag is `type` + `snake_case`. Session state is held in-process
+(`session_manager.rs`) — no database, no Redis. Sessions disappear
+from the registry when their creator disconnects.
 
-Edge-deployed signal server for global low latency:
+#### Standalone Rust server (`apps/signal-server/server/`)
 
-```typescript
-export default {
-  async fetch(request: Request, env: Env) {
-    const upgradeHeader = request.headers.get('Upgrade');
-    
-    if (upgradeHeader === 'websocket') {
-      const pair = new WebSocketPair();
-      const [client, server] = Object.values(pair);
-      
-      await handleWebSocket(server, env);
-      
-      return new Response(null, {
-        status: 101,
-        webSocket: client,
-      });
-    }
-    
-    return new Response('Signal Server', { status: 200 });
-  }
-}
-```
+Tokio + `tokio-tungstenite`. Binds `0.0.0.0:9000`, no env vars, no
+HTTP health endpoint. Run via `cargo run -p webrtc-signal-server`.
+
+#### Cloudflare Worker variant (`apps/signal-server/cloudflare-worker/`)
+
+Rust-over-WASM via the `worker` crate, not TypeScript. The Worker
+receives the WebSocket upgrade, routes messages through the same
+`ClientMsg` / `ServerMsg` enum types, and leverages Cloudflare
+Durable Objects for session state. See
+[`docs/deployment/CLOUDFLARE_DEPLOYMENT.md`](deployment/CLOUDFLARE_DEPLOYMENT.md)
+for deployment specifics.
 
 ---
 
@@ -638,24 +631,44 @@ The MPC Wallet is designed to protect against:
 
 #### 1. Cryptographic Security
 
-- **Key Generation**: Secure random number generation
-- **Share Distribution**: Encrypted point-to-point channels
-- **Signature Generation**: Requires threshold participation
-- **Verification**: All operations are verifiable
+- **Key Generation**: `rand_core::OsRng` + `rand_chacha::ChaCha20Rng`
+  seeded from a root entropy pool (see
+  `frost-core/src/root_secret.rs`). Upstream ZCash FROST crates
+  consume the RNG for commitments and shares.
+- **Share Distribution**: DKG round-2 packages are exchanged over
+  DTLS-encrypted WebRTC data channels (not plaintext over the signal
+  server).
+- **Signature Generation**: FROST threshold enforced by the `frost-*`
+  crates' `aggregate` function — fewer than `t` shares cannot
+  reconstruct a valid signature.
+- **Verification**: Every aggregated signature verifies against the
+  group public key before being returned.
 
 #### 2. Network Security
 
-- **TLS/WebSocket**: Encrypted signaling channel
-- **WebRTC DTLS**: Encrypted data channels
-- **Message Authentication**: HMAC on all messages
-- **Replay Protection**: Nonce-based message ordering
+- **TLS over WebSocket**: All signaling uses `wss://`; plain `ws://`
+  is supported only for localhost testing.
+- **WebRTC DTLS-SRTP**: Peer-to-peer data channels are DTLS-encrypted
+  end-to-end; the signal server is blind to payload content once
+  the mesh is up.
+- **No application-layer HMAC**: Earlier drafts claimed "HMAC on
+  all messages" + "Nonce-based replay protection" — neither exists.
+  The signal server is an unauthenticated relay (DTLS-level integrity
+  only); applications wanting stronger guarantees would need to
+  re-sign over the wire data themselves.
 
 #### 3. Application Security
 
-- **Input Validation**: All inputs sanitized and validated
-- **Memory Protection**: Secure erasure of sensitive data
-- **Access Control**: Permission-based operations
-- **Audit Logging**: Comprehensive activity logging
+- **Input validation**: serde envelope parsing rejects malformed
+  messages at the boundary.
+- **Memory zeroization**: Only `frost-core/src/root_secret.rs`
+  currently uses `zeroize::Zeroize` (verified: 1 hit across the
+  whole workspace). Key shares and decrypted keystore blobs are
+  **not** zeroed on drop today — open hardening work.
+- **Audit Logging**: There is no built-in audit log. Operational
+  observability is via `tracing` / `RUST_LOG` output as described
+  in the Monitoring section above. Earlier drafts claimed
+  "Comprehensive activity logging" — not accurate.
 
 ### Security Assumptions
 

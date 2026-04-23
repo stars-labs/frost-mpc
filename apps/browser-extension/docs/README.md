@@ -6,11 +6,11 @@ The MPC Wallet Browser Extension is a Manifest V3 Chrome/Firefox extension that 
 
 ## Documentation Structure
 
-### Core Documentation
-- [Architecture](architecture/) - Extension architecture, message passing, state management
-- [API Reference](api/) - Extension APIs, Web3 provider, message protocols
-- [User Interface](ui/) - Popup interface, DKG flow, transaction signing
-- [Development Guide](guides/) - Setup, development workflow, debugging
+- [User Interface](ui/) — popup flow, DKG progress, signing UX
+- Extension architecture, message flow, and FROST-WASM details live
+  directly in comments inside the offscreen / background source
+  (start at `src/entrypoints/offscreen/webrtc.ts` and the top-of-repo
+  `CLAUDE.md`).
 
 ## Quick Start
 

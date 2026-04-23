@@ -299,11 +299,17 @@ export class MultiChainNetworkService {
     } else {
       // Switch to testnet
       targetNetwork = getTestnetForMainnet(currentNetwork.id);
-      
-      // If testnet not in managed networks, add it
-      if (targetNetwork && !this.networksByAlgorithm[targetNetwork.algorithm].some(n => n.id === targetNetwork.id)) {
-        this.networksByAlgorithm[targetNetwork.algorithm].push(targetNetwork);
-        await this.saveNetworks();
+
+      // If testnet not in managed networks, add it. Alias to a
+      // local const so the .some() closure sees the narrowed
+      // (non-undefined) type — TS flow analysis doesn't narrow
+      // through closure boundaries on the outer variable.
+      if (targetNetwork) {
+        const testnet = targetNetwork;
+        if (!this.networksByAlgorithm[testnet.algorithm].some(n => n.id === testnet.id)) {
+          this.networksByAlgorithm[testnet.algorithm].push(testnet);
+          await this.saveNetworks();
+        }
       }
     }
 

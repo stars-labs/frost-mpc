@@ -415,6 +415,15 @@ class NetworkService {
         this.changeCallbacks.push(callback);
     }
 
+    /**
+     * Symmetric with onNetworkChange. Delegates to
+     * removeNetworkChangeListener — same naming pattern as the
+     * offAccountChange alias on AccountService (af416a3).
+     */
+    public offNetworkChange(callback: NetworkChangeCallback): void {
+        this.removeNetworkChangeListener(callback);
+    }
+
     public removeNetworkChangeListener(callback: NetworkChangeCallback): void {
         this.changeCallbacks = this.changeCallbacks.filter(cb => cb !== callback);
     }

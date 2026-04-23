@@ -769,7 +769,13 @@ sudo iptables -L
 
 - Check NAT type on both sides — symmetric NAT requires a TURN
   server, which this repo does not ship. Full-cone / restricted-
-  cone / port-restricted-cone all work with public STUN.
+  cone / port-restricted-cone normally work with public STUN,
+  but the TUI currently passes an empty ICE-server list at
+  `src/network/webrtc.rs:285` + `src/elm/webrtc_signaling.rs:387`,
+  so even those easier NAT types may fail until STUN is wired in.
+  The browser extension hard-codes Google's STUN at
+  `apps/browser-extension/src/entrypoints/offscreen/webrtc.ts:32`;
+  the TUI hasn't picked up the matching change.
 - Open `chrome://webrtc-internals` in a browser on the same
   network to confirm STUN candidate gathering succeeds there —
   if the browser can't get candidates, neither can the TUI.

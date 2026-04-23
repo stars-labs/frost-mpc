@@ -180,7 +180,9 @@ or OCSP settings directly — both layers are delegated:
 
 No certificate pinning, no HSTS enforcement, no OCSP stapling,
 no TURN-server authentication (no TURN infra ships — clients rely
-on public STUN only), no SDP sanitization layer. Earlier drafts
+STUN only in the browser extension — TUI currently ships with
+empty ICE-server config; STUN for the TUI is open work at
+`src/network/webrtc.rs:285`), no SDP sanitization layer. Earlier drafts
 of this section enumerated all of those as features — they're not
 implemented.
 

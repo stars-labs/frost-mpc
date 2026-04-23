@@ -273,8 +273,18 @@ accounting of what's actually in source see
 ### Network Security
 - WebRTC data channels use DTLS already (handled by the `webrtc`
   crate — nothing to configure in this project)
-- Public STUN is used out of the box; no TURN server ships with
-  this repo, so symmetric-NAT peers may fail to connect
+- **No STUN configured by default**: the TUI constructs peer
+  connections with an empty `ice_servers: vec![]` list
+  (see `src/network/webrtc.rs:285` +
+  `src/elm/webrtc_signaling.rs:387`), meaning peer-to-peer WebRTC
+  only works when both peers are directly reachable (same LAN, or
+  routable public IPs). Most home-network pairs need STUN. To add
+  it, hand-edit the `RTCConfiguration` construction sites. The
+  browser extension DOES ship Google public STUN at
+  `src/entrypoints/offscreen/webrtc.ts:32` — the TUI has just not
+  had the matching change.
+- No TURN server ships with this repo, so symmetric-NAT peers are
+  unreachable regardless of STUN
 - **Not implemented**: rate limiting for rejoin attempts
 
 ### State Security

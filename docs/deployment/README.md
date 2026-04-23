@@ -143,7 +143,15 @@ never shipped it):
 - No Redis / database layer — the signal server is stateless and
   holds session state in process memory.
 - No Prometheus / Grafana scrape targets.
-- No TURN server setup — clients rely on public STUN for NAT traversal.
+- No TURN server setup. The browser extension hard-codes Google's
+  public STUN (`stun.l.google.com:19302` in
+  `apps/browser-extension/src/entrypoints/offscreen/webrtc.ts:32`);
+  the TUI currently passes an empty ICE-server list
+  (`src/network/webrtc.rs:285`), so TUI-only peers only connect
+  across directly-routable networks. If operators need reliable
+  TUI-to-TUI over the public internet, add STUN config at the
+  peer-connection construction sites — the extension's layout is
+  the template.
 
 ## Navigation
 

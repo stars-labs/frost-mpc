@@ -1084,8 +1084,14 @@ but production use has only been exercised at small cohorts (2-of-3,
   automatically. There is no shared state store (no Redis) to
   coordinate — if an operator wants multi-instance with session
   sharing, the state-store layer would need to be added.
-- **STUN/TURN**: clients rely on public STUN only. No TURN infra
-  ships with this repo; symmetric-NAT peers may fail to connect.
+- **STUN/TURN**: the browser extension hard-codes Google's public
+  STUN (`stun.l.google.com:19302`); the TUI currently passes an
+  empty ICE-server list, so TUI-only peer meshes only form across
+  directly-routable networks. No TURN infra ships with this repo —
+  symmetric-NAT peers are unreachable in any configuration.
+  Adding STUN to the TUI is a straightforward hand-edit at
+  `apps/tui-node/src/network/webrtc.rs:285` (and the matching
+  `src/elm/webrtc_signaling.rs:387`).
 
 ---
 

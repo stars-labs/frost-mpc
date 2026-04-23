@@ -38,23 +38,23 @@ describe('Chain Configuration', () => {
         
         // Native currency
         expect(chain.nativeCurrency).toBeDefined();
-        expect(chain.nativeCurrency.name).toBeDefined();
-        expect(chain.nativeCurrency.symbol).toBeDefined();
-        expect(chain.nativeCurrency.decimals).toBeDefined();
-        expect(typeof chain.nativeCurrency.decimals).toBe('number');
+        expect(chain.nativeCurrency!.name).toBeDefined();
+        expect(chain.nativeCurrency!.symbol).toBeDefined();
+        expect(chain.nativeCurrency!.decimals).toBeDefined();
+        expect(typeof chain.nativeCurrency!.decimals).toBe('number');
         
         // RPC URLs
         expect(chain.rpcUrls).toBeDefined();
-        expect(chain.rpcUrls.default).toBeDefined();
-        expect(chain.rpcUrls.default.http).toBeDefined();
-        expect(Array.isArray(chain.rpcUrls.default.http)).toBe(true);
-        expect(chain.rpcUrls.default.http.length).toBeGreaterThan(0);
+        expect(chain.rpcUrls!.default).toBeDefined();
+        expect(chain.rpcUrls!.default.http).toBeDefined();
+        expect(Array.isArray(chain.rpcUrls!.default.http)).toBe(true);
+        expect(chain.rpcUrls!.default.http.length).toBeGreaterThan(0);
         
         // Block explorers
         expect(chain.blockExplorers).toBeDefined();
-        expect(chain.blockExplorers.default).toBeDefined();
-        expect(chain.blockExplorers.default.name).toBeDefined();
-        expect(chain.blockExplorers.default.url).toBeDefined();
+        expect(chain.blockExplorers!.default).toBeDefined();
+        expect(chain.blockExplorers!.default.name).toBeDefined();
+        expect(chain.blockExplorers!.default.url).toBeDefined();
         
         // Testnet validation
         if (chain.testnet) {
@@ -218,21 +218,21 @@ describe('Chain Configuration', () => {
       expect(bitcoin?.derivationPath).toBe("m/84'/0'/0'/0/0"); // BIP84
       expect(bitcoin?.addressPrefix).toBe('bc1');
       expect(bitcoin?.decimals).toBe(8);
-      expect(bitcoin?.nativeCurrency.decimals).toBe(8);
+      expect(bitcoin!.nativeCurrency!.decimals).toBe(8);
     });
 
     it('should have correct Ethereum configuration', () => {
       const ethereum = getChainById(1);
       expect(ethereum?.derivationPath).toBe("m/44'/60'/0'/0/0");
       expect(ethereum?.decimals).toBe(18);
-      expect(ethereum?.nativeCurrency.symbol).toBe('ETH');
+      expect(ethereum!.nativeCurrency!.symbol).toBe('ETH');
     });
 
     it('should have correct Solana configuration', () => {
       const solana = getChainById(101);
       expect(solana?.derivationPath).toBe("m/44'/501'/0'/0'");
       expect(solana?.decimals).toBe(9);
-      expect(solana?.nativeCurrency.symbol).toBe('SOL');
+      expect(solana!.nativeCurrency!.symbol).toBe('SOL');
     });
 
     it('should have correct Layer 2 configurations', () => {
@@ -240,19 +240,19 @@ describe('Chain Configuration', () => {
       const arbitrum = getChainById(42161);
       expect(arbitrum?.category).toBe('evm');
       expect(arbitrum?.algorithm).toBe('secp256k1');
-      expect(arbitrum?.nativeCurrency.symbol).toBe('ETH');
+      expect(arbitrum!.nativeCurrency!.symbol).toBe('ETH');
       
       // Polygon
       const polygon = getChainById(137);
       expect(polygon?.category).toBe('evm');
-      expect(polygon?.nativeCurrency.symbol).toBe('MATIC');
+      expect(polygon!.nativeCurrency!.symbol).toBe('MATIC');
     });
   });
 
   describe('RPC and Explorer URLs', () => {
     it('should have valid RPC URLs', () => {
       ALL_CHAINS.forEach(chain => {
-        chain.rpcUrls.default.http.forEach(url => {
+        chain.rpcUrls!.default.http.forEach(url => {
           expect(url).toMatch(/^https?:\/\//);
         });
       });
@@ -260,7 +260,7 @@ describe('Chain Configuration', () => {
 
     it('should have valid block explorer URLs', () => {
       ALL_CHAINS.forEach(chain => {
-        expect(chain.blockExplorers.default.url).toMatch(/^https?:\/\//);
+        expect(chain.blockExplorers!.default.url).toMatch(/^https?:\/\//);
       });
     });
   });

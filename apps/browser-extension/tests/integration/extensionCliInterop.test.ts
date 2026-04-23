@@ -76,21 +76,25 @@ describe('Extension-CLI Keystore Interoperability', () => {
                 backupDate: Date.now()
             };
             
-            // Convert to extension format
+            // Convert to extension format. KeyShareData uses
+            // snake_case (matches the Rust/CLI on-disk shape
+            // exactly); CLIExtensionKeyShareData above is the
+            // camelCase input wrapper used for the test fixture.
             const extensionKeyShare: KeyShareData = {
-                keyPackage: cliKeyShareData.keyPackage,
-                groupPublicKey: cliKeyShareData.groupPublicKey,
-                sessionId: cliKeyShareData.sessionId,
-                deviceId: 'device-123',
-                participantIndex: cliKeyShareData.participantIndex,
+                key_package: cliKeyShareData.keyPackage,
+                group_public_key: cliKeyShareData.groupPublicKey,
+                session_id: cliKeyShareData.sessionId,
+                device_id: 'device-123',
+                participant_index: cliKeyShareData.participantIndex,
                 threshold: cliKeyShareData.threshold,
-                totalParticipants: cliKeyShareData.totalParticipants,
+                total_participants: cliKeyShareData.totalParticipants,
                 participants: cliKeyShareData.participants,
                 curve: cliKeyShareData.curve as 'secp256k1',
-                ethereumAddress: cliKeyShareData.ethereumAddress,
-                createdAt: cliKeyShareData.createdAt,
-                lastUsed: cliKeyShareData.lastUsed,
-                backupDate: cliKeyShareData.backupDate
+                blockchains: [],
+                ethereum_address: cliKeyShareData.ethereumAddress,
+                created_at: cliKeyShareData.createdAt,
+                last_used: cliKeyShareData.lastUsed,
+                backup_date: cliKeyShareData.backupDate,
             };
             
             // Import to extension keystore
@@ -131,18 +135,19 @@ describe('Extension-CLI Keystore Interoperability', () => {
             };
             
             const extensionKeyShare: KeyShareData = {
-                keyPackage: cliKeyShareData.keyPackage,
-                groupPublicKey: cliKeyShareData.groupPublicKey,
-                sessionId: cliKeyShareData.sessionId,
-                deviceId: 'device-123',
-                participantIndex: cliKeyShareData.participantIndex,
+                key_package: cliKeyShareData.keyPackage,
+                group_public_key: cliKeyShareData.groupPublicKey,
+                session_id: cliKeyShareData.sessionId,
+                device_id: 'device-123',
+                participant_index: cliKeyShareData.participantIndex,
                 threshold: cliKeyShareData.threshold,
-                totalParticipants: cliKeyShareData.totalParticipants,
+                total_participants: cliKeyShareData.totalParticipants,
                 participants: cliKeyShareData.participants,
                 curve: cliKeyShareData.curve as 'ed25519',
-                solanaAddress: cliKeyShareData.solanaAddress,
-                createdAt: cliKeyShareData.createdAt,
-                lastUsed: cliKeyShareData.lastUsed
+                blockchains: [],
+                solana_address: cliKeyShareData.solanaAddress,
+                created_at: cliKeyShareData.createdAt,
+                last_used: cliKeyShareData.lastUsed,
             };
             
             await extensionKeystore.addWallet('imported-cli-sol', extensionKeyShare, {
@@ -172,25 +177,26 @@ describe('Extension-CLI Keystore Interoperability', () => {
             // Create an extension wallet
             extensionWalletId = 'ext-wallet-1';
             extensionKeyShare = {
-                keyPackage: btoa('extension-key-package'),
-                groupPublicKey: '0xabcdef1234567890',
-                sessionId: 'ext-session-123',
-                deviceId: 'device-123',
-                participantIndex: 1,
+                key_package: btoa('extension-key-package'),
+                group_public_key: '0xabcdef1234567890',
+                session_id: 'ext-session-123',
+                device_id: 'device-123',
+                participant_index: 1,
                 threshold: 2,
-                totalParticipants: 3,
+                total_participants: 3,
                 participants: ['chrome-ext-device1', 'cli-device2', 'cli-device3'],
                 curve: 'secp256k1',
-                ethereumAddress: '0x5aAeb6053F3e94c9b9A09F33669435E7EF1BEaEd',
-                createdAt: Date.now()
+                blockchains: [],
+                ethereum_address: '0x5aAeb6053F3e94c9b9A09F33669435E7EF1BEaEd',
+                created_at: Date.now(),
             };
             
             await extensionKeystore.addWallet(extensionWalletId, extensionKeyShare, {
                 id: extensionWalletId,
                 name: 'Extension Wallet',
                 blockchain: 'ethereum',
-                address: extensionKeyShare.ethereumAddress!,
-                sessionId: extensionKeyShare.sessionId,
+                address: extensionKeyShare.ethereum_address!,
+                sessionId: extensionKeyShare.session_id,
                 isActive: true,
                 hasBackup: false
             });
@@ -213,17 +219,18 @@ describe('Extension-CLI Keystore Interoperability', () => {
                 isActive: true,
                 hasBackup: false
             };
-            const mockKeyShare = {
-                keyPackage: btoa('mock-key-package'),
-                groupPublicKey: '0xabcdef',
-                sessionId: 'ext-session-1',
-                deviceId: 'device-123',
-                participantIndex: 1,
+            const mockKeyShare: KeyShareData = {
+                key_package: btoa('mock-key-package'),
+                group_public_key: '0xabcdef',
+                session_id: 'ext-session-1',
+                device_id: 'device-123',
+                participant_index: 1,
                 threshold: 2,
-                totalParticipants: 3,
+                total_participants: 3,
                 participants: ['device1', 'device2', 'device3'],
                 curve: 'secp256k1' as const,
-                createdAt: Date.now()
+                blockchains: [],
+                created_at: Date.now(),
             };
             await extensionKeystore.addWallet('ext-wallet-1', mockKeyShare, mockWallet);
             
@@ -234,27 +241,27 @@ describe('Extension-CLI Keystore Interoperability', () => {
             
             // Verify backup structure matches CLI expectations
             expect(exportedWallet.metadata.id).toBe(extensionWalletId);
-            expect(exportedWallet.metadata.sessionId).toBe(extensionKeyShare.sessionId);
+            expect(exportedWallet.metadata.sessionId).toBe(extensionKeyShare.session_id);
             expect(exportedWallet.encryptedShare.algorithm).toBe('AES-GCM');
             
             // Simulate CLI decryption and conversion
             const cliFormat: CLIExtensionKeyShareData = {
-                keyPackage: extensionKeyShare.keyPackage,
-                groupPublicKey: extensionKeyShare.groupPublicKey,
-                sessionId: extensionKeyShare.sessionId,
+                keyPackage: extensionKeyShare.key_package,
+                groupPublicKey: extensionKeyShare.group_public_key,
+                sessionId: extensionKeyShare.session_id,
                 deviceId: 'device-123',
-                participantIndex: extensionKeyShare.participantIndex,
+                participantIndex: extensionKeyShare.participant_index,
                 threshold: extensionKeyShare.threshold,
-                totalParticipants: extensionKeyShare.totalParticipants,
+                totalParticipants: extensionKeyShare.total_participants,
                 participants: extensionKeyShare.participants,
                 curve: extensionKeyShare.curve,
-                ethereumAddress: extensionKeyShare.ethereumAddress,
-                createdAt: extensionKeyShare.createdAt,
+                ethereumAddress: extensionKeyShare.ethereum_address,
+                createdAt: extensionKeyShare.created_at,
                 backupDate: backup.exportedAt
             };
-            
+
             // Verify all required fields for CLI
-            expect(cliFormat.sessionId).toBe(extensionKeyShare.sessionId);
+            expect(cliFormat.sessionId).toBe(extensionKeyShare.session_id);
             expect(cliFormat.participants).toEqual(extensionKeyShare.participants);
             expect(cliFormat.threshold).toBe(extensionKeyShare.threshold);
         });
@@ -263,16 +270,17 @@ describe('Extension-CLI Keystore Interoperability', () => {
     describe('Encryption compatibility', () => {
         it('should use PBKDF2 with 100k iterations for CLI compatibility', async () => {
             const keyShare: KeyShareData = {
-                keyPackage: 'test-key',
-                groupPublicKey: '0x123',
-                sessionId: 'test-session',
-                deviceId: 'device-123',
-                participantIndex: 1,
+                key_package: 'test-key',
+                group_public_key: '0x123',
+                session_id: 'test-session',
+                device_id: 'device-123',
+                participant_index: 1,
                 threshold: 2,
-                totalParticipants: 3,
+                total_participants: 3,
                 participants: ['device1', 'device2', 'device3'],
                 curve: 'secp256k1',
-                createdAt: Date.now()
+                blockchains: [],
+                created_at: Date.now(),
             };
             
             await extensionKeystore.addWallet('test-wallet', keyShare, {

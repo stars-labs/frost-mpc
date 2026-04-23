@@ -482,6 +482,24 @@ if !should_auto_join {
 
 ## Architectural Recommendations
 
+> **Scope note**: this whole section is a design wishlist — future
+> work that a contributor might pick up, NOT a description of
+> code that currently ships. None of the traits / structs defined
+> in the snippets below exist in source today. Specifically,
+> verified absent via `grep -rn <name>`:
+>
+>   - `trait StateMachine` / `DkgStateMachine` (§ 1)
+>   - `trait MessageValidator` (§ 2)
+>   - `struct CommandLog` (§ 3)
+>   - `struct MeshHealth` (§ 4)
+>   - `trait StateSnapshot` + `impl StateSnapshot for AppState<C>` (§ 5)
+>   - `struct EventStore` + `pub enum StateEvent` (§ 6)
+>
+> The real state surface is still `AppState<C>` (`src/utils/state.rs`
+> + `src/utils/appstate_compat.rs`) with ad-hoc transition checks
+> scattered through the signaling / DKG / signing handlers. Keep
+> that in mind when grepping for any identifier mentioned below.
+
 ### 1. State Machine Determinism
 
 **Issue**: Current state transitions have implicit dependencies and race conditions.

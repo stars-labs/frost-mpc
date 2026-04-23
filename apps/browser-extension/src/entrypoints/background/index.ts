@@ -32,6 +32,7 @@ import { OffscreenManager } from './offscreenManager';
 import { WebSocketManager } from './webSocketManager';
 import { StateManager } from './stateManager';
 import { PopupMessageHandler, OffscreenMessageHandler } from './messageHandlers';
+import { KeepaliveController } from './keepaliveController';
 
 // Import types
 import { AppState, INITIAL_APP_STATE } from "@mpc-wallet/types/appstate";
@@ -80,6 +81,7 @@ let offscreenManager: OffscreenManager;
 let webSocketManager: WebSocketManager;
 let popupMessageHandler: PopupMessageHandler;
 let offscreenMessageHandler: OffscreenMessageHandler;
+let keepaliveController: KeepaliveController;
 
 // Global state variables for legacy compatibility
 let wsClient: WebSocketClient | null = null;
@@ -140,6 +142,20 @@ function initializeComponents(): void {
         stateManager,
         webSocketManager
     );
+
+    // Architectural reminder #2: keepalive for the offscreen document
+    // during active DKG / signing ceremonies. Chrome kills offscreen
+    // after ~30s idle; without these pings, mid-ceremony rounds die
+    // and peers see timeouts. Subscribing here wires the controller
+    // to StateManager's dkgState transitions, and the listener fires
+    // immediately with the current state so a SW that woke with a
+    // non-Idle dkgState already warms up the offscreen (defensive —
+    // in practice SW wake starts from Idle because session data is
+    // intentionally ephemeral).
+    keepaliveController = new KeepaliveController();
+    stateManager.addDkgStateListener((state) => {
+        keepaliveController.onDkgStateChange(state);
+    });
 
 //     console.log("✅ [Background] All components initialized successfully");
 }

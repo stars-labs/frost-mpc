@@ -154,6 +154,16 @@ chrome.runtime.onMessage.addListener((message: { type?: string; payload?: any },
             console.log("Offscreen: Received 'createOffscreen' command. Document is already active.", payload);
             sendResponse({ success: true, message: "Offscreen document is already active." });
             break;
+        case "keepalive":
+            // Architectural reminder #2: background sends these every
+            // 25s while a ceremony is in progress to stop Chrome from
+            // killing this offscreen document for being idle. The act
+            // of receiving and responding resets the idle timer;
+            // nothing else is needed. Intentionally no-op at the
+            // business-logic layer and silent at log level (ping
+            // floods logs otherwise).
+            sendResponse({ success: true, pong: true });
+            break;
         case "init":
             console.log("Offscreen: Received 'init' command", payload);
 

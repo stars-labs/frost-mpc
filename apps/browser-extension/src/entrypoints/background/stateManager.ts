@@ -20,6 +20,12 @@ import type {
     OffscreenToBackgroundMessage
 } from "@mpc-wallet/types/messages";
 
+/** Listener fired whenever `appState.dkgState` changes. Registered
+ *  via `addDkgStateListener`. Used by the keepalive controller to
+ *  start/stop the offscreen ping timer; also available for any
+ *  future subscriber (e.g. logging, metrics). */
+export type DkgStateListener = (state: DkgState) => void;
+
 /**
  * Manages central application state and popup communication
  */
@@ -30,6 +36,13 @@ export class StateManager {
     private isStateLoaded = false;
     private pendingPopupPorts: chrome.runtime.Port[] = [];
     private rpcHandler?: any; // Will be set after initialization
+    /** External observers of dkgState transitions. Keepalive uses
+     *  this; see `keepaliveController.ts`. */
+    private dkgStateListeners: Set<DkgStateListener> = new Set();
+    /** Last observed dkgState, used to dedupe same-value emissions
+     *  so listeners don't see spurious "change" events when we
+     *  broadcast full state for unrelated reasons. */
+    private lastBroadcastDkgState: DkgState = DkgState.Idle;
 
     constructor(initialState?: Partial<AppState>) {
         this.appState = {
@@ -60,7 +73,27 @@ export class StateManager {
                     wsConnected: false,
                     meshStatus: { type: MeshStatusType.Incomplete },
                     webrtcConnections: {},
+                    // Architectural reminder #1: session data is
+                    // intentionally ephemeral (see `persistState`
+                    // line 117 comment). Belt-and-suspenders forces
+                    // a reset even if a prior code version or manual
+                    // chrome.storage write left session fields in
+                    // persisted storage. Without this, a SW that
+                    // woke up from a killed ceremony could start in
+                    // a mid-round dkgState with no offscreen doc or
+                    // WebRTC mesh to back it up — silent zombie
+                    // state. Forcing Idle here makes the recovery
+                    // boundary sharp: session data never survives
+                    // SW restart, period.
+                    dkgState: DkgState.Idle,
+                    sessionInfo: null,
+                    invites: [],
                 };
+                // `dkgAddress` / `dkgError` are off-type properties
+                // this module writes via bracket access (see fetchAndUpdateDkgAddress).
+                // Untyped cast so defensive cleanup compiles.
+                (this.appState as any).dkgAddress = "";
+                (this.appState as any).dkgError = "";
                 console.log("[StateManager] State restored from persistence");
             } else {
                 console.log("[StateManager] No persisted state found, using initial state");
@@ -105,6 +138,51 @@ export class StateManager {
     }
 
     /**
+     * Subscribe to dkgState transitions. Fires each time the state
+     * actually changes (no duplicate emissions for broadcasts that
+     * don't change dkgState). Returns an unsubscribe function.
+     *
+     * Primary consumer: `KeepaliveController` — it needs to toggle
+     * offscreen-ping cadence whenever a ceremony begins or ends.
+     */
+    addDkgStateListener(listener: DkgStateListener): () => void {
+        this.dkgStateListeners.add(listener);
+        // Fire immediately with current state so late subscribers
+        // don't miss an in-progress ceremony.
+        try {
+            listener(this.appState.dkgState);
+        } catch (err) {
+            console.warn(
+                "[StateManager] initial dkgState listener invocation threw:",
+                err,
+            );
+        }
+        return () => this.dkgStateListeners.delete(listener);
+    }
+
+    /**
+     * Internal helper: called from every site that mutates
+     * `appState.dkgState`. Compares against last broadcast and fires
+     * listeners only on an actual transition. Safe to call even if
+     * nothing changed (it'll short-circuit).
+     */
+    private notifyDkgStateListenersIfChanged(): void {
+        const current = this.appState.dkgState;
+        if (current === this.lastBroadcastDkgState) return;
+        this.lastBroadcastDkgState = current;
+        for (const listener of this.dkgStateListeners) {
+            try {
+                listener(current);
+            } catch (err) {
+                console.warn(
+                    "[StateManager] dkgState listener threw:",
+                    err,
+                );
+            }
+        }
+    }
+
+    /**
      * Persist state to Chrome storage
      */
     private async persistState(): Promise<void> {
@@ -145,6 +223,10 @@ export class StateManager {
         };
         // Persist state changes
         this.persistState();
+        // Fire dkgState listeners if the patch touched dkgState.
+        // Call the helper unconditionally — it short-circuits when
+        // the value didn't actually change, so it's cheap.
+        this.notifyDkgStateListenersIfChanged();
     }
 
     /**
@@ -155,7 +237,7 @@ export class StateManager {
         this.appState[key] = value;
         // Persist state changes
         this.persistState();
-        
+
         // Broadcast the specific update based on the property
         if (key === 'invites' || key === 'sessionInfo') {
             this.broadcastToPopupPorts({
@@ -166,6 +248,12 @@ export class StateManager {
         } else {
             // For other properties, broadcast the full state
             this.broadcastCurrentState();
+        }
+
+        // If the caller mutated dkgState via this single-property
+        // setter, wake any subscribers (same semantics as updateState).
+        if (key === "dkgState") {
+            this.notifyDkgStateListenersIfChanged();
         }
     }
 
@@ -332,6 +420,7 @@ export class StateManager {
                         if (connectedParticipants >= this.appState.sessionInfo.threshold) {
                             console.log("[StateManager] Transitioning from KeystoreImported to Complete - enough participants connected via WebRTC");
                             this.appState.dkgState = DkgState.Complete;
+                            this.notifyDkgStateListenersIfChanged();
                             
                             // Broadcast DKG state update
                             this.broadcastToPopupPorts({
@@ -376,13 +465,14 @@ export class StateManager {
                     if (connectedParticipants >= this.appState.sessionInfo.threshold) {
                         console.log("[StateManager] Transitioning from KeystoreImported to Complete - enough participants connected");
                         this.appState.dkgState = DkgState.Complete;
-                        
+                        this.notifyDkgStateListenersIfChanged();
+
                         // Broadcast DKG state update
                         this.broadcastToPopupPorts({
                             type: "dkgStateUpdate",
                             state: DkgState.Complete
                         } as any);
-                        
+
                         // Auto-fetch DKG address when transitioning to Complete
                         this.fetchAndUpdateDkgAddress();
                     }
@@ -400,6 +490,11 @@ export class StateManager {
             case "dkgStateUpdate":
 //                 console.log("[StateManager] Received DKG state update from offscreen:", payload);
                 this.appState.dkgState = payload.state || DkgState.Idle;
+                // Fire keepalive / other subscribers; offscreen is
+                // the authoritative source of DKG state transitions,
+                // so these events are the primary trigger for
+                // Round1InProgress → Round2InProgress → Finalizing.
+                this.notifyDkgStateListenersIfChanged();
 
                 // No persistence - sessions are ephemeral
 

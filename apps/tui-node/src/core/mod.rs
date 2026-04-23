@@ -6,6 +6,7 @@ pub mod session_manager;
 pub mod offline_manager;
 pub mod wallet_manager;
 pub mod connection_manager;
+pub mod signing_manager;
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
@@ -127,6 +128,50 @@ pub enum SDOperationType {
     Import,
 }
 
+/// A pending threshold-signing request surfaced to the UI.
+///
+/// Shape mirrors what the browser extension's `RpcHandler` puts on
+/// `pendingDappRequests` — a caller (dApp, signing UI, or SD-card
+/// import) prepares the transaction/message bytes; the core awaits
+/// user approval before running the FROST commit/share/aggregate
+/// rounds.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SigningRequest {
+    /// Opaque id; the UI echoes it back when approving/rejecting.
+    pub id: String,
+    /// Which wallet to sign with (index into CoreState.wallets).
+    pub wallet_index: usize,
+    /// Raw bytes to sign, hex-encoded. For EIP-191 / personal_sign
+    /// the caller is responsible for pre-hashing via viem's
+    /// hashMessage equivalent.
+    pub message_hex: String,
+    /// Human-readable label for the preview modal ("Send 0.1 ETH",
+    /// "Sign in with Ethereum", etc.). Optional.
+    pub display_label: Option<String>,
+    /// Chain id for the rendering layer ("ethereum", "solana",
+    /// "polygon", …).
+    pub chain: String,
+    pub created_at: String,
+}
+
+/// Lifecycle state of the current signing ceremony.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum SigningState {
+    Idle,
+    /// UI is showing the confirm modal, waiting for
+    /// approve / reject.
+    AwaitingApproval,
+    /// Broadcasting our round-1 commitment.
+    Commitment,
+    /// Collecting commitments, broadcasting our round-2 share.
+    Share,
+    /// Aggregating shares into the final signature.
+    Aggregating,
+    /// Final signature is in `CoreState.last_signature`.
+    Complete,
+    Failed(String),
+}
+
 /// Core state that's shared between different UI implementations
 #[derive(Clone)]
 pub struct CoreState {
@@ -154,6 +199,13 @@ pub struct CoreState {
     pub offline_enabled: Arc<Mutex<bool>>,
     pub sd_card_detected: Arc<Mutex<bool>>,
     pub pending_sd_operations: Arc<Mutex<Vec<SDCardOperation>>>,
+
+    // Signing state
+    pub signing_state: Arc<Mutex<SigningState>>,
+    pub active_signing_request: Arc<Mutex<Option<SigningRequest>>>,
+    /// Last aggregated signature (hex-encoded). Set once the
+    /// FROST ceremony completes; UI reads this to display / copy.
+    pub last_signature: Arc<Mutex<Option<String>>>,
 }
 
 impl CoreState {
@@ -174,6 +226,9 @@ impl CoreState {
             offline_enabled: Arc::new(Mutex::new(false)),
             sd_card_detected: Arc::new(Mutex::new(false)),
             pending_sd_operations: Arc::new(Mutex::new(Vec::new())),
+            signing_state: Arc::new(Mutex::new(SigningState::Idle)),
+            active_signing_request: Arc::new(Mutex::new(None)),
+            last_signature: Arc::new(Mutex::new(None)),
         }
     }
 }
@@ -201,7 +256,15 @@ pub trait UICallback: Send + Sync {
     // Offline mode updates
     async fn update_offline_status(&self, enabled: bool, sd_card_detected: bool);
     async fn update_sd_operations(&self, operations: Vec<SDCardOperation>);
-    
+
+    // Signing updates. Default no-op impls so existing UICallback
+    // implementors (TUI's elm UIProvider, NativeUICallback) compile
+    // without change; richer UIs override to render approval modals
+    // and progress indicators.
+    async fn update_signing_request(&self, _request: Option<SigningRequest>) {}
+    async fn update_signing_state(&self, _state: SigningState) {}
+    async fn update_signing_complete(&self, _signature_hex: String) {}
+
     // General updates
     async fn show_message(&self, message: String, is_error: bool);
     async fn show_progress(&self, title: String, progress: f32);

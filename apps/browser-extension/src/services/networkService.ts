@@ -324,6 +324,32 @@ class NetworkService {
         return this.networks[blockchain].find(n => n.id === chainId);
     }
 
+    /**
+     * Find a network by chainId across both blockchains (ethereum
+     * first, then solana). Handy when callers have only a chainId
+     * and don't know which blockchain it belongs to — e.g. dApps
+     * that use chainId for routing without caring about the curve.
+     * Returns undefined when the chainId isn't registered anywhere.
+     */
+    public getNetworkByChainId(chainId: number): Chain | undefined {
+        return (
+            this.networks.ethereum.find(n => n.id === chainId) ||
+            this.networks.solana.find(n => n.id === chainId)
+        );
+    }
+
+    /**
+     * Predicate counterpart to getNetworkByChainId. Cheaper than
+     * the full find when the caller only needs a bool (e.g. for
+     * validating user input before a setCurrentNetwork call).
+     */
+    public networkExists(chainId: number): boolean {
+        return (
+            this.networks.ethereum.some(n => n.id === chainId) ||
+            this.networks.solana.some(n => n.id === chainId)
+        );
+    }
+
     public getCurrentNetwork(blockchain?: 'ethereum' | 'solana'): Chain | undefined {
         if (blockchain) {
             return this.currentNetworks[blockchain];

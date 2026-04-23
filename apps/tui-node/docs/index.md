@@ -18,32 +18,25 @@ The FROST MPC TUI Wallet transforms traditional command-line cryptocurrency oper
 
 ## 📚 Documentation Structure
 
-### 📁 [UI/UX Documentation](./ui/)
-- **[Keystore Session UX Flow](./ui/keystore_session_ux_flow.md)** - Visual flows and interaction patterns
-- Terminal interface design patterns
-- User experience wireframes
-
 ### 📁 [User Guides](./guides/)
 - **[User Guide](./guides/USER_GUIDE.md)** - Comprehensive user manual with visual examples
-- **[Keystore Sessions Guide](./guides/keystore_sessions_user_guide.md)** - Session-based wallet management
 - **[Offline Mode Guide](./guides/offline-mode.md)** - Air-gapped operation procedures
 
 ### 📁 [Architecture Documentation](./architecture/)
 - **[Architecture Overview](./architecture/ARCHITECTURE.md)** - Technical design and system components
+- **[Elm Architecture](./architecture/ELM_ARCHITECTURE.md)** - Model/Update/View pattern used in the TUI
 - **[DKG Flows](./architecture/DKG_FLOWS.md)** - Distributed key generation procedures
 - **[Security Model](./architecture/SECURITY.md)** - Security analysis and best practices
-- **[Keystore Design](./architecture/01_keystore_design.md)** - Keystore architecture details
+- **[Keystore Design](./architecture/keystore_design.md)** - Keystore architecture details
 
 ### 📁 [Protocol Specifications](./protocol/)
 - **[WebRTC Signaling](./protocol/01_webrtc_signaling.md)** - P2P communication protocol
-- **[Keystore Sessions](./protocol/02_keystore_sessions.md)** - Session management protocol
 
 ## 🚀 Quick Start
 
 ```bash
-# Install and run
-cargo install frost-mpc-tui-wallet
-frost-mpc-wallet --device-id alice
+# Build and run from the monorepo
+cargo run --bin mpc-wallet-tui -p tui-node -- --device-id alice
 
 # Navigate the TUI
 ↑/↓     Navigate menus

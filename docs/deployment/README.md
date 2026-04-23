@@ -2,30 +2,20 @@
 
 ## Overview
 
-Complete guide for deploying MPC Wallet components to production environments.
+Complete guide for deploying MPC Wallet components to production
+environments. This single-page guide covers:
 
-## Contents
+- Quick-start deployment recipes (Docker, Cloudflare Worker,
+  browser extension)
+- Production architecture and infrastructure sizing
+- Kubernetes and Docker Compose manifests
+- Monitoring, security hardening, backup & recovery
+- Linux kernel tuning + signal-server tuning parameters
+- Pre/during/post-deployment checklist
+- Troubleshooting recipes
 
-### Deployment Strategies
-- [Architecture Overview](architecture.md) - Production architecture design
-- [Deployment Options](options.md) - Cloud, on-premise, and hybrid deployments
-- [Scaling Strategy](scaling.md) - Horizontal and vertical scaling
-
-### Component Deployment
-- [Signal Server Deployment](signal-server.md) - WebSocket server deployment
-- [Browser Extension Publishing](browser-extension.md) - Chrome/Firefox store publishing
-- [Desktop Application Distribution](desktop-app.md) - Platform-specific distribution
-- [Cloudflare Worker Deployment](cloudflare.md) - Edge deployment guide
-
-### Infrastructure
-- [Infrastructure as Code](iac.md) - Terraform and Kubernetes configs
-- [Monitoring Setup](monitoring.md) - Metrics, logging, and alerting
-- [Backup and Recovery](backup.md) - Data backup strategies
-
-### Security & Compliance
-- [Security Hardening](hardening.md) - Production security configurations
-- [Compliance Requirements](compliance.md) - Regulatory compliance
-- [Disaster Recovery](disaster-recovery.md) - DR planning and procedures
+For the Cloudflare Worker deployment specifically, see the
+dedicated guide: [CLOUDFLARE_DEPLOYMENT.md](CLOUDFLARE_DEPLOYMENT.md).
 
 ## Quick Deployment
 
@@ -394,5 +384,4 @@ mtr signal.mpc-wallet.io
 ## Navigation
 
 - [← Back to Main Documentation](../README.md)
-- [← Development Guide](../development/README.md)
 - [Testing Guide →](../testing/README.md)

@@ -362,114 +362,53 @@ Broadcasts the final aggregated signature.
 
 ## Message Flow Examples
 
+> **Scope note**: same wire-format caveat as the § WebRTC Message
+> Types scope note above — every JSON literal below uses the
+> stylistic `{"type": snake_case, "payload": {...}}` shape which
+> is **not** the on-wire format. Real envelopes are
+> `{"webrtc_msg_type": "PascalCaseName", ...flat fields...}` (or
+> `"websocket_msg_type"` for session-layer messages routed through
+> the signal server). Sequencing / role-of-each-message is
+> correct; only the JSON is illustrative.
+
 ### Session Creation
 
-1. Device `mpc-1` sends proposal to `mpc-2` and `mpc-3`:
-   ```json
-   {
-     "type": "session_proposal",
-     "payload": {
-       "session_id": "wallet_2of3",
-       "total": 3,
-       "threshold": 2,
-       "participants": ["mpc-1", "mpc-2", "mpc-3"]
-     }
-   }
-   ```
-
-2. Devices `mpc-2` and `mpc-3` send acceptance:
-   ```json
-   {
-     "type": "session_response",
-     "payload": {
-       "session_id": "wallet_2of3",
-       "accepted": true
-     }
-   }
-   ```
+1. Device `mpc-1` sends a `SessionProposal` to `mpc-2` / `mpc-3`
+   carrying `session_id / total / threshold / participants`.
+2. Each peer responds with a `SessionResponse` whose `accepted`
+   field signals acceptance.
 
 ### Mesh Formation
 
-1. Data channel opened between `mpc-1` and `mpc-2`:
-   ```json
-   {
-     "type": "channel_open",
-     "payload": {
-       "device_id": "mpc-2"
-     }
-   }
-   ```
-
-2. All connections established for `mpc-1`:
-   ```json
-   {
-     "type": "mesh_ready",
-     "payload": {
-       "session_id": "wallet_2of3",
-       "device_id": "mpc-1"
-     }
-   }
-   ```
+1. Each data-channel open triggers a `ChannelOpen` notification
+   whose only field is the remote `device_id`.
+2. Once a device has observed `ChannelOpen` from every required
+   peer, it emits `MeshReady { session_id, device_id }` so the
+   coordinator can count mesh-ready signals.
 
 ### DKG Process
 
-1. `mpc-1` sends Round 1 package to all devices:
-   ```json
-   {
-     "type": "dkg_round1",
-     "payload": {
-       "package": "<serialized-package>"
-     }
-   }
-   ```
-
-2. After all Round 1 packages are received, `mpc-1` sends Round 2 package:
-   ```json
-   {
-     "type": "dkg_round2",
-     "payload": {
-       "package": "<serialized-package>"
-     }
-   }
-   ```
+1. After mesh readiness, each participant broadcasts its
+   `DkgRound1Package { package: <frost-core round1::Package>
+   }` over the data channel.
+2. After all Round-1 packages are received, each participant
+   broadcasts its `DkgRound2Package { package: <frost-core
+   round2::Package> }`. DKG then finalises locally on each peer
+   via `dkg::part3` — there is no dedicated completion message.
 
 ### Signing Process
 
-1. `mpc-1` sends signing request:
-   ```json
-   {
-     "type": "signing_request",
-     "payload": {
-       "signing_id": "sign_mpc-1_1624511234",
-       "transaction_data": "0x123456789abcdef",
-       "required_signers": 2
-     }
-   }
-   ```
-
-2. `mpc-2` accepts the request:
-   ```json
-   {
-     "type": "signing_acceptance",
-     "payload": {
-       "signing_id": "sign_mpc-1_1624511234",
-       "accepted": true
-     }
-   }
-   ```
-
-3. `mpc-1` selects signers (itself and `mpc-2`):
-   ```json
-   {
-     "type": "signer_selection",
-     "payload": {
-       "signing_id": "sign_mpc-1_1624511234",
-       "selected_signers": ["<mpc-1-identifier>", "<mpc-2-identifier>"]
-     }
-   }
-   ```
-
-4. Selected signers exchange commitments and shares, then aggregate the final signature.
+1. `mpc-1` broadcasts `SigningRequest` carrying `signing_id /
+   transaction_data (hex) / required_signers / blockchain /
+   chain_id` (last two fields required by the real variant at
+   `signal.rs:230` — earlier drafts of this example dropped them).
+2. Each co-signer replies with `SigningAcceptance { signing_id,
+   accepted: bool }`.
+3. The coordinator publishes the chosen signer set via
+   `SignerSelection { signing_id, selected_signers: Vec<Identifier<C>> }`.
+4. Selected signers exchange `SigningCommitment` then
+   `SignatureShare`; the aggregator broadcasts `AggregatedSignature
+   { signing_id, signature: Vec<u8> }` once threshold shares are in.
 
 ---
 
@@ -492,13 +431,18 @@ Establishing a complete WebRTC mesh involves:
 
 4. **Automatic Recovery:**
    - If connections fail, nodes automatically attempt reconnection with backoff
-   - The `/mesh_ready` command can be used manually if automatic detection fails
+   - (Earlier drafts mentioned a manual `/mesh_ready` slash command;
+     no slash-command system exists in the TUI — mesh readiness is
+     computed automatically from accumulated `MeshReady` events.)
 
 ---
 
 ## Troubleshooting
 
-- **Device Discovery Issues:** Use the `/list` command to refresh the device list from the signaling server.
+- **Device Discovery Issues:** The TUI is keyboard-driven; there
+  is no `/list` slash command. Return to the main menu and re-enter
+  Join Session to refresh the session list (which triggers a
+  `request_active_sessions` round-trip to the signal server).
 - **WebRTC Connection Failures:**
   - Ensure you're not behind a restrictive firewall blocking WebRTC.
   - Check the logs for ICE connectivity errors.

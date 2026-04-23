@@ -120,6 +120,38 @@ payload as opaque.
 
 Once a direct WebRTC connection is established, nodes exchange application-level messages for the MPC protocol.
 
+> **Scope note (wire-format retraction)**: every JSON example in
+> this section uses `{"type": "snake_case_name", "payload": {...}}`
+> shape. **That is NOT the real on-wire format** — the examples
+> are stylistic, not literal. The real enums are:
+>
+>   - `WebRTCMessage<C>` — `apps/tui-node/src/protocal/signal.rs:199`
+>     tagged `#[serde(tag = "webrtc_msg_type")]`, NO `rename_all`,
+>     so the tag value is the **PascalCase** variant name, and
+>     variant fields serialize **flat** as sibling properties
+>     (NO `"payload"` wrapper).
+>   - `WebSocketMessage` — `signal.rs:87` tagged
+>     `#[serde(tag = "websocket_msg_type")]`, same PascalCase +
+>     flat-fields rule.
+>
+> A real `DkgRound1Package` message over the data channel has the
+> shape (verified against `src/network/webrtc.rs:78-82` and the
+> TypeScript mirror at `packages/@mpc-wallet/types/src/webrtc.ts:26`):
+>
+> ```json
+> {
+>   "webrtc_msg_type": "DkgRound1Package",
+>   "package": "<serialized frost-core round1 Package>"
+> }
+> ```
+>
+> — NOT `{"type": "dkg_round1_package", "payload": {"package": ...}}`.
+>
+> The narrative sections (protocol ordering, role of each message,
+> which side sends what) are correct; only the JSON shape below
+> should be read as illustrative pseudo-JSON rather than copyable
+> on-wire literals.
+
 ### 1. Session Management
 
 ```json
@@ -176,8 +208,13 @@ Indicates a device has established connections to all other participants.
 ### 3. Distributed Key Generation (DKG)
 
 Authoritative enum: `WebRTCMessage<C>` in
-`apps/tui-node/src/protocal/signal.rs:204`. Serde tags use
-`snake_case` on the enum variant name — note the `_package` suffix.
+`apps/tui-node/src/protocal/signal.rs:199`. The enum is tagged
+`#[serde(tag = "webrtc_msg_type")]` with no `rename_all`, so on
+the wire the discriminator value is the **PascalCase** variant
+name (`DkgRound1Package`, not `dkg_round1_package`). Earlier
+drafts of this note claimed snake_case; verify against
+`signal.rs:199` + the TS mirror at
+`packages/@mpc-wallet/types/src/webrtc.ts:26`.
 
 ```json
 {

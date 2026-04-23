@@ -26,7 +26,7 @@
 
 ## Executive Summary
 
-The MPC (Multi-Party Computation) Wallet is a distributed cryptographic wallet system that enables secure key generation and transaction signing across multiple parties without any single party having access to the complete private key. Built on the FROST (Flexible Round-Optimized Schnorr Threshold) signature scheme, the system provides enterprise-grade security for digital asset management.
+The MPC (Multi-Party Computation) Wallet is a distributed cryptographic wallet system that enables secure key generation and transaction signing across multiple parties without any single party having access to the complete private key. Built on the FROST (Flexible Round-Optimized Schnorr Threshold) signature scheme via the ZCash Foundation's `frost-core 2.2` crates, the system splits signing authority across `t`-of-`n` participants — compromise of fewer than `t` key shares cannot produce a signature.
 
 ### Key Features
 
@@ -59,13 +59,21 @@ The MPC (Multi-Party Computation) Wallet is a distributed cryptographic wallet s
 
 ### Architectural Principles
 
-The MPC Wallet follows a **distributed, peer-to-peer architecture** with these core principles:
+The MPC Wallet follows a **distributed, peer-to-peer architecture**:
 
-1. **No Single Point of Failure**: All components can operate independently
-2. **Zero-Knowledge Design**: No party has access to complete key material
-3. **Protocol Agnostic**: Support for multiple blockchain protocols
-4. **Modular Architecture**: Clear separation of concerns between components
-5. **Defense in Depth**: Multiple layers of security controls
+1. **No single participant holds a complete key**: shares are distributed
+   via FROST DKG; only a valid `t`-of-`n` subset can sign.
+2. **Peer-to-peer ceremony**: DKG and signing run over WebRTC data
+   channels; the signal server is a stateless relay, blind to payload
+   content once the mesh is up.
+3. **Multiple curves**: concrete support for secp256k1 (Ethereum) and
+   ed25519 (Solana). The code is not curve-agnostic beyond those two
+   — the `FrostCurve` trait abstracts over them but every address
+   derivation, encoding, and chain-integration path is written
+   per-curve. ("Protocol agnostic" has been removed from the earlier
+   draft because each new chain needs meaningful integration work.)
+4. **Modular repo layout**: shared `frost-core` crate + three UI
+   frontends (TUI, native, extension) that reuse it.
 
 ### High-Level Architecture
 
@@ -108,40 +116,51 @@ The project is organized as a monorepo with shared dependencies:
 
 ```
 mpc-wallet/
-├── apps/                           # Application modules
-│   ├── browser-extension/          # Chrome/Firefox extension
-│   │   ├── src/
-│   │   │   ├── entrypoints/       # Extension entry points
-│   │   │   ├── components/        # UI components
-│   │   │   └── services/          # Business logic
-│   │   └── wxt.config.ts          # WXT framework config
+├── apps/
+│   ├── browser-extension/          # WXT + Svelte 5, MV3
+│   │   ├── src/entrypoints/        # background / popup / offscreen / content
+│   │   ├── src/components/         # Svelte components
+│   │   ├── src/services/           # AccountService, KeystoreService, etc.
+│   │   ├── tests/                  # Bun test suite
+│   │   └── wxt.config.ts
 │   │
-│   ├── native-node/               # Desktop application
-│   │   ├── src/
-│   │   │   └── main.rs           # Slint UI application
-│   │   └── ui/                   # Slint UI definitions
+│   ├── native-node/                # Slint 1.x desktop GUI
+│   │   ├── src/main.rs             # entry (tokio + Slint event loop)
+│   │   ├── src/core_adapter.rs     # bridges CoreState ↔ Slint AppState globals
+│   │   ├── src/ui_callback.rs      # NativeUICallback (Send-bridge onto Slint loop)
+│   │   └── ui/main_enhanced.slint  # Slint UI, compiled by build.rs
 │   │
-│   ├── tui-node/                  # Terminal UI application
-│   │   ├── src/
-│   │   │   ├── ui/               # TUI components
-│   │   │   ├── handlers/         # Command handlers
-│   │   │   └── network/          # Network management
-│   │   └── Cargo.toml
+│   ├── tui-node/                   # Ratatui Elm-architecture TUI
+│   │   ├── src/bin/                # mpc-wallet-tui binary entry
+│   │   ├── src/elm/                # Model / Update / View + per-screen components
+│   │   ├── src/core/               # *Manager types (reused by native-node)
+│   │   ├── src/protocal/           # Wire types (signal.rs / dkg.rs / signing.rs)
+│   │   ├── src/keystore/           # Encrypted share persistence
+│   │   ├── src/webrtc/             # Mesh manager
+│   │   ├── src/network/            # WebSocket client
+│   │   ├── src/offline/            # SD-card air-gap mode
+│   │   ├── src/hybrid/             # Online+offline mixed-participant mode
+│   │   └── src/utils/
 │   │
-│   └── signal-server/             # WebRTC signaling
-│       ├── server/                # Standard WebSocket server
-│       └── cloudflare-worker/     # Edge deployment
+│   └── signal-server/
+│       ├── server/                 # Standalone tokio + tokio-tungstenite
+│       └── cloudflare-worker/      # Rust-over-WASM via `worker` crate
 │
-├── packages/@mpc-wallet/          # Shared libraries
-│   ├── frost-core/               # Core FROST implementation
-│   ├── core-wasm/                # WebAssembly bindings
-│   ├── blockchain/               # Multi-chain support (Ethereum/Solana/Bitcoin)
-│   └── types/                    # TypeScript definitions
+├── packages/@mpc-wallet/
+│   ├── frost-core/                 # FROST wrapper: unified_dkg, hd_derivation,
+│   │                               # traits, ed25519, secp256k1, keystore, root_secret
+│   ├── core-wasm/                  # wasm-bindgen wrapper around frost-core
+│   ├── blockchain/                 # Ethereum/Solana/Bitcoin encoding
+│   └── types/                      # Shared TypeScript types (Bun workspace only)
 │
-├── scripts/                       # Build & deployment scripts
-├── docs/                         # Documentation
-└── Cargo.toml                    # Rust workspace root
+├── scripts/
+├── docs/
+├── Cargo.toml                      # Rust workspace (edition 2024, resolver 2)
+└── package.json                    # Bun workspace root
 ```
+
+Note: the directory name `src/protocal/` is intentionally misspelled
+in-tree; rename would be a broad refactor and is not blocking.
 
 ---
 

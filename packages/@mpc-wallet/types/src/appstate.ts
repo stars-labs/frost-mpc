@@ -41,10 +41,13 @@ export interface AppState {
 
   // --- Popup UI state (persisted in appState so a popup reopen
   // sees the same form / toggle values) ---
-  /** Session-proposal form: total participants input. */
-  totalParticipants?: number;
-  /** Session-proposal form: signing threshold input. */
-  threshold?: number;
+  /** Session-proposal form: total participants input. Defaults
+   *  to 3 in INITIAL_APP_STATE so callers doing arithmetic on
+   *  this (e.g. `totalParticipants - 1`) don't hit NaN. */
+  totalParticipants: number;
+  /** Session-proposal form: signing threshold input. Defaults to
+   *  2 (the 2-of-3 threshold that pairs with totalParticipants=3). */
+  threshold: number;
   /** Session-proposal form: user-typed session id (can be blank
    *  → server generates). */
   proposedSessionIdInput?: string;
@@ -108,7 +111,10 @@ export const INITIAL_APP_STATE: AppState = {
   meshStatus: { type: MeshStatusType.Incomplete },
   dkgState: DkgState.Idle,
   webrtcConnections: {},
-  blockchain: "ethereum"
+  blockchain: "ethereum",
+  // 2-of-3 is the standard threshold-signing default.
+  totalParticipants: 3,
+  threshold: 2,
 };
 
 export type SupportedChain = 'ethereum' | 'solana';

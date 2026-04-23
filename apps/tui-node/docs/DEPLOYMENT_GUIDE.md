@@ -1,215 +1,191 @@
-# MPC Wallet TUI Node Deployment Guide
+# TUI Node Deployment Guide
 
-## Overview
-
-This guide provides complete deployment instructions for the MPC Wallet TUI Node with automated deployment configurations for both development and production environments.
+Covers running the standalone Rust signal server + one or more TUI
+nodes. For the browser extension + native-node + Cloudflare-Worker
+paths, see the workspace-level `docs/deployment/README.md` +
+`docs/deployment/CLOUDFLARE_DEPLOYMENT.md`.
 
 ## Quick Start
 
-### 1. Build Components
+Scripts referenced below live at **`apps/tui-node/scripts/`** (not
+`./scripts/` at the repo root — that's a different set for
+workspace-wide build/test/clean).
 
 ```bash
-# Build signal server
+# From the repo root
+cd apps/tui-node
+
+# Build the signal server binary (release mode)
 ./scripts/build-signal-server.sh
 
-# Build TUI node (will create stub if main binary fails to compile)
+# Build the TUI binary
 ./scripts/build-tui-node.sh
-```
 
-### 2. Launch Development Cluster
-
-```bash
-# Launch 3-node cluster with signal server
+# Launch signal server + 3 TUI nodes locally
 ./scripts/launch-3node-cluster.sh
-```
 
-### 3. Monitor Health
-
-```bash
-# Check cluster health
-./scripts/health-check.sh
+# Health check (verifies signal server is reachable + each node is up)
+./scripts/health-check.sh [--verbose]
 
 # Continuous monitoring
 ./scripts/monitor-cluster.sh
 ```
 
-## Deployment Methods
+## Deployment methods
 
-### Method 1: Direct Script Deployment
+### Method 1: direct invocation
 
-**Start Signal Server:**
+Start signal server:
+
 ```bash
-# Start signal server on port 9000
-SIGNAL_PORT=9000 ./scripts/run-signal-server.sh
+# The signal server binds 0.0.0.0:9000 unconditionally — no env var
+# controls this today (verified: signal-server/server/src/main.rs
+# reads zero env vars). If you need a different port, patch main.rs.
+cargo run --release -p webrtc-signal-server
 ```
 
-**Start Individual Nodes:**
+Or use the wrapper script:
+
 ```bash
-# Terminal 1 - Node 1
-cargo run --bin mpc-wallet-tui -- --signal-server ws://localhost:9000 --device-id mpc-1
-
-# Terminal 2 - Node 2  
-cargo run --bin mpc-wallet-tui -- --signal-server ws://localhost:9000 --device-id mpc-2
-
-# Terminal 3 - Node 3
-cargo run --bin mpc-wallet-tui -- --signal-server ws://localhost:9000 --device-id mpc-3
+./scripts/run-signal-server.sh
 ```
 
-### Method 2: SystemD Production Deployment
+Start TUI nodes in separate terminals:
 
-**1. Install Binaries:**
 ```bash
-sudo mkdir -p /opt/mpc-wallet/data
-sudo cp target/release/webrtc-signal-server /opt/mpc-wallet/signal-server
-sudo cp target/release/mpc-wallet-tui /opt/mpc-wallet/mpc-wallet-tui
-sudo chown -R mpcwallet:mpcwallet /opt/mpc-wallet
+# Terminal 1
+cargo run -p tui-node --bin mpc-wallet-tui -- \
+  --signal-server ws://localhost:9000 --device-id mpc-1
+
+# Terminal 2
+cargo run -p tui-node --bin mpc-wallet-tui -- \
+  --signal-server ws://localhost:9000 --device-id mpc-2
+
+# Terminal 3
+cargo run -p tui-node --bin mpc-wallet-tui -- \
+  --signal-server ws://localhost:9000 --device-id mpc-3
 ```
 
-**2. Install SystemD Services:**
-```bash
-sudo cp systemd/*.service /etc/systemd/system/
-sudo cp systemd/*.target /etc/systemd/system/
-sudo systemctl daemon-reload
-```
+Omit `--signal-server` to use the default
+`wss://xiongchenyu.dpdns.org` (the Cloudflare Worker deployment
+bound to that domain).
 
-**3. Start Services:**
-```bash
-# Start entire cluster
-sudo systemctl enable mpc-wallet-cluster.target
-sudo systemctl start mpc-wallet-cluster.target
+### Method 2: systemd
 
-# Or start individual services
-sudo systemctl start mpc-signal-server
-sudo systemctl start mpc-wallet-node@mpc-1
-sudo systemctl start mpc-wallet-node@mpc-2
-sudo systemctl start mpc-wallet-node@mpc-3
+The repo does NOT ship pre-built systemd unit files — earlier
+drafts of this guide referenced `systemd/mpc-signal-server.service`
++ `mpc-wallet-cluster.target` + `mpc-wallet-node@.service` that
+don't exist (verified: no `systemd/` dir, no `.service` files in
+the tree).
 
-# Check status
-sudo systemctl status mpc-wallet-cluster.target
-```
+For a self-hosted production deployment, write your own unit files
+adapted from the template in `docs/deployment/README.md` § "systemd
+unit template". The binary paths are whatever you place under
+`/opt/mpc-wallet/` or similar after `cargo build --release`.
 
 ## Configuration
 
-### Signal Server Configuration
+### Signal server
 
-Environment variables:
-- `SIGNAL_PORT`: Port to bind (default: 9000)
-- `BIND_ADDRESS`: Address to bind (default: 0.0.0.0:9000)
-- `RUST_LOG`: Log level (default: info)
+Reads zero environment variables. Binds `0.0.0.0:9000` as hardcoded
+in `apps/signal-server/server/src/main.rs:35`. To change the bind
+address, edit that line (or add a CLI flag + wire it through).
 
-### TUI Node Configuration
+### TUI node
 
-Command line arguments:
-- `--signal-server`: WebSocket URL of signal server (default: ws://localhost:9000)
-- `--device-id`: Unique device identifier (required for multi-node setup)
+Accepts these CLI flags (authoritative:
+`apps/tui-node/src/bin/mpc-wallet-tui.rs`):
 
-Environment variables:
-- `RUST_LOG`: Log level (default: info)
-- `DATA_DIR`: Data directory path (default: ./data/{device-id})
+| Flag                      | Default                           |
+|---------------------------|-----------------------------------|
+| `--device-id <ID>`        | hostname                          |
+| `--signal-server <URL>`   | `wss://xiongchenyu.dpdns.org`     |
+| `--offline`               | (off)                             |
+| `--log-location <PATH>`   | `~/.frost_keystore/logs/mpc-wallet.log` |
+| `--log-level <LEVEL>`     | `info`                            |
 
-## Health Checks and Monitoring
+Environment: only `HOME` (to compute the keystore path), `RUST_LOG`
+(tracing-subscriber directive), and `PERF_MONITORING` (enables
+the `perf_monitor` instrumentation) are consulted.
 
-### Manual Health Check
+There is no `DATA_DIR` env var — the keystore location is fixed at
+`~/.frost_keystore` (see the keystore-directory fix in 22ae959).
+
+## Health checks and monitoring
+
 ```bash
-./scripts/health-check.sh [--verbose]
-```
+# Manual health check (reaches out to signal server, inspects node
+# process state + log files)
+./scripts/health-check.sh --verbose
 
-### Continuous Monitoring
-```bash
-# Monitor with 30-second intervals
+# Continuous monitor (polls health at MONITOR_INTERVAL seconds,
+# default 60)
 MONITOR_INTERVAL=30 ./scripts/monitor-cluster.sh
 ```
 
-### SystemD Health Checks
-```bash
-# Check all services
-sudo systemctl status mpc-signal-server mpc-wallet-node@mpc-1 mpc-wallet-node@mpc-2 mpc-wallet-node@mpc-3
+There is no `/health` HTTP endpoint on the signal server (earlier
+drafts of this guide showed `curl -v http://localhost:9000/health`
+— that returns 400 or connection-closed because the server only
+accepts WebSocket upgrades). Real reachability probe:
 
-# View logs
-journalctl -u mpc-signal-server -f
-journalctl -u mpc-wallet-node@mpc-1 -f
+```bash
+# WebSocket upgrade attempt — success = TCP/TLS reach + server alive
+wscat -c ws://localhost:9000/
 ```
 
-## Current Status
+## Testing the deployment
 
-### Working Components
-- **Signal Server**: compiles and runs cleanly
-- **Main TUI Binary** (`mpc-wallet-tui`): full DKG + threshold signing, all 174 unit/integration tests pass
-- **SystemD Services**: production-ready service definitions
-- **Monitoring Scripts**: health checks + continuous monitoring
-- **Build Scripts**: `./scripts/build-*.sh`, `./scripts/launch-3node-cluster.sh`
-
-### Not currently supported
-- **Docker deployment**: the `Dockerfile` + `docker-compose.yml` that used to live at `apps/tui-node/` were written for a pre-monorepo, pre-edition-2024 layout (Rust 1.75, single-crate `COPY Cargo.lock`). They were removed rather than carried as broken examples. Reintroducing Docker deployment would need a Dockerfile at the workspace root with `FROM rust:1.85+` and a proper multi-stage build that includes every workspace member crate.
-
-## Testing the Deployment
-
-### Test Signal Server
 ```bash
-# Start signal server
-./scripts/run-signal-server.sh &
+# Single node against a running signal server
+cargo run -p tui-node --bin mpc-wallet-tui -- \
+  --signal-server ws://localhost:9000 --device-id test-node
 
-# Test WebSocket connection
-curl -v http://localhost:9000/health
-
-# Test WebSocket upgrade (should see 101 response)
-curl --include --no-buffer --header "Connection: Upgrade" --header "Upgrade: websocket" --header "Sec-WebSocket-Key: SGVsbG8sIHdvcmxkIQ==" --header "Sec-WebSocket-Version: 13" http://localhost:9000/
-```
-
-### Test a Single Node
-```bash
-cargo run --bin mpc-wallet-tui -p tui-node -- --signal-server ws://localhost:9000 --device-id test-node
-```
-
-### Test Full Cluster
-```bash
-# Launch complete 3-node setup
+# Full 3-node cluster
 ./scripts/launch-3node-cluster.sh
 
-# In another terminal, monitor health
-./scripts/monitor-cluster.sh
+# Smoke DKG test — runs the whole workspace test suite
+cd ../..            # back to repo root
+./scripts/smoke-dkg.sh
 ```
 
-## Performance and Scaling
+## Resource requirements
 
-### Resource Requirements
-- **Signal Server**: ~50MB RAM, minimal CPU
-- **TUI Node**: ~100-200MB RAM per node, moderate CPU for crypto operations
-- **Network**: WebRTC requires UDP connectivity between nodes
+Not yet benchmarked — earlier drafts of this guide quoted specific
+figures (`Signal Server: ~50MB RAM / ~100-200MB per TUI node /
+100+ concurrent nodes`) without a source. Real sizing depends on
+concurrent-peer load + the number of active DKG/signing
+ceremonies; start small and scale vertically. WebRTC full-mesh
+degree is `n·(n-1)/2` peer connections — keep cohorts small or
+provision accordingly.
 
-### Scaling Considerations
-- Signal server can handle 100+ concurrent nodes
-- Each DKG session requires 2-of-3 or 3-of-5 participants
-- P2P WebRTC connections scale O(n²) - use mesh topology carefully
+## Not currently supported
 
-## Security Notes
+- **Docker deployment**: the `Dockerfile` + `docker-compose.yml`
+  that used to live at `apps/tui-node/` were written for a
+  pre-monorepo, pre-edition-2024 layout (Rust 1.75, single-crate
+  `COPY Cargo.lock`). They were removed rather than carried as
+  broken examples. Reintroducing Docker deployment would need a
+  Dockerfile at the workspace root with `FROM rust:1.85+` and a
+  proper multi-stage build covering every workspace member crate.
+- **systemd units**: see Method 2 above — write your own from the
+  workspace-level template.
+- **Kubernetes manifests / Helm charts**: not shipped; see
+  `docs/deployment/README.md` § "Not supported" for the full
+  absent-infra list.
+- **Prometheus `/metrics`**: not implemented. Operational visibility
+  is stdout/stderr via `tracing` + the `--log-location` file.
 
-### Production Security
-- Run services as non-root user `mpcwallet`
-- Use firewall to restrict access to signal server port
-- Consider TLS termination proxy for WebSocket connections
-- Secure private key storage (not implemented in stub)
+## Security notes
 
-### Network Security
-- WebRTC uses DTLS for P2P encryption
-- Signal server only coordinates connection setup
-- No private keys transmitted through signal server
-
-## Next Steps
-
-1. **Fix Compilation Issues**: Resolve the 81 compilation errors in the main TUI binary
-2. **Complete DKG Implementation**: Remove stubs and implement full FROST DKG
-3. **Add TLS Support**: Secure WebSocket connections with TLS
-4. **Implement Persistence**: Add secure keystore persistence
-5. **Add Metrics**: Integrate Prometheus/Grafana monitoring
-6. **Load Testing**: Test with larger node counts
-
-## Support
-
-For issues and questions:
-1. Check logs in `./data/` directory
-2. Run health checks with `--verbose` flag
-3. Monitor system resources during operation
-4. Review WebRTC connectivity between nodes
-
-This deployment configuration provides a solid foundation for the MPC Wallet infrastructure, ready to support the full implementation once compilation issues are resolved.
+- Run the signal server as a non-root user. Because the binary
+  binds a privileged port below 1024 only if you terminate TLS
+  in front (see `docs/deployment/README.md` for nginx / caddy /
+  Cloudflare Tunnel options), port 9000 is fine for an
+  unprivileged user.
+- Firewall 9000/tcp inbound (or whatever port your TLS proxy
+  exposes). WebRTC traffic is peer-to-peer after signaling, so
+  the signal server doesn't proxy media/data.
+- Keystore files under `~/.frost_keystore/<device_id>/` are
+  PBKDF2-HMAC-SHA256 (100k) + AES-256-GCM encrypted. The
+  password is what gates them — don't store the password next
+  to the `.dat` file.

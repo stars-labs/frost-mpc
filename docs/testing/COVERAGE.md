@@ -1,10 +1,5 @@
 # Test Coverage Configuration
 
-## Current Status
-- **Total Tests**: 140 (all passing)  
-- **Function Coverage**: 80.05%
-- **Line Coverage**: 72.93%
-
 ## Configuration
 The project uses Bun's built-in test runner with coverage enabled via `bunfig.toml`:
 
@@ -75,10 +70,8 @@ bun test --coverage && c8 --exclude="pkg/**" --exclude="**/test-utils.ts" report
 Create a script to run tests and filter results programmatically.
 
 ## Recommendation
-For now, accept the current coverage metrics as-is since:
-1. The core application code coverage is good (80%+ function coverage)
-2. The included files represent edge cases (generated code + test utilities)
-3. Bun's coverage system limitation is a known constraint
-4. The overall test suite is comprehensive (140 passing tests)
-
-Monitor Bun's development for future coverage exclusion features.
+Accept the current coverage metrics as-is: core application code
+coverage is healthy, and the over-counted files are generated WASM
+bindings + test utilities that shouldn't skew real coverage
+discussions. Monitor Bun's development for future coverage-exclusion
+features.

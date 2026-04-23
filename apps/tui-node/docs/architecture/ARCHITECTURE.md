@@ -294,22 +294,26 @@ pub struct EncryptedWallet {
 
 ### Directory Structure
 
+The structure is partitioned by device_id and curve (see
+`src/keystore/storage.rs`):
+
 ```
 ~/.frost_keystore/
-├── config.toml              # Application configuration
-├── keystores/               # Encrypted wallet data
-│   ├── company-treasury.dat
-│   ├── defi-operations.dat
-│   └── metadata.json
-├── sessions/                # Session history
-│   ├── active/
-│   └── completed/
-├── logs/                    # Application logs
-│   ├── app.log
-│   └── debug.log
-└── backups/                 # Automated backups
-    └── 2024-01-20/
+├── index.json                    # Wallet index (device_id × curve → wallet list)
+├── device_id                     # This node's device_id
+└── <device_id>/
+    ├── ed25519/
+    │   ├── <wallet_id>.json      # Wallet metadata (threshold, participants, etc.)
+    │   └── <wallet_id>.dat       # Encrypted FROST key share (AES-256-GCM)
+    └── secp256k1/
+        ├── <wallet_id>.json
+        └── <wallet_id>.dat
 ```
+
+The TUI currently has no config-file, session-history, log-archive, or
+automated-backup functionality — all runtime config goes through CLI
+flags (see `apps/tui-node/src/bin/mpc-wallet-tui.rs`), and logs stream
+to the path passed via `--log-location`.
 
 ### Data Persistence
 

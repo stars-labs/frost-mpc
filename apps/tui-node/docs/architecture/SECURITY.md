@@ -282,18 +282,25 @@ impl Drop for SensitiveData {
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│ File Permissions (Unix)                                 │
+│ File Permissions (Unix, recommended)                   │
 ├─────────────────────────────────────────────────────────┤
-│ ~/.frost_keystore/                                           │
-│ ├── config.toml          (600) User read/write only   │
-│ ├── keystores/           (700) User access only       │
-│ │   ├── wallet1.dat      (600) Encrypted keystore     │
-│ │   └── wallet2.dat      (600) Encrypted keystore     │
-│ ├── logs/                (700) User access only       │
-│ │   └── audit.log        (600) Append-only            │
-│ └── backups/             (700) User access only       │
+│ ~/.frost_keystore/                                      │
+│ ├── index.json           (600) Wallet index            │
+│ ├── device_id            (600) Device identity         │
+│ └── <device_id>/                                        │
+│     ├── ed25519/         (700) Curve-scoped dir        │
+│     │   ├── <wid>.json   (600) Wallet metadata         │
+│     │   └── <wid>.dat    (600) Encrypted key share     │
+│     └── secp256k1/       (700)                         │
+│         ├── <wid>.json   (600)                         │
+│         └── <wid>.dat    (600)                         │
 └─────────────────────────────────────────────────────────┘
 ```
+
+The current implementation calls `fs::create_dir_all` for the
+directories but does not explicitly `chmod` them — inheriting the
+user's umask. Hardening steps below still apply as a defence-in-depth
+recommendation.
 
 ## Operational Security
 
@@ -588,7 +595,7 @@ ufw enable
 
 # File system hardening
 chmod 700 ~/.frost_keystore
-chmod 600 ~/.frost_keystore/keystores/*
+chmod -R go-rwx ~/.frost_keystore
 
 # Enable audit logging
 auditctl -w ~/.frost_keystore -p wa -k frost_keystore_changes

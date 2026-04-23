@@ -88,8 +88,8 @@ async fn handle_webrtc_signal<C>(
             });
             spawn_answer_handler(from.clone(), sdp.to_string(), app_state);
         }
-    } else if let Some(ice_data) = data.get("Candidate") {
-        if let (Some(candidate), Some(sdp_mid), Some(sdp_mline_index)) = (
+    } else if let Some(ice_data) = data.get("Candidate")
+        && let (Some(candidate), Some(sdp_mid), Some(sdp_mline_index)) = (
             ice_data.get("candidate").and_then(|v| v.as_str()),
             ice_data.get("sdpMid").and_then(|v| v.as_str()),
             ice_data.get("sdpMLineIndex").and_then(|v| v.as_u64()),
@@ -103,7 +103,6 @@ async fn handle_webrtc_signal<C>(
                 app_state,
             );
         }
-    }
 }
 
 /// Handle the `participant_update` frame the signal server emits when a new
@@ -163,8 +162,8 @@ async fn handle_server_frame<C>(
     // so FROST only starts once, against the finalized participant set.
     let session_total_opt = session_info.get("total").and_then(|v| v.as_u64());
     let participants_len = new_participants.len() + 1; // include self
-    if let Some(total) = session_total_opt {
-        if (participants_len as u64) < total {
+    if let Some(total) = session_total_opt
+        && (participants_len as u64) < total {
             info!(
                 "⏳ participant_update: {}/{} joined — waiting for full session before \
                  initiating WebRTC",
@@ -187,7 +186,6 @@ async fn handle_server_frame<C>(
             });
             return;
         }
-    }
 
     info!(
         "📡 Received participant update (session full: {}), triggering WebRTC",

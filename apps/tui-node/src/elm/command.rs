@@ -646,14 +646,13 @@ impl Command {
                                     match &*shared {
                                                     webrtc_signal_server::ServerMsg::SessionAvailable { session_info } => {
                                                         // Another participant announced a session - check if it's us joining theirs
-                                                        if let Some(sid) = session_info.get("session_id").and_then(|v| v.as_str()) {
-                                                            if sid != session_id_clone {
+                                                        if let Some(sid) = session_info.get("session_id").and_then(|v| v.as_str())
+                                                            && sid != session_id_clone {
                                                                 // Different session
                                                                 let _ = tx_msg.send(Message::Info { 
                                                                     message: format!("📢 Another session available: {}", sid)
                                                                 });
                                                             }
-                                                        }
                                                     }
                                                     webrtc_signal_server::ServerMsg::Devices { devices } => {
                                                         // Display-only: show the raw signal-server
@@ -981,8 +980,8 @@ impl Command {
                                 match &*shared {
                                                 webrtc_signal_server::ServerMsg::SessionAvailable { session_info } => {
                                                     // Check if this is our session being announced/updated
-                                                    if let Some(sid) = session_info.get("session_id").and_then(|v| v.as_str()) {
-                                                        if sid == session_id_clone {
+                                                    if let Some(sid) = session_info.get("session_id").and_then(|v| v.as_str())
+                                                        && sid == session_id_clone {
                                                             // Our session - update full session info
                                                             let curve_type = session_info.get("curve_type")
                                                                 .and_then(|v| v.as_str())
@@ -1023,7 +1022,6 @@ impl Command {
                                                                 }
                                                             }
                                                         }
-                                                    }
                                                 }
                                                 webrtc_signal_server::ServerMsg::Devices { devices } => {
                                                     let _ = tx_msg.send(Message::Info { 
@@ -1117,7 +1115,7 @@ impl Command {
 
                         // Show initial status
                         let _ = tx_clone.send(Message::Info {
-                            message: format!("⏳ Waiting for other participants to join...")
+                            message: "⏳ Waiting for other participants to join...".to_string()
                         });
                         let _ = tx_clone.send(Message::Info {
                             message: format!("📋 Session ID: {}", session_id)
@@ -1149,7 +1147,7 @@ impl Command {
                 });
                 
                 let _ = tx.send(Message::Info { 
-                    message: format!("⏳ Starting WebRTC connection process...")
+                    message: "⏳ Starting WebRTC connection process...".to_string()
                 });
                 
                 // CRITICAL FIX: Actually initiate WebRTC connections NOW
@@ -1243,16 +1241,12 @@ impl Command {
                             // Get session info to create wallet config
                             let wallet_config = {
                                 let state = app_state_mesh.lock().await;
-                                if let Some(ref session) = state.session {
-                                    Some(crate::elm::model::WalletConfig {
+                                state.session.as_ref().map(|session| crate::elm::model::WalletConfig {
                                         name: format!("MPC Wallet {}", &session.session_id[..8]),
                                         total_participants: session.total,
                                         threshold: session.threshold,
                                         mode: crate::elm::model::WalletMode::Online,
                                     })
-                                } else {
-                                    None
-                                }
                             };
 
                             if let Some(config) = wallet_config {
@@ -2178,7 +2172,7 @@ impl Command {
                 use crate::elm::ws_runtime;
 
                 info!("Attempting to reconnect WebSocket");
-                let params = ws_runtime::read_connect_params(&app_state).await;
+                let params = ws_runtime::read_connect_params(app_state).await;
                 let _ = tx.send(Message::Info {
                     message: format!("🔄 Reconnecting to {}...", params.url),
                 });
@@ -2186,12 +2180,12 @@ impl Command {
                 let (mut sink, rx) = match ws_runtime::dial(&params.url).await {
                     Ok(split) => split,
                     Err(e) => {
-                        ws_runtime::handle_dial_failure(e, &tx, &app_state).await;
+                        ws_runtime::handle_dial_failure(e, &tx, app_state).await;
                         return Ok(());
                     }
                 };
 
-                let channels = ws_runtime::install_handles(&app_state).await;
+                let channels = ws_runtime::install_handles(app_state).await;
 
                 ws_runtime::send_register(&mut sink, &params.device_id).await;
                 if let Some(session) = &params.existing_session {

@@ -214,12 +214,10 @@ impl Component for ModeSelectionComponent {
 
 impl ModeSelectionComponent {
     fn render_header(&self, frame: &mut Frame, area: Rect) {
-        let header_text = vec![
-            "🔐 OPERATION MODE SELECTION (Step 1 of 3)",
+        let header_text = ["🔐 OPERATION MODE SELECTION (Step 1 of 3)",
             "",
             "Choose between Online (Hot) and Offline (Cold) wallet modes",
-            "This decision affects security, convenience, and operational workflow",
-        ];
+            "This decision affects security, convenience, and operational workflow"];
         
         let header = Paragraph::new(header_text.join("\n"))
             .style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))
@@ -360,12 +358,10 @@ impl ModeSelectionComponent {
             "← → Switch Between Modes | Enter: Next Step | Esc: Cancel"
         };
 
-        let footer_text = vec![
-            status_line,
+        let footer_text = [status_line,
             "".to_string(),
             controls_line.to_string(),
-            "💡 Tip: You can switch modes later, but it requires re-initialization".to_string(),
-        ];
+            "💡 Tip: You can switch modes later, but it requires re-initialization".to_string()];
 
         let footer = Paragraph::new(footer_text.join("\n"))
             .style(

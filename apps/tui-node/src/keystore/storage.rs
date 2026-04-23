@@ -81,11 +81,10 @@ impl Keystore {
                 
                 if path.extension().and_then(|s| s.to_str()) == Some("json") {
                     // Try to read the wallet metadata
-                    if let Ok(file) = File::open(&path) {
-                        if let Ok(wallet_file) = serde_json::from_reader::<_, WalletFile>(file) {
+                    if let Ok(file) = File::open(&path)
+                        && let Ok(wallet_file) = serde_json::from_reader::<_, WalletFile>(file) {
                             self.wallet_cache.push(wallet_file.metadata);
                         }
-                    }
                 }
             }
         }
@@ -317,14 +316,12 @@ impl Keystore {
                 
                 if json_path.exists() {
                     // Check if it's already v2 format
-                    if let Ok(file) = File::open(&json_path) {
-                        if let Ok(wallet_file) = serde_json::from_reader::<_, WalletFile>(file) {
-                            if wallet_file.version == "2.0" {
+                    if let Ok(file) = File::open(&json_path)
+                        && let Ok(wallet_file) = serde_json::from_reader::<_, WalletFile>(file)
+                            && wallet_file.version == "2.0" {
                                 // Already migrated
                                 continue;
                             }
-                        }
-                    }
                     
                     // Read v1 JSON file
                     let file = File::open(&json_path)?;
@@ -478,11 +475,10 @@ impl Keystore {
             eprintln!("Warning: Failed to rename legacy index.json: {}", _e);
         }
         
-        if device_id_path.exists() {
-            if let Err(_e) = fs::rename(&device_id_path, self.base_path.join("device_id.legacy")) {
+        if device_id_path.exists()
+            && let Err(_e) = fs::rename(&device_id_path, self.base_path.join("device_id.legacy")) {
                 eprintln!("Warning: Failed to rename legacy device_id file: {}", _e);
             }
-        }
         
         // Reload the wallet cache
         self.reload_wallet_cache()?;

@@ -56,11 +56,10 @@ impl PerformanceMonitor {
             .push(metric);
         
         // Keep only last 1000 entries per operation
-        if let Some(vec) = metrics.get_mut(&op_clone) {
-            if vec.len() > 1000 {
+        if let Some(vec) = metrics.get_mut(&op_clone)
+            && vec.len() > 1000 {
                 vec.drain(0..vec.len() - 1000);
             }
-        }
     }
     
     /// Get performance summary

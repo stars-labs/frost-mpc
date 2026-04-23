@@ -209,12 +209,10 @@ impl Component for JoinSessionComponent {
 
 impl JoinSessionComponent {
     fn render_header(&self, frame: &mut Frame, area: Rect) {
-        let header_text = vec![
-            "🔗 JOIN EXISTING SESSION",
+        let header_text = ["🔗 JOIN EXISTING SESSION",
             "",
             "Participate in active DKG or signing sessions",
-            "Sessions are discovered automatically via WebSocket/WebRTC",
-        ];
+            "Sessions are discovered automatically via WebSocket/WebRTC"];
         
         let header = Paragraph::new(header_text.join("\n"))
             .style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))
@@ -381,15 +379,13 @@ impl JoinSessionComponent {
     }
     
     fn render_footer(&self, frame: &mut Frame, area: Rect) {
-        let footer_text = vec![
-            format!("Tab: {} | Sessions Found: {}", 
+        let footer_text = [format!("Tab: {} | Sessions Found: {}", 
                 if self.selected_tab == 0 { "DKG" } else { "Signing" },
                 self.get_filtered_sessions().len()
             ),
             "".to_string(),
             "← → Switch Tabs | ↑↓ Select Session | Enter: Join | Esc: Back".to_string(),
-            "💡 Sessions expire after 30 minutes of inactivity".to_string(),
-        ];
+            "💡 Sessions expire after 30 minutes of inactivity".to_string()];
         
         let footer = Paragraph::new(footer_text.join("\n"))
             .style(

@@ -598,10 +598,9 @@ pub async fn apply_pending_candidates<C>(
     let candidates = {
         let mut _state_guard = state_log.lock().await;
         let pending = _state_guard.pending_ice_candidates.remove(device_id);
-        if let Some(candidates) = &pending {
-            if !candidates.is_empty() {
+        if let Some(candidates) = &pending
+            && !candidates.is_empty() {
             }
-        }
         pending
     };
 

@@ -114,7 +114,7 @@ impl WalletManager {
         drop(wallets);
         
         self.ui_callback.show_message(
-            format!("Wallet export feature coming soon"),
+            "Wallet export feature coming soon".to_string(),
             false
         ).await;
         

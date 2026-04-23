@@ -729,13 +729,12 @@ where
     /// Update component states with latest model data
     fn update_component_states(&mut self) {
         // Update MainMenu selection if it's mounted
-        if self.app.mounted(&Id::MainMenu) {
-            if let Some(selected_idx) = self.model.ui_state.selected_indices.get(&self.model.ui_state.focus) {
+        if self.app.mounted(&Id::MainMenu)
+            && let Some(selected_idx) = self.model.ui_state.selected_indices.get(&self.model.ui_state.focus) {
                 // Unfortunately tuirealm doesn't expose a way to update component state directly
                 // We'll need to handle this in the render or via messages
                 debug!("Would update MainMenu selected index to: {}", selected_idx);
             }
-        }
     }
     
     /// Main event loop

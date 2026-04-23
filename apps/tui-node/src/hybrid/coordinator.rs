@@ -245,13 +245,12 @@ impl HybridCoordinator {
         println!("\n🌐 Restoring network connectivity...");
         
         for id in participant_ids {
-            if let Some(participant) = self.participants.get_mut(&id) {
-                if participant.mode == ParticipantMode::Offline {
+            if let Some(participant) = self.participants.get_mut(&id)
+                && participant.mode == ParticipantMode::Offline {
                     println!("  ✅ {} back online", participant.name);
                     participant.mode = ParticipantMode::Online;
                     self.online_queue.lock().unwrap().insert(id, Vec::new());
                 }
-            }
         }
     }
 }

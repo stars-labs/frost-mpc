@@ -244,7 +244,7 @@ impl ExtensionKeyShareData {
             session_id: wallet_data.session_id.clone(),
             device_id: wallet_data.device_id.clone(),
             participant_index: (participant_index + 1) as u16, // 1-based in extension
-            threshold: wallet_info.threshold as u16,
+            threshold: wallet_info.threshold,
             total_participants: wallet_info.total_participants,
             participants: wallet_info.devices.iter().map(|d| d.device_id.clone()).collect(),
             curve: curve.to_string(),

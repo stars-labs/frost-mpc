@@ -131,11 +131,10 @@ pub fn import_from_directory(
         match import_offline_data(&path, config) {
             Ok(data) => {
                 // Filter by session ID if provided
-                if let Some(sid) = session_id {
-                    if data.session_id != sid {
+                if let Some(sid) = session_id
+                    && data.session_id != sid {
                         continue;
                     }
-                }
                 
                 let filename = path.file_name()
                     .and_then(|n| n.to_str())

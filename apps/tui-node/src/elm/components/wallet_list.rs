@@ -96,13 +96,9 @@ impl WalletList {
     }
     
     fn select_current(&self) -> Option<Message> {
-        if let Some(wallet) = self.wallets.get(self.selected) {
-            Some(Message::SelectWallet {
+        self.wallets.get(self.selected).map(|wallet| Message::SelectWallet {
                 wallet_id: wallet.session_id.clone(),
             })
-        } else {
-            None
-        }
     }
 }
 
@@ -219,11 +215,9 @@ impl Component for WalletList {
         
         // Render selected wallet details
         if let Some(wallet) = self.wallets.get(self.selected) {
-            let details = vec![
-                format!("Created: {}", wallet.created_at),
+            let details = [format!("Created: {}", wallet.created_at),
                 format!("Device: {}", wallet.device_id),
-                format!("Index: {}/{}", wallet.participant_index, wallet.total_participants),
-            ];
+                format!("Index: {}/{}", wallet.participant_index, wallet.total_participants)];
             
             let details_text = details.join(" | ");
             
@@ -305,26 +299,18 @@ impl AppComponent<Message, UserEvent> for WalletList {
                 modifiers: KeyModifiers::NONE,
             }) => {
                 // Delete wallet
-                if let Some(wallet) = self.wallets.get(self.selected) {
-                    Some(Message::DeleteWallet {
+                self.wallets.get(self.selected).map(|wallet| Message::DeleteWallet {
                         wallet_id: wallet.session_id.clone(),
                     })
-                } else {
-                    None
-                }
             }
             Event::Keyboard(KeyEvent {
                 code: Key::Char('e'),
                 modifiers: KeyModifiers::NONE,
             }) => {
                 // Export wallet
-                if let Some(wallet) = self.wallets.get(self.selected) {
-                    Some(Message::ExportWallet {
+                self.wallets.get(self.selected).map(|wallet| Message::ExportWallet {
                         wallet_id: wallet.session_id.clone(),
                     })
-                } else {
-                    None
-                }
             }
             Event::User(UserEvent::FocusGained) => {
                 self.focused = true;

@@ -224,12 +224,10 @@ impl Component for ThresholdConfigComponent {
 
 impl ThresholdConfigComponent {
     fn render_header(&self, frame: &mut Frame, area: Rect) {
-        let header_text = vec![
-            "⚙️ THRESHOLD CONFIGURATION (Step 3 of 3)",
+        let header_text = ["⚙️ THRESHOLD CONFIGURATION (Step 3 of 3)",
             "",
             "Set the number of participants and signing threshold",
-            "Threshold = minimum signers needed to authorize transactions",
-        ];
+            "Threshold = minimum signers needed to authorize transactions"];
         
         let header = Paragraph::new(header_text.join("\n"))
             .style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))
@@ -409,12 +407,10 @@ impl ThresholdConfigComponent {
     }
     
     fn render_footer(&self, frame: &mut Frame, area: Rect) {
-        let footer_text = vec![
-            format!("Configuration: {}-of-{} threshold", self.threshold, self.participants),
+        let footer_text = [format!("Configuration: {}-of-{} threshold", self.threshold, self.participants),
             "".to_string(),
             "← → Switch Fields | ↑↓ Adjust Values | Enter: Confirm | Esc: Back".to_string(),
-            "💡 Recommended: Use majority threshold (>50%) for security".to_string(),
-        ];
+            "💡 Recommended: Use majority threshold (>50%) for security".to_string()];
         
         let footer = Paragraph::new(footer_text.join("\n"))
             .style(

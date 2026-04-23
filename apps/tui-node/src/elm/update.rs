@@ -2257,8 +2257,8 @@ pub fn update(model: &mut Model, msg: Message) -> Option<Command> {
                         model.wallet_state.creating_wallet =
                             Some(CreateWalletState::default());
                     }
-                    if let Some(ref mut cw) = model.wallet_state.creating_wallet {
-                        if cw.custom_config.is_none() {
+                    if let Some(ref mut cw) = model.wallet_state.creating_wallet
+                        && cw.custom_config.is_none() {
                             cw.custom_config = Some(WalletConfig {
                                 name: "MPC Wallet".to_string(),
                                 threshold: 2,
@@ -2266,7 +2266,6 @@ pub fn update(model: &mut Model, msg: Message) -> Option<Command> {
                                 mode: cw.mode.clone().unwrap_or(WalletMode::Online),
                             });
                         }
-                    }
 
                     // Route through the password-capture screen before
                     // starting the DKG. `Message::SubmitPassword` picks

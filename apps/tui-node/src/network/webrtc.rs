@@ -80,8 +80,8 @@ pub async fn dispatch_data_channel_msg<C>(
     // NOT `{"SimpleMessage":{"text":"..."}}`. The previous externally-tagged parser
     // silently dropped every DKG Round 1/2 package.
     let webrtc_tag = json_msg.get("webrtc_msg_type").and_then(|v| v.as_str());
-    if webrtc_tag == Some("SimpleMessage") {
-        if let Some(msg_text) = json_msg.get("text").and_then(|v| v.as_str()) {
+    if webrtc_tag == Some("SimpleMessage")
+        && let Some(msg_text) = json_msg.get("text").and_then(|v| v.as_str()) {
             use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
             if let Some(package_data) = msg_text.strip_prefix("DKG_ROUND1:") {
                 info!("🔑 Received DKG Round 1 package from {}", device_id_recv);
@@ -175,7 +175,6 @@ pub async fn dispatch_data_channel_msg<C>(
             info!("📨 SimpleMessage from {}: {}", device_id_recv, msg_text);
             return;
         }
-    }
 
     // Control frames: `channel_open`, `mesh_ready`.
     if let Some(msg_type) = json_msg.get("type").and_then(|v| v.as_str()) {

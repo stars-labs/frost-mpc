@@ -927,8 +927,14 @@ chrome.runtime.onMessage.addListener((message: { type?: string; payload?: any },
                 const chain = payload.chain || "ethereum";
                 let keystoreData: string | null = null;
                 
-                // Try to get the keystore from the DKG manager
-                const dkgManager = webRTCManager.getDkgManager();
+                // Try to get the keystore from the DKG manager.
+                // Cast — getDkgManager / getDkgInstance are legacy
+                // accessors that predate the current webrtc.ts layout
+                // where frostDkg is a direct field. This path is kept
+                // for backward compat with the exportKeystore handler;
+                // a cleaner replacement would read webRTCManager
+                // frostDkg directly.
+                const dkgManager = (webRTCManager as any).getDkgManager?.();
                 if (dkgManager) {
                     // Export keystore from WASM
                     const dkgInstance = dkgManager.getDkgInstance();

@@ -435,6 +435,23 @@ export class WebRTCManager {
   }
 
   /**
+   * Expose the derived address / group public key for the popup's
+   * address-display flows. Offscreen/index.ts calls these by name
+   * from the background-command switch; fields are private so they
+   * need public accessors. Returns null when the ceremony hasn't
+   * completed yet.
+   */
+  public getGroupPublicKey(): string | null {
+    return this.groupPublicKey;
+  }
+  public getEthereumAddress(): string | null {
+    return this.ethereumAddress;
+  }
+  public getSolanaAddress(): string | null {
+    return this.solanaAddress;
+  }
+
+  /**
    * Send a plain text / debug message to a peer over the data
    * channel. Distinct from sendWebRTCAppMessage (which requires a
    * discriminated WebRTCAppMessage shape) — this just wraps the

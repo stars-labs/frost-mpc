@@ -65,7 +65,13 @@ describe('Keystore Persistence Integration', () => {
         await manager1.createKeystore('password123');
         
         // Step 2: Import a keystore (simulate CLI import)
-        const keyShareData: KeyShareData = {
+        // Note: this literal intentionally uses an older KeyShareData
+        // shape (keystore_id, current_round, party_index, key_packages,
+        // round1/round2 slots) that predates the Rust-aligned interface.
+        // The persistence roundtrip test is about encrypt/store/decrypt,
+        // not KeyShareData field conformance — cast to any to bypass
+        // type checking while keeping the test intent intact.
+        const keyShareData: any = {
             keystore_id: 'cli-imported',
             current_round: 2,
             threshold: 2,
@@ -150,6 +156,7 @@ describe('Keystore Persistence Integration', () => {
             createdAt: Date.now()
         };
         
+        // Legacy shape — see comment on keyShareData at line ~68.
         await manager.addWallet('eth-wallet', {
             keystore_id: 'eth-keystore',
             current_round: 2,
@@ -163,7 +170,7 @@ describe('Keystore Persistence Integration', () => {
             round1_packages: {},
             round2_secret_package: null,
             round2_public_packages: {}
-        }, ethWallet);
+        } as any, ethWallet);
         
         // Add Solana wallet
         const solWallet: ExtensionWalletMetadata = {
@@ -190,7 +197,7 @@ describe('Keystore Persistence Integration', () => {
             round1_packages: {},
             round2_secret_package: null,
             round2_public_packages: {}
-        }, solWallet);
+        } as any, solWallet);
         
         // Verify both wallets exist
         const wallets = manager.getWallets();

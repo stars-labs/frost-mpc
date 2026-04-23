@@ -7,12 +7,19 @@ edition = "2024"
 crate-type = ["cdylib"]
 
 [dependencies]
+# WASM bindings — every #[wasm_bindgen] in lib.rs routes through this.
 wasm-bindgen = "0.2.99"
-wasm-bindgen-futures = "0.4.49"
-serde = { version = "1.0.217", features = ["derive"] }
+
+# JSON <-> FROST round1/round2/commitment/share serialization.
+# (`serde` itself isn't a direct dep — serde_json re-exports the
+# traits it needs, and lib.rs has no custom #[derive(Serialize)].)
 serde_json = "1.0.143"
+
+# Optional panic-hook wired via `default = ["console_error_panic_hook"]`;
+# call site is `console_error_panic_hook::set_once()` inside the gated
+# cfg at lib.rs:699.
 console_error_panic_hook = { version = "0.1.7", optional = true }
-web-sys = { version = "0.3.76", features = ["console"] }
+
 # Inherit the workspace-level getrandom (version 0.4 + wasm_js feature)
 # so wasm-pack builds correctly resolve the js-sys backend. See root
 # Cargo.toml for the feature-name rationale.
@@ -25,8 +32,9 @@ getrandom.workspace = true
 # this entry exists purely for feature-unification. Renamed via
 # `package =` so it doesn't collide with the main `getrandom` name.
 getrandom_02 = { package = "getrandom", version = "0.2", features = ["js"] }
+
+# Hex encode/decode for FROST round1/round2 package wire format.
 hex = "0.4.3"
-base64 = "0.22.1"
 
 # Use our shared frost-core library
 mpc-wallet-frost-core = { path = "../frost-core" }
@@ -35,13 +43,11 @@ mpc-wallet-frost-core = { path = "../frost-core" }
 frost-secp256k1 = { version = "2.2.0", features = ["serde"] }
 frost-ed25519 = { version = "2.2.0", features = ["serde"] }
 
-# For random number generation. rand_core 0.6 + rand_chacha 0.3 match
-# what FROST 2.2 transitively requires — pinning here avoids having
-# cargo resolve two majors of rand_core (0.6 for FROST, 0.9+ for
-# higher-level `rand`) and failing feature unification.
-rand = "0.8"
+# OsRng is the only RNG the code uses — pinned to the 0.6 line because
+# that's what FROST 2.2's API exposes (see workspace Cargo.toml
+# comment for the full explanation). The `getrandom` feature is what
+# makes OsRng usable on wasm32.
 rand_core = { version = "0.6", features = ["getrandom"] }
-rand_chacha = "0.3"
 
 [features]
 default = ["console_error_panic_hook"]

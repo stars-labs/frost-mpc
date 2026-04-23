@@ -8,7 +8,7 @@ use crate::protocal::signal::SessionInfo;
 use crate::utils::state::PendingSigningRequest;
 
 /// All possible messages in the application
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub enum Message {
     // Navigation messages
     Navigate(Screen),
@@ -276,6 +276,7 @@ pub enum Message {
     Heartbeat,
     
     // No operation
+    #[default]
     None,
 }
 
@@ -379,12 +380,6 @@ impl Message {
 impl From<crossterm::event::KeyEvent> for Message {
     fn from(key: crossterm::event::KeyEvent) -> Self {
         Message::KeyPressed(key)
-    }
-}
-
-impl Default for Message {
-    fn default() -> Self {
-        Message::None
     }
 }
 

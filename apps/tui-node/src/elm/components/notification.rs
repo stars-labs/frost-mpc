@@ -34,21 +34,11 @@ use tuirealm::state::State;
 /// user knows some were dropped.
 const MAX_VISIBLE: usize = 2;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct NotificationBar {
     props: Props,
     notifications: Vec<Notification>,
     focused: bool,
-}
-
-impl Default for NotificationBar {
-    fn default() -> Self {
-        Self {
-            props: Props::default(),
-            notifications: Vec::new(),
-            focused: false,
-        }
-    }
 }
 
 impl NotificationBar {

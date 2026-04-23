@@ -20,17 +20,12 @@ use base64;
 use tracing::{info, error, warn};
 
 /// DKG execution mode for different coordination scenarios
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub enum DkgMode {
+    #[default]
     Online,    // Real-time WebRTC mesh coordination
     Offline,   // Air-gapped with file/QR code exchange
     Hybrid,    // Online coordination, offline key generation
-}
-
-impl Default for DkgMode {
-    fn default() -> Self {
-        DkgMode::Online
-    }
 }
 
 /// Compute a FROST `Identifier` for `device_id` that is **deterministic across

@@ -26,21 +26,11 @@ use tuirealm::props::Props;
 use tuirealm::ratatui::Frame;
 use tuirealm::state::State;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct ModalComponent {
     props: Props,
     modal: Option<Modal>,
     focused: bool,
-}
-
-impl Default for ModalComponent {
-    fn default() -> Self {
-        Self {
-            props: Props::default(),
-            modal: None,
-            focused: false,
-        }
-    }
 }
 
 impl ModalComponent {

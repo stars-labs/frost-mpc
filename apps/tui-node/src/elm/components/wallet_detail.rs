@@ -10,21 +10,11 @@ use tuirealm::state::State;
 use tuirealm::command::{Cmd, CmdResult};
 use ratatui::layout::Rect;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct WalletDetail {
     props: Props,
     wallet_id: Option<String>,
     focused: bool,
-}
-
-impl Default for WalletDetail {
-    fn default() -> Self {
-        Self {
-            props: Props::default(),
-            wallet_id: None,
-            focused: false,
-        }
-    }
 }
 
 impl WalletDetail {

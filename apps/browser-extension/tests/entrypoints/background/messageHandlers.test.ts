@@ -574,7 +574,7 @@ describe('Background Message Handlers', () => {
                 )
             );
 
-            responses.forEach(response => {
+            responses.forEach((response: any) => {
                 expect(response.success).toBe(true);
             });
 
@@ -643,7 +643,7 @@ describe('Background Message Handlers', () => {
             // Should complete 100 requests reasonably quickly
             expect(duration).toBeLessThan(1000); // Less than 1 second
             expect(responses.length).toBe(100);
-            responses.forEach(response => {
+            responses.forEach((response: any) => {
                 expect(response.success).toBe(true);
             });
         });

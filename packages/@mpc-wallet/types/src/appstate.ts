@@ -69,6 +69,14 @@ export interface AppState {
   // these; user has to redo DKG). ---
   /** Derived on-chain address from the DKG result. */
   dkgAddress?: string;
+  /** Ethereum address derived from a secp256k1 wallet. Stored
+   *  separately from dkgAddress so a user with both ethereum and
+   *  solana wallets can surface each without overwriting the
+   *  other on wallet switch. */
+  ethereumAddress?: string;
+  /** Solana address derived from an ed25519 wallet. See
+   *  ethereumAddress note. */
+  solanaAddress?: string;
   /** Last DKG error message (ceremony failed, peer dropped, etc.).
    *  Cleared to "" on new ceremony start; stateManager writes this
    *  from the fetchAndUpdateDkgAddress error path. */

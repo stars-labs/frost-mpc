@@ -7,9 +7,14 @@ The MPC Wallet has been successfully updated to implement the EIP-6963 standard 
 
 ### 1. Provider Injection (`src/entrypoints/injected/index.ts`)
 - Creates a `PageProvider` class that implements the Ethereum provider API
-- Exposes the provider as both `window.ethereum` and `window.starlabEthereum`
-- Handles multi-provider scenarios when other wallets are present
-- Implements all required EIP-1193 methods
+- Exposes the provider **only** as `window.starlabEthereum`, never
+  as `window.ethereum` — the injection code explicitly scopes
+  itself to the namespaced property so we never overwrite another
+  wallet extension's `window.ethereum`. dApps discover us via the
+  EIP-6963 announcement, not a `window.ethereum` prototype chain.
+- Implements all required EIP-1193 methods via a `Proxy` around
+  `PageProvider` to pass through legacy MetaMask-specific
+  properties.
 
 ### 2. EIP-6963 Provider Announcement
 - Listens for `eip6963:requestProvider` events
@@ -40,29 +45,29 @@ The MPC Wallet has been successfully updated to implement the EIP-6963 standard 
 ## Testing
 
 ### Manual Testing Steps
-1. Build the extension: `bun run build`
+1. Build the extension: `bun run build` (from `apps/browser-extension/`)
 2. Load the extension in Chrome:
    - Navigate to `chrome://extensions`
    - Enable "Developer mode"
    - Click "Load unpacked"
    - Select the `.output/chrome-mv3/` directory
-3. Open the test dApp:
-   - Start local server: `python3 -m http.server 8080`
-   - Navigate to `http://localhost:8080/test-dapp.html`
-   - Or open `test-extension-loaded.html` directly
+3. Visit any EIP-6963-aware dApp (e.g. the Uniswap interface, or
+   a local Rabby Kit / Wagmi `createConfig` test harness) and confirm
+   "MPC Wallet" appears in the wallet-discovery list alongside any
+   other installed wallet extension.
 
-### Test Files Created
-- `/test-dapp.html` - Full-featured test dApp with UI
-- `/test-extension-loaded.html` - Simple extension verification page
-- `/test-eip6963.js` - Console script for testing
+Earlier drafts of this section referenced bundled test harness files
+(`/test-dapp.html`, `/test-extension-loaded.html`, `/test-eip6963.js`)
+that never shipped in-tree — removed rather than kept as broken
+pointers. A dedicated test-dApp fixture is open work.
 
 ### Expected Behavior
-1. The wallet should appear in the "Discovered Wallets" list
-2. Clicking "Connect Wallet" should establish a connection
-3. RPC methods should return appropriate values:
-   - `eth_chainId`: "0x1" (Ethereum mainnet)
-   - `eth_accounts`: Array of connected addresses
-   - `net_version`: "1"
+1. "MPC Wallet" shows up in the dApp's EIP-6963 "Discovered Wallets" list.
+2. Clicking "Connect" invokes the MPC-wallet `eth_requestAccounts` flow.
+3. Default RPC replies (before a wallet is unlocked):
+   - `eth_chainId`: `"0x1"` (Ethereum mainnet)
+   - `net_version`: `"1"`
+   - `eth_accounts`: `[]` until a wallet is selected + unlocked.
 
 ## Integration with dApps
 The wallet will automatically work with any dApp that:

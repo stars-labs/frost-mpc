@@ -1,10 +1,43 @@
-import { describe, it, expect, beforeEach } from 'bun:test';
+import { describe, it, expect, beforeEach, mock } from 'bun:test';
+import { jest } from 'bun:test';
 import WalletClientService from './walletClient';
+
+// Smoke-test contract: each WalletClient method either resolves with a
+// valid shape, or rejects with a recognizable error. These tests must
+// run without network access, so mock viem's clients to return deterministic
+// values. The companion mocked unit tests live in
+// tests/services/walletClient.test.ts.
+mock.module('viem', () => ({
+    createWalletClient: jest.fn(() => ({ account: { address: '0x123' } })),
+    createPublicClient: jest.fn(() => ({
+        getBalance: jest.fn().mockResolvedValue(BigInt('1000000000000000000')),
+        getTransactionCount: jest.fn().mockResolvedValue(5),
+        estimateGas: jest.fn().mockResolvedValue(BigInt(21000)),
+        getGasPrice: jest.fn().mockResolvedValue(BigInt('20000000000')),
+        getTransactionReceipt: jest.fn().mockResolvedValue({ status: 'success' }),
+        getBlockNumber: jest.fn().mockResolvedValue(BigInt(22_000_000)),
+    })),
+    http: jest.fn(() => ({})),
+    custom: jest.fn(() => ({})),
+}));
+mock.module('viem/chains', () => ({
+    mainnet: {
+        id: 1,
+        name: 'Ethereum',
+        network: 'mainnet',
+        nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
+        rpcUrls: { default: { http: ['https://mock.local'] } },
+        blockExplorers: { default: { name: 'Etherscan', url: 'https://etherscan.io' } },
+    },
+}));
 
 describe('WalletClientService', () => {
     let walletClient: WalletClientService;
 
     beforeEach(() => {
+        // Reset singleton so each test sees a fresh client constructed
+        // against the mocks above.
+        (WalletClientService as any).instance = null;
         walletClient = WalletClientService.getInstance();
     });
 

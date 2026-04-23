@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, mock } from 'bun:test';
+import { describe, it, expect, beforeEach, afterEach, mock } from 'bun:test';
 import { jest } from 'bun:test';
 import WalletClientService from '../../src/services/walletClient';
 import AccountService from '../../src/services/accountService';
@@ -61,6 +61,16 @@ describe('WalletClientService', () => {
     jest.spyOn(NetworkService, 'getInstance').mockReturnValue(mockNetworkService);
 
     walletClient = WalletClientService.getInstance();
+  });
+
+  afterEach(() => {
+    // Restore AccountService/NetworkService.getInstance — spies installed
+    // on class statics leak across test files (clearAllMocks resets call
+    // history but not implementations). Without this, subsequent files
+    // that call AccountService.getInstance() get our test's mock object
+    // instead of the real singleton.
+    jest.restoreAllMocks();
+    (WalletClientService as any).instance = null;
   });
 
   describe('Initialization', () => {

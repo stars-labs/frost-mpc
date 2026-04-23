@@ -2,7 +2,34 @@ import WalletController from '../../src/services/walletController';
 import AccountService from '../../src/services/accountService';
 import NetworkService from '../../src/services/networkService';
 // Mock chrome.storage.local
-import {  describe, it, expect, beforeEach, afterEach  } from 'bun:test';
+import {  describe, it, expect, beforeEach, afterEach, mock  } from 'bun:test';
+import { jest } from 'bun:test';
+
+// viem is imported transitively through WalletClientService. Without
+// this mock, getBalance/getBlockNumber/etc hit real RPC and time out.
+mock.module('viem', () => ({
+    createWalletClient: jest.fn(() => ({ account: { address: '0x123' } })),
+    createPublicClient: jest.fn(() => ({
+        getBalance: jest.fn().mockResolvedValue(BigInt('1000000000000000000')),
+        getTransactionCount: jest.fn().mockResolvedValue(5),
+        estimateGas: jest.fn().mockResolvedValue(BigInt(21000)),
+        getGasPrice: jest.fn().mockResolvedValue(BigInt('20000000000')),
+        getTransactionReceipt: jest.fn().mockResolvedValue({ status: 'success' }),
+        getBlockNumber: jest.fn().mockResolvedValue(BigInt(22_000_000)),
+    })),
+    http: jest.fn(() => ({})),
+    custom: jest.fn(() => ({})),
+}));
+mock.module('viem/chains', () => ({
+    mainnet: {
+        id: 1,
+        name: 'Ethereum',
+        network: 'mainnet',
+        nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
+        rpcUrls: { default: { http: ['https://mock.local'] } },
+        blockExplorers: { default: { name: 'Etherscan', url: 'https://etherscan.io' } },
+    },
+}));
 const mockStorage = {
     data: {} as Record<string, any>,
     get: async (key: string) => ({ [key]: mockStorage.data[key] }),

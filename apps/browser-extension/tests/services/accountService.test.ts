@@ -56,17 +56,24 @@ describe('AccountService', () => {
     let accountService: AccountService;
 
     beforeEach(async () => {
+        // Re-install file-local mockStorage onto chrome.storage.local.
+        // setup-bun.ts has its own beforeEach that overwrites
+        // chrome.storage.local with a fresh mock — run last, that would
+        // bury our spy. Re-assigning here makes the file's mockStorage
+        // the one the service actually hits.
+        (global as any).chrome.storage.local = mockStorage;
+
         // Clear mock storage
         await mockStorage.clear();
         mockStorage.get.mockClear();
         mockStorage.set.mockClear();
-        
+
         // Reset singleton instance before each test
         AccountService.resetInstance();
-        
+
         // Get fresh instance
         accountService = AccountService.getInstance();
-        
+
         // Ensure it's initialized
         await accountService.ensureInitialized();
     });

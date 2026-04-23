@@ -9,7 +9,7 @@ class AccountService {
     private accounts: Account[] = [];
     private readonly STORAGE_KEY = 'wallet_accounts';
     private readonly CURRENT_ACCOUNT_KEY = 'wallet_current_account';
-    private currentAccountAddress: string | undefined;
+    private currentAccountId: string | undefined;
     private changeCallbacks: AccountChangeCallback[] = [];
     private initialized: boolean = false;
 
@@ -48,12 +48,14 @@ class AccountService {
             // In test environment, chrome.storage might not be available
             if (typeof chrome !== 'undefined' && chrome.storage) {
                 const result = await chrome.storage.local.get([this.STORAGE_KEY, this.CURRENT_ACCOUNT_KEY]);
-                this.accounts = result[this.STORAGE_KEY] || [];
-                this.currentAccountAddress = result[this.CURRENT_ACCOUNT_KEY];
+                // Defensive: corrupted storage (non-array) must reset to [].
+                const raw = result[this.STORAGE_KEY];
+                this.accounts = Array.isArray(raw) ? raw : [];
+                this.currentAccountId = result[this.CURRENT_ACCOUNT_KEY];
             } else {
                 // Fallback for test environment
                 this.accounts = [];
-                this.currentAccountAddress = undefined;
+                this.currentAccountId = undefined;
             }
         } catch (error) {
             console.error('Failed to load accounts:', error);
@@ -62,22 +64,17 @@ class AccountService {
     }
 
     private async saveAccounts(): Promise<void> {
-        try {
-            if (typeof chrome !== 'undefined' && chrome.storage) {
-                await chrome.storage.local.set({ [this.STORAGE_KEY]: this.accounts });
-            }
-        } catch (error) {
-            console.error('Failed to save accounts:', error);
+        // Propagate storage failures — callers (addAccount, removeAccount)
+        // need to know if persistence failed, otherwise we corrupt the
+        // in-memory cache without anything on disk to back it up.
+        if (typeof chrome !== 'undefined' && chrome.storage) {
+            await chrome.storage.local.set({ [this.STORAGE_KEY]: this.accounts });
         }
     }
 
     private async saveCurrentAccount(): Promise<void> {
-        try {
-            if (typeof chrome !== 'undefined' && chrome.storage) {
-                await chrome.storage.local.set({ [this.CURRENT_ACCOUNT_KEY]: this.currentAccountAddress });
-            }
-        } catch (error) {
-            console.error('Failed to save current account:', error);
+        if (typeof chrome !== 'undefined' && chrome.storage) {
+            await chrome.storage.local.set({ [this.CURRENT_ACCOUNT_KEY]: this.currentAccountId });
         }
     }
 
@@ -115,7 +112,6 @@ class AccountService {
 
         this.accounts.push(account);
         await this.saveAccounts();
-        await this.setCurrentAccount(account.id);
         return account;
     }
 
@@ -163,8 +159,8 @@ class AccountService {
         this.accounts.splice(accountIndex, 1);
 
         // If this was the current account, clear current account
-        if (this.currentAccountAddress === removedAccount.address) {
-            this.currentAccountAddress = undefined;
+        if (this.currentAccountId === removedAccount.id) {
+            this.currentAccountId = undefined;
         }
 
         await this.saveAccounts();
@@ -198,24 +194,24 @@ class AccountService {
     }
 
     public getCurrentAccount(): Account | null {
-        if (!this.currentAccountAddress) {
-            // If no current account is set but we have accounts, use the first one
-            if (this.accounts.length > 0) {
-                this.currentAccountAddress = this.accounts[0].address;
-                this.saveCurrentAccount().catch(error => {
-                    console.error('Failed to save current account:', error);
-                });
-                return this.accounts[0];
-            }
-            return null;
-        }
-        return this.accounts.find(acc => acc.address === this.currentAccountAddress) || null;
+        // Pure read: returns null when no account has been explicitly
+        // selected. Callers that want "pick one if unset" must use
+        // ensureDefaultAccount(), which is the opt-in helper.
+        if (!this.currentAccountId) return null;
+        return this.accounts.find(acc => acc.id === this.currentAccountId) || null;
     }
 
     public async ensureDefaultAccount(): Promise<Account | null> {
-        // If we already have an account, use it
+        // If a current account is already explicitly set, use it.
+        const existingCurrent = this.getCurrentAccount();
+        if (existingCurrent) return existingCurrent;
+
+        // Otherwise, if we have at least one account, promote the first
+        // to current (replaces the implicit auto-select that used to
+        // live in getCurrentAccount()).
         if (this.accounts.length > 0) {
-            return this.getCurrentAccount();
+            await this.setCurrentAccount(this.accounts[0].id);
+            return this.accounts[0];
         }
 
         try {
@@ -235,6 +231,7 @@ class AccountService {
                     }
                 };
                 await this.addAccount(account);
+                await this.setCurrentAccount(account.id);
                 return account;
             }
         } catch (error) {
@@ -441,7 +438,7 @@ class AccountService {
      */
     public async setCurrentAccount(accountId: string | null): Promise<void> {
         if (accountId === null) {
-            this.currentAccountAddress = undefined;
+            this.currentAccountId = undefined;
             await this.saveCurrentAccount();
             this.notifyAccountChange(null);
             return;
@@ -450,14 +447,14 @@ class AccountService {
         if (!account) {
             throw new Error('Account not found');
         }
-        this.currentAccountAddress = account.address;
+        this.currentAccountId = account.id;
         await this.saveCurrentAccount();
         this.notifyAccountChange(account);
     }
 
     public async clearAccounts(): Promise<void> {
         this.accounts = [];
-        this.currentAccountAddress = undefined;
+        this.currentAccountId = undefined;
         await this.saveAccounts();
         await this.saveCurrentAccount();
         this.notifyAccountChange(null);

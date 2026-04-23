@@ -76,43 +76,40 @@ class WalletClientService {
     }
 
     public async sendTransaction(transaction: any): Promise<string> {
-        // MPC wallets don't support single-key transaction signing
-        // Transactions must be signed through the MPC protocol
-        throw new Error('Transaction signing must use MPC protocol. Please use the MPC signing flow.');
+        // MPC wallets don't support single-key transaction signing.
+        // Callers must route through the threshold-signing ceremony.
+        throw new Error('Transaction signing must use MPC protocol (not supported via wallet client). Use the MPC signing flow.');
     }
 
     public async signMessage(message: string): Promise<string> {
-        // MPC wallets don't support single-key message signing
-        // Messages must be signed through the MPC protocol
-        throw new Error('Message signing must use MPC protocol. Please use the MPC signing flow.');
+        throw new Error('Message signing must use MPC protocol (not supported via wallet client). Use the MPC personal_sign flow.');
     }
 
     public async signTypedData(typedData: any): Promise<string> {
-        // MPC wallets don't support single-key typed data signing
-        // Typed data must be signed through the MPC protocol
-        throw new Error('Typed data signing must use MPC protocol. Please use the MPC signing flow.');
+        throw new Error('Typed data signing must use MPC protocol (not supported via wallet client). Use the MPC signing flow.');
     }
 
     public async getBalance(address?: string): Promise<string> {
-        const currentAccount = this.accountService.getCurrentAccount();
-        if (!currentAccount) {
-            throw new Error('No account selected');
+        // An explicit address makes this a pure RPC query — no account
+        // selection needed. Only fall back to the currentAccount when
+        // the caller didn't specify one.
+        const target = address ?? this.accountService.getCurrentAccount()?.address;
+        if (!target) {
+            throw new Error('No account selected and no address provided');
         }
-
         const balance = await this.publicClient.getBalance({
-            address: (address || currentAccount.address) as `0x${string}`
+            address: target as `0x${string}`
         });
         return balance.toString();
     }
 
     public async getTransactionCount(address?: string): Promise<number> {
-        const currentAccount = this.accountService.getCurrentAccount();
-        if (!currentAccount) {
-            throw new Error('No account selected');
+        const target = address ?? this.accountService.getCurrentAccount()?.address;
+        if (!target) {
+            throw new Error('No account selected and no address provided');
         }
-
         return this.publicClient.getTransactionCount({
-            address: (address || currentAccount.address) as `0x${string}`
+            address: target as `0x${string}`
         });
     }
 

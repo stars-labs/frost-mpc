@@ -159,124 +159,86 @@ let commitment = VerifiableSecretSharing::commit(&secret_share);
 
 ## Network Security
 
-### TLS/DTLS Configuration
+### TLS / DTLS scope
 
-```
-┌─────────────────────────────────────────────────────────┐
-│ TLS Configuration (WebSocket)                           │
-├─────────────────────────────────────────────────────────┤
-│ Version: TLS 1.3 (minimum TLS 1.2)                     │
-│                                                         │
-│ Cipher Suites:                                          │
-│ • TLS_AES_256_GCM_SHA384 (preferred)                  │
-│ • TLS_AES_128_GCM_SHA256                              │
-│ • TLS_CHACHA20_POLY1305_SHA256                        │
-│                                                         │
-│ Certificate Validation:                                 │
-│ • Verify full certificate chain                        │
-│ • Check certificate expiration                         │
-│ • Validate against pinned CA (optional)               │
-│ • Verify server hostname                              │
-│                                                         │
-│ Additional Security:                                    │
-│ • HSTS enforcement                                     │
-│ • Certificate transparency                             │
-│ • OCSP stapling                                       │
-└─────────────────────────────────────────────────────────┘
-```
+This application does NOT configure TLS cipher suites, versions,
+or OCSP settings directly — both layers are delegated:
 
-### WebRTC Security
+- **Signal-server TLS (WebSocket)**: clients connect via `wss://`
+  and trust the system CA store. `tokio-tungstenite` uses the
+  native TLS stack on each platform. The public Cloudflare Worker
+  endpoint at `wss://xiongchenyu.dpdns.org` gets its TLS from
+  Cloudflare's edge. Operators running the self-hosted signal
+  server terminate TLS in their own reverse proxy (nginx / caddy /
+  Cloudflare Tunnel — see `docs/deployment/README.md`).
+- **WebRTC DTLS-SRTP**: version + cipher selection happens inside
+  the `webrtc` crate / browser WebRTC implementation. Earlier
+  drafts claimed "DTLS 1.3" specifically — the protocol version
+  is whatever the underlying library negotiates, not something
+  this app pins. Data channels (no media tracks) ride DTLS-SRTP
+  as usual.
 
-```
-┌─────────────────────────────────────────────────────────┐
-│ WebRTC Security Configuration                           │
-├─────────────────────────────────────────────────────────┤
-│ DTLS Configuration:                                     │
-│ • Version: DTLS 1.3                                    │
-│ • SRTP for media encryption                           │
-│ • Perfect forward secrecy                             │
-│                                                         │
-│ ICE Security:                                           │
-│ • TURN server authentication                           │
-│ • Consent freshness checks                            │
-│ • Rate limiting                                       │
-│                                                         │
-│ Signaling Security:                                     │
-│ • All offers/answers over TLS                         │
-│ • SDP sanitization                                    │
-│ • Origin validation                                   │
-└─────────────────────────────────────────────────────────┘
-```
+No certificate pinning, no HSTS enforcement, no OCSP stapling,
+no TURN-server authentication (no TURN infra ships — clients rely
+on public STUN only), no SDP sanitization layer. Earlier drafts
+of this section enumerated all of those as features — they're not
+implemented.
 
 ### Network Isolation
 
-For high-security deployments:
-
-```
-┌─────────────────────────────────────────────────────────┐
-│ Network Segmentation                                    │
-├─────────────────────────────────────────────────────────┤
-│ DMZ Network:                                            │
-│ • Signal server connection                             │
-│ • No direct internet access                           │
-│                                                         │
-│ Management Network:                                     │
-│ • Administrative access only                           │
-│ • Separate from production                            │
-│                                                         │
-│ Air-Gapped Network:                                    │
-│ • Offline signing operations                          │
-│ • Physical separation required                        │
-└─────────────────────────────────────────────────────────┘
-```
+For operators who want to deploy the self-hosted signal server in
+a segmented network, standard network-engineering practice applies
+(DMZ for the WS listener, separate management interface, air-gap
+for offline participants). The application itself doesn't ship
+any tooling that enforces this segmentation — it's an operator-side
+concern.
 
 ## Local Security
 
 ### Keystore Protection
 
+Values below are the real constants in
+`apps/tui-node/src/keystore/encryption.rs`:
+
 ```
-┌─────────────────────────────────────────────────────────┐
-│ Keystore Encryption Scheme                              │
-├─────────────────────────────────────────────────────────┤
-│ Key Derivation:                                         │
-│ • Algorithm: PBKDF2-SHA256                             │
-│ • Iterations: 100,000                                  │
-│ • Salt: 32 bytes (unique per keystore)                │
-│                                                         │
-│ Encryption:                                             │
-│ • Algorithm: AES-256-GCM                               │
-│ • IV: 12 bytes (unique per encryption)                │
-│ • Tag: 16 bytes (authentication)                       │
-│                                                         │
-│ Storage Format:                                         │
-│ ┌─────────────────────────┐                           │
-│ │ Version (4 bytes)       │                           │
-│ │ Salt (32 bytes)         │                           │
-│ │ IV (12 bytes)           │                           │
-│ │ Ciphertext (variable)   │                           │
-│ │ Auth Tag (16 bytes)     │                           │
-│ └─────────────────────────┘                           │
-└─────────────────────────────────────────────────────────┘
+Key Derivation:
+  Algorithm:  PBKDF2-HMAC-SHA256
+  Iterations: 100_000  (PBKDF2_ITERATIONS constant)
+  Salt:       16 bytes (SALT_LEN = 16, fresh per wallet)
+
+Encryption:
+  Algorithm:  AES-256-GCM
+  Nonce:      12 bytes (NONCE_LEN = 12, fresh per encryption)
+  Auth tag:   16 bytes (standard GCM tag, appended to ciphertext
+              by the aes-gcm crate — no separate storage field)
+
+`.dat` on-disk layout (no version prefix):
+  ┌─────────────────────────────────────────────┐
+  │ salt       (16 B)                           │
+  │ nonce      (12 B)                           │
+  │ ciphertext + GCM auth tag (variable bytes)  │
+  └─────────────────────────────────────────────┘
 ```
+
+Earlier drafts of this section claimed a 32-byte salt and a
+leading `Version (4 bytes)` field — neither is true (verified
+against `encryption.rs:20-21` for the constants and `:99` for
+the write format).
 
 ### Memory Protection
 
-```rust
-// Secure memory handling
-use zeroize::Zeroize;
+Today only `packages/@mpc-wallet/frost-core/src/root_secret.rs`
+uses `zeroize::Zeroize` (grep: 1 hit across the whole workspace).
+Key shares, decrypted keystore blobs, passwords entered into the
+PasswordPrompt screen, and signing intermediate state are NOT
+zeroed on drop. Earlier drafts of this doc showed a
+`#[zeroize(drop)] SensitiveData` struct with automatic wiping —
+that pattern is not applied anywhere in the current tree.
 
-pub struct SensitiveData {
-    #[zeroize(drop)]
-    key_material: Vec<u8>,
-}
-
-// Automatic zeroing on drop
-impl Drop for SensitiveData {
-    fn drop(&mut self) {
-        self.key_material.zeroize();
-    }
-}
-```
+Adding systematic zeroization (at minimum to: `key_package`,
+`group_public_key`, `frost_nonces`, `frost_commitments`,
+`frost_signature_shares`, `signing_message`, and the
+PasswordPrompt draft buffers) is tracked as open hardening work.
 
 ### File System Security
 

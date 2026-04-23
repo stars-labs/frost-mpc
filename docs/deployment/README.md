@@ -1,387 +1,152 @@
 # Deployment Guide
 
-## Overview
+Production deployment paths that actually exist in this repo. Most of
+this project's "operations" story is intentionally small — the signal
+server is stateless, the wallet clients are single-binary apps, and
+the production signaling path runs on a Cloudflare Worker.
 
-Complete guide for deploying MPC Wallet components to production
-environments. This single-page guide covers:
+## What ships to production
 
-- Quick-start deployment recipes (Docker, Cloudflare Worker,
-  browser extension)
-- Production architecture and infrastructure sizing
-- Kubernetes and Docker Compose manifests
-- Monitoring, security hardening, backup & recovery
-- Linux kernel tuning + signal-server tuning parameters
-- Pre/during/post-deployment checklist
-- Troubleshooting recipes
+| Component | Artefact | Real deployment target |
+|---|---|---|
+| Signal server (edge) | Cloudflare Worker | `wrangler deploy` from `apps/signal-server/cloudflare-worker/` — see [CLOUDFLARE_DEPLOYMENT.md](CLOUDFLARE_DEPLOYMENT.md) |
+| Signal server (self-host) | Native Rust binary from `apps/signal-server/server/` | systemd service behind an HTTPS terminator (nginx/caddy/Cloudflare Tunnel). Binds `0.0.0.0:9000`. Stateless, no DB, no Redis. |
+| Browser extension | `bun run build:chrome` / `build:firefox` | Chrome Web Store / AMO distribution, or sideload via `.output/<browser>-mv3` |
+| TUI wallet | `cargo build --release --bin mpc-wallet-tui` | End-user distribution — not a server deployment; single static binary. |
+| Native desktop | `cargo build --release -p mpc-wallet-native` | End-user Slint desktop binary. |
 
-For the Cloudflare Worker deployment specifically, see the
-dedicated guide: [CLOUDFLARE_DEPLOYMENT.md](CLOUDFLARE_DEPLOYMENT.md).
+## Cloudflare Worker signal server
 
-## Quick Deployment
-
-### Signal Server (Docker)
-
-```bash
-# Build Docker image
-docker build -t mpc-signal-server apps/signal-server/server
-
-# Run with Docker Compose
-docker-compose up -d
-
-# Or run directly
-docker run -d \
-  -p 8080:8080 \
-  -e RUST_LOG=info \
-  --name signal-server \
-  mpc-signal-server
-```
-
-### Cloudflare Worker
+The canonical production deployment. Stateless, globally distributed,
+handled entirely by Cloudflare edge runtime.
 
 ```bash
 cd apps/signal-server/cloudflare-worker
-
-# Configure wrangler
-wrangler login
-
-# Deploy to Cloudflare
-wrangler publish
-
-# View logs
-wrangler tail
+wrangler deploy        # deploys to the wrangler.toml-configured account
+wrangler tail          # tail logs
 ```
 
-### Browser Extension
+Full instructions: [CLOUDFLARE_DEPLOYMENT.md](CLOUDFLARE_DEPLOYMENT.md).
+
+## Self-hosted signal server
+
+Verified against `apps/signal-server/server/src/main.rs` — the binary
+reads zero environment variables, binds a hard-coded `0.0.0.0:9000`,
+and holds all state in memory.
 
 ```bash
-# Build for production
+# Build
+cargo build --release -p webrtc-signal-server
+
+# Run (foreground)
+./target/release/webrtc-signal-server
+#   -> "Signal server listening on 0.0.0.0:9000"
+```
+
+### systemd unit template
+
+```ini
+[Unit]
+Description=MPC Wallet signal server
+After=network.target
+
+[Service]
+Type=simple
+User=signal-server
+ExecStart=/opt/mpc-wallet/webrtc-signal-server
+Restart=on-failure
+RestartSec=5s
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Terminate TLS in front of port 9000 with nginx, caddy, Cloudflare
+Tunnel, or equivalent. The extension and TUI default to
+`wss://xiongchenyu.dpdns.org`; override via chrome.storage.local
+(extension) or `--signal-server` (TUI) during testing.
+
+## Browser extension
+
+```bash
 cd apps/browser-extension
-bun run build:chrome
+bun run build:chrome      # -> .output/chrome-mv3/
+bun run build:firefox     # -> .output/firefox-mv2/
 
-# Create distribution package
-cd .output/chrome-mv3
-zip -r ../../mpc-wallet-chrome.zip .
-
-# Upload to Chrome Web Store Developer Dashboard
+# Package for web-store upload
+cd .output/chrome-mv3 && zip -r ../../mpc-wallet-chrome.zip .
 ```
 
-## Production Architecture
+Install unpacked during development via `chrome://extensions` →
+Developer Mode → "Load unpacked" → `.output/chrome-mv3`.
 
-### Recommended Setup
+## Operator notes
 
-```
-                    ┌─────────────────┐
-                    │   Load Balancer │
-                    │   (AWS ALB/NLB)  │
-                    └────────┬────────┘
-                             │
-                ┌────────────┼────────────┐
-                │            │            │
-         ┌──────▼────┐ ┌────▼──────┐ ┌──▼────────┐
-         │  Signal   │ │  Signal   │ │  Signal   │
-         │  Server 1 │ │  Server 2 │ │  Server 3 │
-         └───────────┘ └───────────┘ └───────────┘
-                │            │            │
-                └────────────┼────────────┘
-                             │
-                    ┌────────▼────────┐
-                    │   Redis Cache   │
-                    │  (Session State) │
-                    └─────────────────┘
-```
+### Kernel parameters for a busy self-hosted signal server
 
-### Infrastructure Requirements
-
-#### Signal Server
-- **CPU**: 4 vCPUs (minimum)
-- **Memory**: 8GB RAM
-- **Storage**: 50GB SSD
-- **Network**: 1Gbps
-- **Instances**: 3+ for HA
-
-#### STUN/TURN Servers
-- **Bandwidth**: 10Gbps
-- **Locations**: Multiple regions
-- **Provider**: Coturn or commercial
-
-#### Database (Optional)
-- **Type**: PostgreSQL 14+
-- **Storage**: 100GB+
-- **Backup**: Daily snapshots
-
-## Deployment Configurations
-
-### Environment Variables
+Applies to the native Rust signal server under load (thousands of
+concurrent WebSocket connections). Not needed for the Cloudflare
+Worker variant — that's Cloudflare's problem.
 
 ```bash
-# Signal Server
-RUST_LOG=info
-PORT=8080
-REDIS_URL=redis://localhost:6379
-MAX_CONNECTIONS=10000
-SESSION_TIMEOUT=3600
-
-# STUN/TURN
-STUN_SERVER=stun:stun.example.com:3478
-TURN_SERVER=turn:turn.example.com:3478
-TURN_USERNAME=username
-TURN_PASSWORD=password
-```
-
-### Kubernetes Deployment
-
-```yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: signal-server
-spec:
-  replicas: 3
-  selector:
-    matchLabels:
-      app: signal-server
-  template:
-    metadata:
-      labels:
-        app: signal-server
-    spec:
-      containers:
-      - name: signal-server
-        image: mpc-wallet/signal-server:latest
-        ports:
-        - containerPort: 8080
-        env:
-        - name: RUST_LOG
-          value: "info"
-        resources:
-          requests:
-            memory: "4Gi"
-            cpu: "2"
-          limits:
-            memory: "8Gi"
-            cpu: "4"
-```
-
-### Docker Compose
-
-```yaml
-version: '3.8'
-
-services:
-  signal-server:
-    image: mpc-wallet/signal-server:latest
-    ports:
-      - "8080:8080"
-    environment:
-      - RUST_LOG=info
-      - REDIS_URL=redis://redis:6379
-    depends_on:
-      - redis
-    restart: unless-stopped
-
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis-data:/data
-    restart: unless-stopped
-
-  nginx:
-    image: nginx:alpine
-    ports:
-      - "443:443"
-      - "80:80"
-    volumes:
-      - ./nginx.conf:/etc/nginx/nginx.conf
-      - ./certs:/etc/nginx/certs
-    depends_on:
-      - signal-server
-    restart: unless-stopped
-
-volumes:
-  redis-data:
-```
-
-## Monitoring & Observability
-
-### Prometheus Metrics
-
-```yaml
-# prometheus.yml
-global:
-  scrape_interval: 15s
-
-scrape_configs:
-  - job_name: 'signal-server'
-    static_configs:
-      - targets: ['localhost:9090']
-```
-
-### Grafana Dashboard
-
-Key metrics to monitor:
-- Active connections
-- Message throughput
-- Session creation rate
-- Error rate
-- P95 latency
-
-### Logging
-
-```bash
-# Structured logging with Vector
-[sources.signal_server]
-type = "docker_logs"
-include_containers = ["signal-server"]
-
-[transforms.parse]
-type = "remap"
-inputs = ["signal_server"]
-source = '''
-. = parse_json!(.message)
-'''
-
-[sinks.elasticsearch]
-type = "elasticsearch"
-inputs = ["parse"]
-endpoint = "https://elasticsearch:9200"
-```
-
-## Security Hardening
-
-### TLS Configuration
-
-```nginx
-server {
-    listen 443 ssl http2;
-    ssl_certificate /etc/nginx/certs/cert.pem;
-    ssl_certificate_key /etc/nginx/certs/key.pem;
-    
-    ssl_protocols TLSv1.2 TLSv1.3;
-    ssl_ciphers HIGH:!aNULL:!MD5;
-    ssl_prefer_server_ciphers on;
-    
-    location /ws {
-        proxy_pass http://signal-server:8080;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-    }
-}
-```
-
-### Firewall Rules
-
-```bash
-# Allow only necessary ports
-ufw allow 22/tcp   # SSH
-ufw allow 443/tcp  # HTTPS
-ufw allow 8080/tcp # WebSocket
-ufw enable
-```
-
-## Backup & Recovery
-
-### Backup Strategy
-
-```bash
-#!/bin/bash
-# backup.sh
-
-# Backup Redis data
-redis-cli --rdb /backup/redis-$(date +%Y%m%d).rdb
-
-# Backup configuration
-tar -czf /backup/config-$(date +%Y%m%d).tar.gz /etc/mpc-wallet
-
-# Upload to S3
-aws s3 cp /backup/ s3://mpc-wallet-backups/ --recursive
-```
-
-### Recovery Procedure
-
-1. Restore Redis data
-2. Restore configuration files
-3. Start services in order
-4. Verify connectivity
-5. Run health checks
-
-## Performance Tuning
-
-### Linux Kernel Parameters
-
-```bash
-# /etc/sysctl.conf
+# /etc/sysctl.d/99-signal-server.conf
 net.core.somaxconn = 65535
 net.ipv4.tcp_max_syn_backlog = 65535
 net.core.netdev_max_backlog = 65535
 fs.file-max = 2097152
 ```
 
-### Signal Server Tuning
+### Firewall
 
-```rust
-// Increase connection pool
-const MAX_CONNECTIONS: usize = 10000;
-const CONNECTION_TIMEOUT: Duration = Duration::from_secs(60);
-```
+Self-hosted: open 9000/tcp inbound (or whatever port your TLS
+terminator exposes). No other inbound ports are required — WebRTC
+traffic goes peer-to-peer after signaling completes, so the signal
+server does not proxy media.
 
-## Deployment Checklist
+### Observability
 
-### Pre-Deployment
-- [ ] Security audit completed
-- [ ] Load testing performed
-- [ ] Backup strategy tested
-- [ ] Monitoring configured
-- [ ] Documentation updated
+The signal server currently exposes no `/metrics`, `/health`, or
+`/api/*` endpoints (verified: zero route handlers match). Operate
+from `stdout`/`stderr` logs via systemd journal; add structured
+logging by compiling with `RUST_LOG=webrtc_signal_server=info`.
 
-### Deployment
-- [ ] Deploy to staging environment
-- [ ] Run integration tests
-- [ ] Perform smoke tests
-- [ ] Deploy to production
-- [ ] Monitor metrics
-
-### Post-Deployment
-- [ ] Verify all services healthy
-- [ ] Check error rates
-- [ ] Review performance metrics
-- [ ] Update status page
-- [ ] Notify stakeholders
+Future work: Prometheus-compatible `/metrics` endpoint, structured
+log output (JSON).
 
 ## Troubleshooting
 
-### Common Issues
-
-#### High Memory Usage
 ```bash
-# Check memory usage
-docker stats signal-server
+# Verify TLS+DNS to the public signal server
+curl -v https://xiongchenyu.dpdns.org/
+# The server is WebSocket-only, so expect "400 Bad Request" or similar
+# on a plain HTTP GET — that still confirms reachability.
 
-# Increase memory limit
-docker update --memory 16g signal-server
-```
+# Test a WebSocket upgrade
+wscat -c wss://xiongchenyu.dpdns.org/
 
-#### Connection Failures
-```bash
-# Check firewall rules
-iptables -L -n
+# Self-hosted: test local port
+wscat -c ws://localhost:9000/
 
-# Test WebSocket connection
-wscat -c ws://localhost:8080
-```
-
-#### Performance Issues
-```bash
-# Profile CPU usage
-perf top -p $(pgrep signal-server)
-
-# Check network latency
+# Check connection latency
 mtr xiongchenyu.dpdns.org
 ```
+
+What is **not** supported today (deliberately — or because the repo
+never shipped it):
+
+- No Dockerfile or docker-compose.yml for any component (the old
+  tui-node Dockerfile + compose were pre-monorepo and got removed
+  rather than carried as broken examples — see
+  `apps/tui-node/docs/DEPLOYMENT_GUIDE.md` for the history).
+- No Kubernetes manifests.
+- No Redis / database layer — the signal server is stateless and
+  holds session state in process memory.
+- No Prometheus / Grafana scrape targets.
+- No TURN server setup — clients rely on public STUN for NAT traversal.
 
 ## Navigation
 
 - [← Back to Main Documentation](../README.md)
 - [Testing Guide →](../testing/README.md)
+- [Cloudflare-specific deployment →](CLOUDFLARE_DEPLOYMENT.md)

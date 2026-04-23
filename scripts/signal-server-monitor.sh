@@ -21,6 +21,12 @@ DEFAULT_HOST="localhost"
 REFRESH_INTERVAL=2
 MONITOR_LOG="/tmp/signal-server-monitor.log"
 
+# Repo root — scripts/ is at the top level, so the parent of this
+# script is the repo root regardless of where it was cloned.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(dirname "$SCRIPT_DIR")"
+LOG_DIR="$REPO_ROOT/logs"
+
 # Clear screen and move cursor
 clear_screen() { printf "\033c"; }
 move_cursor() { printf "\033[%d;%dH" "$1" "$2"; }
@@ -102,7 +108,7 @@ test_websocket() {
 
 # Parse log for errors
 check_recent_errors() {
-    local log_dir="/home/freeman.xiong/Documents/github/hecoinfo/mpc-wallet/logs"
+    local log_dir="$LOG_DIR"
     if [ -d "$log_dir" ]; then
         local latest_log=$(ls -t "$log_dir"/signal-server_*.log 2>/dev/null | head -1)
         if [ ! -z "$latest_log" ]; then
@@ -249,7 +255,7 @@ test_websocket_detailed() {
 # Watch logs in real-time with filtering
 watch_logs() {
     local filter=${1:-""}
-    local log_dir="/home/freeman.xiong/Documents/github/hecoinfo/mpc-wallet/logs"
+    local log_dir="$LOG_DIR"
     local latest_log=$(ls -t "$log_dir"/signal-server_*.log 2>/dev/null | head -1)
 
     if [ -z "$latest_log" ]; then
@@ -308,7 +314,7 @@ show_stats() {
     # Log analysis
     echo ""
     echo -e "${BOLD}Log Analysis (last 1000 lines):${NC}"
-    local log_dir="/home/freeman.xiong/Documents/github/hecoinfo/mpc-wallet/logs"
+    local log_dir="$LOG_DIR"
     local latest_log=$(ls -t "$log_dir"/signal-server_*.log 2>/dev/null | head -1)
 
     if [ ! -z "$latest_log" ]; then

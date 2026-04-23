@@ -1,4 +1,3 @@
-// filepath: /home/freeman.xiong/Documents/github/hecoinfo/mpc-wallet/src/entrypoints/background/index.ts
 // ===================================================================
 // MAIN BACKGROUND SCRIPT COORDINATOR
 // ===================================================================

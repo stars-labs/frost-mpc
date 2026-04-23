@@ -1,4 +1,5 @@
-// Based on /home/freeman.xiong/Documents/github/hecoinfo/crypto-rust-tools/webrtc-signal-server/src/lib.rs
+// Wire-protocol mirror of apps/signal-server/server/src/lib.rs.
+// Keep the message shapes in sync with the Rust side.
 import type {
     WebSocketClientMsg,
     WebSocketServerMsg,

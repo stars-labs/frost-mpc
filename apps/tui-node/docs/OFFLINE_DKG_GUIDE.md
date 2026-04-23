@@ -156,6 +156,33 @@ mkdir -p /Volumes/DKG_TRANSFER/dkg_ceremony/final
 
 ## Step-by-Step Process
 
+> **Scope note (partial retraction)**: the procedural steps below
+> contain a few non-literal details that survive from an earlier
+> draft. Before following any instruction as-is, cross-reference
+> with the current source:
+>
+>   - **Key hotkeys like `Press E to export` / `Press I to import`**
+>     are illustrative, not literal. No single-letter export/import
+>     hotkeys are wired up — `grep KeyCode::Char\(\'E\'\)` /
+>     `KeyCode::Char\(\'I\'\)` in `src/elm/` returns zero hits. Offline
+>     export/import in the TUI is reached via the main menu → mode
+>     selection flow (see `src/elm/components/mode_selection.rs`)
+>     and then per-screen Export / Import buttons surfaced by the
+>     relevant `Component::view` render.
+>   - **"Sign with participant key"** in any export step is wrong —
+>     the offline protocol has **no** application-level per-file
+>     signature layer. Integrity comes from physical chain-of-custody
+>     of the SD cards; see § Data Formats below (lines citing
+>     `OfflineData` at `src/offline/types.rs:12`) and § Verification
+>     Procedures for the honest picture. Earlier drafts contradicted
+>     themselves between the procedural steps (which instructed
+>     signing) and the format section (which explicitly disclaimed
+>     file-level signatures) — the format section is correct.
+>
+> With those two caveats, the high-level Coordinator/Participant
+> phase structure (Setup → Round 1 → Round 2 → Finalization) does
+> match what `src/offline/` implements.
+
 ### 📍 Phase 0: Pre-Ceremony Preparation
 
 **All Participants:**

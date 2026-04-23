@@ -189,4 +189,5 @@ packages/@mpc-wallet/
   frost-core/           # Core crypto library
   core-wasm/            # WASM bindings
   blockchain/           # Chain integrations
+  types/                # Shared TypeScript types (Bun workspace only, not in Cargo)
 ```

@@ -135,6 +135,7 @@ mpc-wallet/
 ├── packages/@mpc-wallet/          # Shared libraries
 │   ├── frost-core/               # Core FROST implementation
 │   ├── core-wasm/                # WebAssembly bindings
+│   ├── blockchain/               # Multi-chain support (Ethereum/Solana/Bitcoin)
 │   └── types/                    # TypeScript definitions
 │
 ├── scripts/                       # Build & deployment scripts

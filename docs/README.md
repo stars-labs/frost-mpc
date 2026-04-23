@@ -129,18 +129,18 @@ cargo run -p native-node
 mpc-wallet/
 ├── apps/                         # Applications
 │   ├── browser-extension/        # Chrome/Firefox extension
-│   ├── native-node/             # Desktop GUI application
-│   ├── tui-node/                # Terminal UI application
-│   └── signal-server/           # WebRTC signaling server
+│   ├── native-node/              # Desktop GUI application (Slint)
+│   ├── tui-node/                 # Terminal UI application (Ratatui)
+│   └── signal-server/            # WebRTC signaling (server + Cloudflare Worker)
 │
 ├── packages/@mpc-wallet/         # Shared packages
-│   ├── frost-core/              # FROST protocol implementation
-│   ├── core-wasm/               # WebAssembly bindings
-│   └── types/                   # TypeScript definitions
+│   ├── frost-core/               # FROST protocol implementation (Rust)
+│   ├── core-wasm/                # WebAssembly bindings
+│   ├── blockchain/               # Multi-chain support (Ethereum/Solana/Bitcoin)
+│   └── types/                    # TypeScript type definitions
 │
-├── docs/                        # Documentation
-├── scripts/                     # Build and utility scripts
-└── tests/                       # Integration tests
+├── docs/                         # Documentation
+└── scripts/                      # Build, test, and operational scripts
 ```
 
 ## Technology Stack

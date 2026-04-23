@@ -384,30 +384,56 @@ exist (see § 2 Performance Optimizations).
 
 ### Integration Tests
 
-```rust
-// tests/integration/
-├── dkg_flow.rs       # Complete DKG process
-├── signing_flow.rs   # Transaction signing
-├── import_export.rs  # Keystore operations
-└── network_recovery.rs # Connection handling
+Real integration-style coverage lives in two places:
+
 ```
+apps/tui-node/tests/
+├── update_transitions.rs   # Pure Elm update() transition assertions
+└── component_rendering.rs  # tui-realm component render smoke tests
+
+apps/tui-node/examples/      # Runnable end-to-end scenarios
+├── offline_dkg_demo.rs
+├── offline_dkg_signing_demo.rs
+├── offline_frost_dkg_signing.rs
+├── hybrid_mode_e2e_test.rs
+├── webrtc_mesh_e2e_test.rs
+├── test_join_session_navigation.rs
+├── test_keyboard_events.rs
+└── test_session_loading_simple.rs
+```
+
+Earlier drafts of this section invented a `tests/integration/`
+directory tree with files named `dkg_flow.rs` / `signing_flow.rs` /
+`import_export.rs` / `network_recovery.rs`. None of those files
+exist (`find apps/tui-node/tests -type f` returns only the two
+above). End-to-end flows are exercised by the `examples/` binaries,
+not a dedicated integration test harness.
 
 ### Test Coverage
 
-| Component | Coverage | Target |
-|-----------|----------|--------|
-| Core Logic | 85% | 90% |
-| UI Components | 70% | 80% |
-| Network Layer | 75% | 85% |
-| Cryptography | 95% | 100% |
+No automated coverage tooling is wired into the workspace — there
+is no `cargo tarpaulin` / `grcov` / `llvm-cov` config, no CI step
+producing a coverage report, and no badge target. Earlier drafts
+of this section printed a 4-row table with percentages
+(`Core Logic 85% / UI Components 70% / Network Layer 75% /
+Cryptography 95%`). Those numbers were fabricated; there was no
+measurement run behind them. Removed.
 
 ### Testing Tools
 
 - **Unit**: Rust built-in `#[test]`
-- **Integration**: Custom test harness
-- **UI**: MockUIProvider for headless testing
-- **Network**: Mock WebSocket/WebRTC servers
-- **Performance**: Criterion benchmarks
+- **Integration-style end-to-end**: runnable `examples/*.rs` binaries
+  (see above) — no shared "test harness" crate beyond what
+  `cargo test` + plain `tokio::test` provide.
+- **UI**: `NoOpUIProvider` (`src/elm/provider.rs:71`) is the real
+  headless provider used by `tests/update_transitions.rs`. Earlier
+  drafts called this type `MockUIProvider`, which doesn't exist.
+- **Network**: no dedicated mock WebSocket / WebRTC server —
+  integration-style examples spin up real `tokio` listeners.
+- **Performance**: no `criterion` dependency and no `benches/`
+  directory today. Earlier drafts listed "Criterion benchmarks" as
+  a real tool; they aren't. Adding a benches tree is open future
+  work (see the Performance Considerations section).
 
 ---
 

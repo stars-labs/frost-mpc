@@ -431,7 +431,7 @@ describe('WASM Service Integration', () => {
 
         it('should handle invalid parameters', () => {
             // Mock validation for invalid parameters
-            mockWasmModule.dkg_round1.mockImplementationOnce((participant_id) => {
+            mockWasmModule.dkg_round1.mockImplementationOnce((participant_id: number) => {
                 if (participant_id <= 0) {
                     throw new Error('Invalid participant ID');
                 }
@@ -444,7 +444,7 @@ describe('WASM Service Integration', () => {
         });
 
         it('should handle malformed JSON input', () => {
-            mockWasmModule.import_cli_keystore.mockImplementationOnce((json_data) => {
+            mockWasmModule.import_cli_keystore.mockImplementationOnce((json_data: string) => {
                 try {
                     JSON.parse(json_data);
                     return 'imported_keystore';

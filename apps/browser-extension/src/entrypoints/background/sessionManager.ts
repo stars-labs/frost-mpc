@@ -326,10 +326,10 @@ export class SessionManager {
         if (this.wsClient?.getReadyState() === WebSocket.OPEN) {
             // Send to all other participants
             const currentDeviceId = this.stateManager ? this.stateManager.getState().deviceId : this.appState.deviceId;
-            const otherParticipants = newSessionInfo.participants.filter(p => p !== currentDeviceId);
+            const otherParticipants = newSessionInfo.participants.filter((p: string) => p !== currentDeviceId);
 
             try {
-                await Promise.all(otherParticipants.map(async (peerId) => {
+                await Promise.all(otherParticipants.map(async (peerId: string) => {
                     try {
                         await this.wsClient!.relayMessage(peerId, acceptanceData);
                         console.log(`[SessionManager] Session acceptance sent to ${peerId}`);

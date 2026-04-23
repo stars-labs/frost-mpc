@@ -442,7 +442,7 @@ pub async fn initiate_webrtc_with_channel<C>(
                         let self_id = self_device_id_dc.clone();
                         let dc_open = dc_for_open.clone();
                         let app_state_mesh = app_state_for_mesh.clone();
-                        let ui_msg_tx_open = ui_msg_tx_open.clone();
+                        let ui_msg_tx_open = ui_msg_tx_open;
                         
                         Box::pin(async move {
                             info!("📂 Data channel OPENED with {}", device_id_open);

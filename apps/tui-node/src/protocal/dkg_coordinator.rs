@@ -220,7 +220,7 @@ impl<C: Ciphersuite> DKGParticipant<C> {
             &self.round2_packages_received,
         ).map_err(|e| anyhow!("Failed to finalize DKG: {:?}", e))?;
         
-        self.key_package = Some(key_package.clone());
+        self.key_package = Some(key_package);
         self.pubkey_package = Some(pubkey_package.clone());
         
         info!("DKG finalized successfully for participant {:?}", self.id);

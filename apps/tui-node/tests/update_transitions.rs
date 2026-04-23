@@ -2341,7 +2341,7 @@ fn session_discovered_cancel_chain_purges_invite() {
     let _ = update(
         &mut model,
         Message::SessionDiscovered {
-            session: sess.clone(),
+            session: sess,
         },
     );
     match &model.ui_state.modal {

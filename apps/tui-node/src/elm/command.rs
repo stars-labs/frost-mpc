@@ -2063,7 +2063,7 @@ impl Command {
                                         blockchain: m.curve_type.clone(),
                                         group_public_key: m.group_public_key.clone(),
                                     },
-                                    curve_type: m.curve_type.clone(),
+                                    curve_type: m.curve_type,
                                     coordination_type: "Network".to_string(),
                                     signing_message_hex: None,
                                 });

@@ -71,7 +71,7 @@ pub fn encrypt_data_with_method(data: &[u8], password: &str, method: KeyDerivati
             
             let binding = password_hash.hash.unwrap();
             let hash_bytes = binding.as_bytes();
-            Key::<Aes256Gcm>::from_slice(hash_bytes).clone()
+            *Key::<Aes256Gcm>::from_slice(hash_bytes)
         }
         KeyDerivation::Pbkdf2 => {
             let key_bytes: [u8; KEY_LEN] = pbkdf2_hmac_array::<Sha256, KEY_LEN>(
@@ -151,7 +151,7 @@ pub fn decrypt_data_with_method(encrypted_data: &[u8], password: &str, method: K
             
             let binding = password_hash.hash.unwrap();
             let hash_bytes = binding.as_bytes();
-            Key::<Aes256Gcm>::from_slice(hash_bytes).clone()
+            *Key::<Aes256Gcm>::from_slice(hash_bytes)
         }
         KeyDerivation::Pbkdf2 => {
             let key_bytes: [u8; KEY_LEN] = pbkdf2_hmac_array::<Sha256, KEY_LEN>(

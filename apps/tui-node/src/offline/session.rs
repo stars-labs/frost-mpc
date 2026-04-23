@@ -149,7 +149,7 @@ impl OfflineSession {
         
         // Validate participant
         if !self.participants.contains(&commitments.device_id) {
-            return Err(OfflineError::UnauthorizedDevice(commitments.device_id.clone()));
+            return Err(OfflineError::UnauthorizedDevice(commitments.device_id));
         }
         
         self.commitments.insert(commitments.device_id.clone(), commitments);
@@ -210,7 +210,7 @@ impl OfflineSession {
         
         // Validate participant
         if !self.participants.contains(&share.device_id) {
-            return Err(OfflineError::UnauthorizedDevice(share.device_id.clone()));
+            return Err(OfflineError::UnauthorizedDevice(share.device_id));
         }
         
         // Ensure they provided commitments

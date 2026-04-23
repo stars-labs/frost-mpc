@@ -631,7 +631,7 @@ where
         }
         
         // Update the model and get command
-        if let Some(command) = update(&mut self.model, msg.clone()) {
+        if let Some(command) = update(&mut self.model, msg) {
             debug!("Update produced command: {:?}", command);
             // Execute the command
             let tx = self.message_tx.clone();

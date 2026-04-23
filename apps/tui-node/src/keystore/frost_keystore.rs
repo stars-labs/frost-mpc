@@ -189,7 +189,7 @@ impl FrostKeystoreManager {
         // Create keystore structure
         let keystore = FrostKeystore {
             version: "1.0".to_string(),
-            id: keystore_id.clone(),
+            id: keystore_id,
             address: eth_address,
             crypto: CryptoData {
                 cipher: "aes-256-gcm".to_string(),

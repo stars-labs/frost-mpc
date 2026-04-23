@@ -499,7 +499,7 @@ pub fn update(model: &mut Model, msg: Message) -> Option<Command> {
                 proposer_id: model.device_id.clone(),
                 total: config.total_participants,
                 threshold: config.threshold,
-                participants: participants.clone(),
+                participants,
                 session_type: SessionType::DKG,
                 curve_type: model.wallet_state.curve_type.to_string(),
                 coordination_type: "online".to_string(),
@@ -507,7 +507,7 @@ pub fn update(model: &mut Model, msg: Message) -> Option<Command> {
             });
             
             // Navigate to DKG Progress screen with placeholder
-            model.push_screen(Screen::DKGProgress { session_id: temp_session_id.clone() });
+            model.push_screen(Screen::DKGProgress { session_id: temp_session_id });
 
             // Set focus for DKGProgress screen
             model.ui_state.focus = crate::elm::model::ComponentId::DKGProgress;
@@ -605,7 +605,7 @@ pub fn update(model: &mut Model, msg: Message) -> Option<Command> {
             model.wallet_state.signing_commitments_received.clear();
             model.wallet_state.signing_shares_received.clear();
             model.push_screen(Screen::SigningProgress {
-                request_id: request_id.clone(),
+                request_id,
             });
             Some(Command::StartSigning { request })
         }
@@ -660,7 +660,7 @@ pub fn update(model: &mut Model, msg: Message) -> Option<Command> {
             } else {
                 None
             };
-            let display_message = raw_message.clone().unwrap_or_else(|| message.clone());
+            let display_message = raw_message.unwrap_or_else(|| message.clone());
 
             model.wallet_state.last_completed_signature =
                 Some(crate::elm::model::CompletedSignatureInfo {
@@ -748,7 +748,7 @@ pub fn update(model: &mut Model, msg: Message) -> Option<Command> {
                 text.clone()
             };
             let notif_text = format!("📋 Copied {}: {}", label, preview);
-            let log_label = label.clone();
+            let log_label = label;
             let log_len = text.len();
 
             std::thread::spawn(move || {
@@ -833,9 +833,9 @@ pub fn update(model: &mut Model, msg: Message) -> Option<Command> {
             let (bytes_to_sign, raw_for_display) = if curve == "secp256k1" {
                 let hash =
                     crate::utils::eth_helper::eip191_hash(&raw_message_bytes).to_vec();
-                (hash, Some(raw_message_bytes.clone()))
+                (hash, Some(raw_message_bytes))
             } else {
-                (raw_message_bytes.clone(), None)
+                (raw_message_bytes, None)
             };
 
             let warm = model.wallet_state.wallet_unlocked_id.as_deref() == Some(&wallet_id);
@@ -1050,7 +1050,7 @@ pub fn update(model: &mut Model, msg: Message) -> Option<Command> {
             model.ui_state.modal = Some(Modal::Confirm {
                 title: "Delete Wallet".to_string(),
                 message: format!("Are you sure you want to delete wallet '{}'? This action cannot be undone.", wallet_id),
-                on_confirm: Box::new(Message::WalletDeleted { wallet_id: wallet_id.clone() }),
+                on_confirm: Box::new(Message::WalletDeleted { wallet_id }),
                 on_cancel: Box::new(Message::CloseModal),
             });
             None
@@ -1098,7 +1098,7 @@ pub fn update(model: &mut Model, msg: Message) -> Option<Command> {
             
             // Update the screen to show the real session ID
             if let Screen::DKGProgress { ref mut session_id } = model.current_screen {
-                *session_id = real_session_id.clone();
+                *session_id = real_session_id;
             }
             
             // Force a remount to update the display
@@ -1110,7 +1110,7 @@ pub fn update(model: &mut Model, msg: Message) -> Option<Command> {
             
             // Update the active session with the current participants
             if let Some(ref mut session) = model.active_session {
-                session.participants = participants.clone();
+                session.participants = participants;
                 info!("Updated session participants to: {:?}", session.participants);
             }
             
@@ -1124,7 +1124,7 @@ pub fn update(model: &mut Model, msg: Message) -> Option<Command> {
 
             // Store the WebRTC status in the model's network state
             model.network_state.participant_webrtc_status
-                .entry(device_id.clone())
+                .entry(device_id)
                 .and_modify(|status| {
                     status.0 = webrtc_connected;
                     status.1 = data_channel_open;
@@ -1245,7 +1245,7 @@ pub fn update(model: &mut Model, msg: Message) -> Option<Command> {
             // Show error modal - always stay on current screen so user can retry or press Esc to go back
             model.ui_state.modal = Some(Modal::Error {
                 title: "DKG Failed".to_string(),
-                message: error.clone(),
+                message: error,
             });
 
             // Reset DKG-in-progress flag so user can retry
@@ -1480,8 +1480,8 @@ pub fn update(model: &mut Model, msg: Message) -> Option<Command> {
             model.wallet_state.last_finalized_wallet =
                 Some(crate::elm::model::CompletedWalletInfo {
                     wallet_id: wallet_id.clone(),
-                    group_pubkey_hex: group_pubkey_hex.clone(),
-                    curve_type: curve_type.clone(),
+                    group_pubkey_hex,
+                    curve_type,
                     addresses: addresses.clone(),
                 });
             // DKG leaves the KeyPackage live on AppState; mark the
@@ -1509,7 +1509,7 @@ pub fn update(model: &mut Model, msg: Message) -> Option<Command> {
             // on a fresh MainMenu.
             model.go_home();
             model.push_screen(Screen::WalletComplete {
-                wallet_id: wallet_id.clone(),
+                wallet_id,
             });
             model.ui_state.focus = crate::elm::model::ComponentId::WalletComplete;
 
@@ -2655,7 +2655,7 @@ pub fn update(model: &mut Model, msg: Message) -> Option<Command> {
                         session_id: session.session_id.clone(),
                     }),
                     on_cancel: Box::new(Message::DeclineSigningRequest {
-                        session_id: session.session_id.clone(),
+                        session_id: session.session_id,
                     }),
                 });
             }

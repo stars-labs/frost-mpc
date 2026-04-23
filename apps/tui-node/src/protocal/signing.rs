@@ -161,7 +161,7 @@ pub async fn handle_start_signing<C>(
     {
         let mut guard = state.lock().await;
         guard.frost_nonces = Some(nonces);
-        guard.frost_commitments.insert(my_identifier, commitments.clone());
+        guard.frost_commitments.insert(my_identifier, commitments);
     }
 
     // ---- Broadcast SIGN_COMMIT:<b64>
@@ -342,7 +342,7 @@ async fn try_advance_to_round2<C>(
             selected_signers: Vec::new(),
             signing_package: Some(signing_package),
             shares: guard.frost_signature_shares.clone(),
-            own_share: Some(guard.frost_signature_shares[&my_id].clone()),
+            own_share: Some(guard.frost_signature_shares[&my_id]),
             blockchain: String::new(),
             chain_id: None,
         };

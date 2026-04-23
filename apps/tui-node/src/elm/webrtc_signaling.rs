@@ -74,7 +74,7 @@ async fn handle_webrtc_signal<C>(
                 message: format!("📥 Received WebRTC offer from {}, preparing answer...", from),
             });
             spawn_offer_handler(
-                from.clone(),
+                from,
                 sdp.to_string(),
                 app_state,
                 tx_msg,
@@ -86,7 +86,7 @@ async fn handle_webrtc_signal<C>(
             let _ = tx_msg.send(Message::Info {
                 message: format!("📥 Received WebRTC answer from {}, setting remote description...", from),
             });
-            spawn_answer_handler(from.clone(), sdp.to_string(), app_state);
+            spawn_answer_handler(from, sdp.to_string(), app_state);
         }
     } else if let Some(ice_data) = data.get("Candidate")
         && let (Some(candidate), Some(sdp_mid), Some(sdp_mline_index)) = (
@@ -96,7 +96,7 @@ async fn handle_webrtc_signal<C>(
         ) {
             info!("📥 Received ICE candidate from {}", from);
             spawn_ice_handler(
-                from.clone(),
+                from,
                 candidate.to_string(),
                 sdp_mid.to_string(),
                 sdp_mline_index as u16,
@@ -433,7 +433,7 @@ fn attach_data_channel_handler<C>(
                 let dc = dc_for_open.clone();
                 let device_id = device_open.clone();
                 let tx_msg = tx_open.clone();
-                let app_state = app_state_open.clone();
+                let app_state = app_state_open;
                 Box::pin(async move {
                     info!("📂 Data channel OPENED from {}", device_id);
                     {

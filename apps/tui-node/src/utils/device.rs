@@ -284,7 +284,7 @@ pub async fn create_and_setup_device_connection<C>(
                             
                             if should_reconnect {
                                 // Update last attempt time
-                                guard.reconnection_tracker.insert(device_id.clone(), std::time::Instant::now());
+                                guard.reconnection_tracker.insert(device_id, std::time::Instant::now());
                                 
                                 if let Some(current_session) = guard.session.clone() {
                                     tracing::info!("Will attempt to rejoin session: {}", current_session.session_id);
@@ -335,8 +335,8 @@ pub async fn create_and_setup_device_connection<C>(
             }));
 
             // --- Only set up callbacks for the main data channel (responder side) ---
-            let state_log_on_data = state_log_on_state_ice.clone();
-            let device_id_on_data = device_id_on_state_ice.clone();
+            let state_log_on_data = state_log_on_state_ice;
+            let device_id_on_data = device_id_on_state_ice;
             let cmd_tx_on_data = cmd_tx.clone();
             pc_arc.on_data_channel(Box::new(move |dc: Arc<RTCDataChannel>| {
                 let state_log = state_log_on_data.clone();
@@ -404,7 +404,7 @@ pub async fn setup_data_channel_callbacks<C>(
     dc_arc.on_open(Box::new(move || {
         // Clone for async closure
         let device_id_open = device_id_open.clone();
-        let cmd_tx_open = cmd_tx_open.clone();
+        let cmd_tx_open = cmd_tx_open;
         Box::pin(async move {
             
             // Send ReportChannelOpen command to trigger mesh ready signaling
@@ -504,7 +504,7 @@ pub async fn setup_data_channel_callbacks<C>(
                             },
                             WebRTCMessage::MeshReady { session_id: _, device_id } => {
                                 let _ = cmd_tx.send(InternalCommand::ProcessMeshReady {
-                                    device_id: device_id.clone(),
+                                    device_id,
                                 });
                             },
                             // Signing message handlers

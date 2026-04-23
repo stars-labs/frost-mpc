@@ -610,7 +610,7 @@ where
         
         // Get the real verifying key from the public key package
         let verifying_key = pubkey_package.verifying_key();
-        guard.group_public_key = Some(verifying_key.clone());
+        guard.group_public_key = Some(*verifying_key);
         
         // Complete DKG
         guard.dkg_state = DkgState::Complete;

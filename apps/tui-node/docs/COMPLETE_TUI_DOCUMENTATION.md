@@ -638,41 +638,31 @@ registry across Rust + TypeScript is open future work.
 
 ### C. Keyboard Map Reference
 
+Canonical reference: [`KEYBOARD_NAVIGATION_GUIDE.md`](./KEYBOARD_NAVIGATION_GUIDE.md)
+(rewritten in d09bddc after verifying every keybinding claim against
+`src/elm/components/`).
+
+TL;DR of what actually works:
+
 ```
 ┌─────────────────────────────────────┐
-│          Global Controls            │
+│  Global (every screen)              │
 ├─────────────┬───────────────────────┤
-│ Ctrl+Q      │ Quit                  │
-│ Ctrl+R      │ Refresh               │
-│ Ctrl+H      │ Home                  │
-│ ?           │ Help                  │
-│ Esc         │ Back/Cancel           │
-└─────────────┴───────────────────────┘
-
-┌─────────────────────────────────────┐
-│         Navigation Controls         │
-├─────────────┬───────────────────────┤
-│ ↑/k         │ Move up               │
-│ ↓/j         │ Move down             │
-│ ←/h         │ Move left             │
-│ →/l         │ Move right            │
-│ Enter       │ Select                │
-│ Space       │ Toggle                │
-│ Tab         │ Next field            │
-│ Shift+Tab   │ Previous field        │
-└─────────────┴───────────────────────┘
-
-┌─────────────────────────────────────┐
-│          Action Shortcuts          │
-├─────────────┬───────────────────────┤
-│ n           │ New wallet            │
-│ j           │ Join session          │
-│ s           │ Sign transaction      │
-│ w           │ Manage wallets        │
-│ /           │ Search                │
-│ :           │ Command mode          │
+│ ↑ / ↓       │ Move selection / focus│
+│ Enter       │ Confirm               │
+│ Esc         │ Back / cancel         │
+│ Tab         │ Move focus in a screen│
+│ Ctrl+C      │ Quit (OS interrupt)   │
 └─────────────┴───────────────────────┘
 ```
+
+Earlier drafts of this appendix listed `Ctrl+Q` / `Ctrl+R` /
+`Ctrl+H` / `?` global shortcuts, `hjkl` vim-style nav, `n` / `j`
+/ `s` / `w` quick keys, `/` search, and `:` command mode. None of
+those exist in source (verified via `grep Key::Char` across
+`src/elm/components/`). See KEYBOARD_NAVIGATION_GUIDE.md for the
+per-screen breakdown of what each component's `on(event)` handler
+actually accepts.
 
 ### D. Troubleshooting Guide
 
@@ -702,46 +692,71 @@ infocmp $TERM | grep colors
 
 **Problem**: High CPU usage
 **Solution**:
-- Check adaptive event loop is enabled
-- Verify bounded channels are configured
-- Review log level (debug is expensive)
+Earlier drafts suggested "Check adaptive event loop is enabled" /
+"Verify bounded channels are configured" / "Enable differential
+updates" / "Disable animations in config" — none of those features
+exist (see § 2 Performance Optimizations + the 49360fa retraction).
+Real mitigations:
 
-**Problem**: Slow UI updates
-**Solution**:
-- Enable differential updates
-- Reduce terminal baud rate if remote
-- Disable animations in config
+- Lower log verbosity: `RUST_LOG=error` or `RUST_LOG=warn`
+  (default `info` is cheap; `debug`/`trace` gets expensive mid-
+  ceremony).
+- Stagger startup when running many TUI instances on one host so
+  they don't all poll the signal server in lockstep.
 
 #### Network Issues
 
-**Problem**: Cannot connect to WebSocket
-**Solution**:
+**Problem**: Cannot connect to signal server
+
 ```bash
-# Test connectivity
-curl -v wss://your-server.com
-# Check firewall
+# curl does NOT speak wss:// — for a WebSocket upgrade probe,
+# use wscat (`npm install -g wscat`):
+wscat -c wss://xiongchenyu.dpdns.org/
+
+# For plain TCP/TLS reachability:
+curl -v https://xiongchenyu.dpdns.org/
+# Server is WebSocket-only so a GET returns 400, but reaching
+# "HTTP/1.1 400" confirms DNS + TLS + routing worked.
+
+# Outbound firewall check:
 sudo iptables -L
-# Verify certificates
-openssl s_client -connect server:port
 ```
 
-**Problem**: WebRTC connection fails
-**Solution**:
-- Check STUN/TURN servers
-- Verify NAT type
-- Enable UPnP if available
-- Configure port forwarding
+**Problem**: WebRTC connection fails after signal-server succeeds
+
+- Check NAT type on both sides — symmetric NAT requires a TURN
+  server, which this repo does not ship. Full-cone / restricted-
+  cone / port-restricted-cone all work with public STUN.
+- Open `chrome://webrtc-internals` in a browser on the same
+  network to confirm STUN candidate gathering succeeds there —
+  if the browser can't get candidates, neither can the TUI.
+- Fallback: switch to `--offline` mode and exchange DKG/signing
+  artefacts via SD card.
 
 ---
 
 ## Conclusion
 
-The MPC Wallet TUI represents a professional-grade implementation of threshold signatures with an emphasis on usability, security, and performance. Through careful architecture decisions and comprehensive optimization, it provides enterprise-ready functionality while maintaining accessibility for all user levels.
+This doc aims to describe the TUI as it actually ships today.
+Earlier drafts concluded with "professional-grade implementation",
+"enterprise-ready functionality", "comprehensive optimization",
+plus a footer claiming "Document Version: 2.0.0" + "Status:
+Production Ready". None of that was accurate (same fabrication
+class removed from the MPC_WALLET_TECHNICAL_DOCUMENTATION.md
+footer in f13514a): `git tag -l` is still empty, all workspace
+crates are at 0.1.x, no third-party audit has been performed,
+no benchmarks ship. What DOES ship:
 
-For the latest updates and contributions, visit the [GitHub repository](https://github.com/hecoinfo/mpc-wallet).
+- Real FROST t-of-n DKG + threshold signing via upstream
+  `frost-core 2.2` (secp256k1 for Ethereum, ed25519 for Solana).
+- Encrypted per-share keystore (PBKDF2 100k + AES-256-GCM) that
+  round-trips with the browser extension.
+- Online (WebRTC mesh) and offline (SD-card air-gap) ceremony
+  modes.
+- 174+ Rust tests under `cargo test --workspace` covering the
+  DKG / signing / keystore paths.
 
----
-
-*Document Version: 2.0.0*  
-*Last Updated: 2025*  
-*Status: Production Ready*
+For the latest state see
+[github.com/hecoinfo/mpc-wallet](https://github.com/hecoinfo/mpc-wallet)
+and `git log`; for security reports use
+[GitHub Security Advisories](https://github.com/hecoinfo/mpc-wallet/security/advisories/new).

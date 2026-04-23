@@ -34,19 +34,23 @@ class WalletClientService {
 
     private initializeWalletClient(): WalletClient {
         // MPC wallet doesn't use viem's wallet client for signing
-        // This is kept only for compatibility with the interface
+        // This is kept only for compatibility with the interface.
+        // rpcUrls is optional on our Chain type (covers sketch
+        // networks); at this call-site a concrete network is
+        // guaranteed (viem's `mainnet` fallback always has urls),
+        // so non-null-assert the chain into viem's shape.
         const currentNetwork = this.networkService.getCurrentNetwork() || mainnet;
         return createWalletClient({
-            chain: currentNetwork,
-            transport: http(currentNetwork.rpcUrls.default.http[0])
+            chain: currentNetwork as any,
+            transport: http(currentNetwork.rpcUrls!.default.http[0])
         });
     }
 
     private initializePublicClient(): PublicClient {
         const currentNetwork = this.networkService.getCurrentNetwork() || mainnet;
         return createPublicClient({
-            chain: currentNetwork,
-            transport: http(currentNetwork.rpcUrls.default.http[0])
+            chain: currentNetwork as any,
+            transport: http(currentNetwork.rpcUrls!.default.http[0])
         });
     }
 

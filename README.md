@@ -181,28 +181,34 @@ mpc-wallet/
 
 ## Security
 
-The MPC Wallet has been designed with security as the primary concern:
+The MPC Wallet is designed around threshold cryptography primitives:
 
-- Private keys never exist in complete form
-- All communication is end-to-end encrypted
-- Comprehensive input validation and sanitization
-- Regular security audits and updates
+- Root secret entropy is split via FROST DKG — the combined private key
+  never exists in memory on any single participant
+- Keystore at rest is PBKDF2 + AES-256-GCM (see `packages/@mpc-wallet/frost-core/src/keystore.rs`)
+- Peer-to-peer traffic rides WebRTC (DTLS-SRTP); signaling over WSS
+- FROST implementation comes from the [ZCash Foundation](https://github.com/ZcashFoundation/frost)
+  crates (`frost-core 2.2`, `frost-ed25519 2.2`, `frost-secp256k1 2.2`)
+
+No third-party security audit has been performed on this codebase as a
+whole. Report vulnerabilities via [GitHub Security Advisories](https://github.com/hecoinfo/mpc-wallet/security/advisories/new).
 
 ## Performance
 
-### Benchmarks
+The repo has no `criterion` benches yet (PR welcome — see the open
+deferred work in `CLAUDE.md`). Functional coverage that exercises the
+real FROST paths:
 
-| Operation | Participants | Time | Network |
-|-----------|-------------|------|---------|
-| DKG | 3 | 1.2s | 45KB |
-| Sign | 3 | 45ms | 15KB |
-| Verify | 1 | 15ms | - |
-
-### Scalability
-
-- Supports up to 100 participants
-- Horizontal scaling for signal servers
-- Optimized for mobile and low-bandwidth environments
+- `cargo test` — 174 tests passing across the workspace (DKG, signing,
+  keystore round-trip, HD derivation, WebRTC mesh simulator)
+- `bun test` — 509 tests passing in the browser extension (RPC,
+  session lifecycle, DKG auto-trigger, signing auto-trigger, decline
+  paths)
+- FROST itself is parameter-generic over `t`/`n`; the bottleneck at
+  larger cohorts is the WebRTC full-mesh degree (n·(n-1)/2 peer
+  connections), not the cryptography. No hard participant cap is
+  enforced, but production use has only been exercised at small
+  cohorts (2-of-3, 3-of-5).
 
 ## Contributing
 

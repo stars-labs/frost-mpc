@@ -12,6 +12,7 @@
 
 import { WebSocketClient } from "./websocket";
 import { AppState } from "@mpc-wallet/types/appstate";
+import type { SessionInfo } from "@mpc-wallet/types/session";
 import { SessionManager } from "./sessionManager";
 import { getSignalServerUrl } from "../../config/signal-server";
 import { parseSessionInfoFromWire } from "../../utils/session-parse";
@@ -39,6 +40,15 @@ export class WebSocketManager {
      * string that drifts whenever the default changes.
      */
     private connectedUrl: string | undefined;
+    /**
+     * session_id of the last session we fired `sessionAllAccepted` for.
+     * Guards against re-dispatching on server re-broadcasts (which
+     * can arrive multiple times if peers reconnect). Reset is implicit:
+     * a new session gets a fresh id, so the check naturally passes.
+     * Cleared to undefined on session clear / NavigateHome-equivalent
+     * flows via `clearDkgTriggerFor`.
+     */
+    private dkgTriggerFiredFor: string | undefined;
 
     constructor(
         appState: AppState,
@@ -365,6 +375,85 @@ export class WebSocketManager {
         if (this.stateManager?.updateInvites) {
             this.stateManager.updateInvites(invites);
         }
+
+        // Ext-1c auto-trigger: a session update that brings
+        // participants.length up to total means all N-of-N are
+        // joined — time to kick off the WebRTC mesh + FROST DKG
+        // ceremony. The offscreen already knows how to handle a
+        // `sessionAllAccepted` message (handler at
+        // `offscreen/index.ts:437` already does setBlockchain +
+        // updateSessionInfo + checkAndTriggerDkg). We just need to
+        // fire the trigger message at the right moment.
+        //
+        // Gate conditions:
+        //   1. This session is OUR active session (we're the
+        //      creator OR we previously joined). Avoids triggering
+        //      DKG for sessions we haven't committed to.
+        //   2. We're listed as a participant (belt-and-suspenders
+        //      given #1).
+        //   3. `participants.length === total` exactly — this is
+        //      the transition, not any full or past-full value
+        //      (server re-broadcasts could retrigger otherwise).
+        this.maybeTriggerDkgCeremony(parsed);
+    }
+
+    /**
+     * Fire `sessionAllAccepted` to offscreen if this session update
+     * brings us to the "ready to start DKG" threshold. Idempotent:
+     * a repeated same-value broadcast shouldn't re-fire (offscreen's
+     * own `checkAndTriggerDkg` guards against dkgState !== Idle, but
+     * we also dedup here to save the round trip). The dedup is
+     * per-session-id in `dkgTriggerFiredFor`.
+     */
+    private maybeTriggerDkgCeremony(session: SessionInfo): void {
+        const mySessionId = this.appState.sessionInfo?.session_id;
+        if (!mySessionId || mySessionId !== session.session_id) {
+            return; // Not our session.
+        }
+        const deviceId = this.appState.deviceId;
+        if (!deviceId || !session.participants.includes(deviceId)) {
+            return; // We're not a listed participant.
+        }
+        if (session.participants.length !== session.total) {
+            return; // Not yet full.
+        }
+        if (this.dkgTriggerFiredFor === session.session_id) {
+            return; // Already fired for this exact session.
+        }
+        this.dkgTriggerFiredFor = session.session_id;
+
+        // The existing sessionAllAccepted handler expects
+        // `accepted_devices` to contain every participant (it uses
+        // that for the "all accepted" check). TUI's wire format
+        // doesn't carry this field — `parseSessionInfoFromWire`
+        // synthesizes `[]`. Fill it in here: for the TUI-compat
+        // flow, being in `participants` IS being accepted.
+        const sessionWithAccepted: SessionInfo = {
+            ...session,
+            accepted_devices: [...session.participants],
+        };
+
+        const blockchain =
+            (session.curve_type ?? "secp256k1") === "ed25519"
+                ? "solana"
+                : "ethereum";
+
+        console.log(
+            `[WebSocketManager] 🎉 All ${session.total} participants joined session ${session.session_id} — triggering DKG (${blockchain})`,
+        );
+
+        // Fire-and-forget. The offscreen response isn't awaited
+        // here because the Svelte UI will pick up ceremony
+        // progress via dkgState updates flowing back through
+        // StateManager.
+        void this.sendToOffscreen(
+            {
+                type: "sessionAllAccepted",
+                sessionInfo: sessionWithAccepted,
+                blockchain,
+            } as any,
+            `sessionAllAccepted(${session.session_id})`,
+        );
     }
 
     /**

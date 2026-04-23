@@ -165,11 +165,24 @@ export const INITIAL_APP_STATE: AppState = {
   threshold: 2,
 };
 
-export type SupportedChain = 'ethereum' | 'solana';
+/**
+ * All chain names the wallet recognizes. secp256k1-family (ethereum
+ * + its L2s like polygon/arbitrum/optimism/base) and ed25519-family
+ * (solana, sui). Routing to underlying blockchain infrastructure
+ * happens via CHAIN_TO_BLOCKCHAIN in networkService.ts.
+ */
+export type SupportedChain =
+  | 'ethereum'
+  | 'polygon'
+  | 'arbitrum'
+  | 'optimism'
+  | 'base'
+  | 'solana'
+  | 'sui';
 
 export const CURVE_COMPATIBLE_CHAINS: Record<string, SupportedChain[]> = {
-  'secp256k1': ['ethereum'],
-  'ed25519': ['solana']
+  'secp256k1': ['ethereum', 'polygon', 'arbitrum', 'optimism', 'base'],
+  'ed25519': ['solana', 'sui'],
 };
 
 export function getCompatibleChains(curveType: string): SupportedChain[] {

@@ -17,7 +17,7 @@ NC='\033[0m' # No Color
 # Configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
-SIGNAL_SERVER_DIR="$PROJECT_ROOT/apps/signal-server"
+SIGNAL_SERVER_DIR="$PROJECT_ROOT/apps/signal-server/server"
 LOG_DIR="$PROJECT_ROOT/logs"
 PID_FILE="/tmp/signal-server.pid"
 DEFAULT_PORT=9000

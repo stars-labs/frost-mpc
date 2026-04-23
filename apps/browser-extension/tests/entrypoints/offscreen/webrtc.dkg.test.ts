@@ -194,9 +194,17 @@ describe('WebRTCManager DKG Process', () => {
             expect(frostDkgC.can_finalize()).toBe(true);
 
             // === FINALIZATION PHASE ===
-            const groupPublicKeyA = frostDkgA.finalize_dkg();
-            const groupPublicKeyB = frostDkgB.finalize_dkg();
-            const groupPublicKeyC = frostDkgC.finalize_dkg();
+            // finalize_dkg() returns the full per-participant keystore
+            // JSON (different participant_index/signing_share per peer),
+            // so comparing those directly would always fail. Compare the
+            // shared verifying_key via get_group_public_key() — that IS
+            // identical across all threshold participants by construction.
+            frostDkgA.finalize_dkg();
+            frostDkgB.finalize_dkg();
+            frostDkgC.finalize_dkg();
+            const groupPublicKeyA = frostDkgA.get_group_public_key();
+            const groupPublicKeyB = frostDkgB.get_group_public_key();
+            const groupPublicKeyC = frostDkgC.get_group_public_key();
 
             // Verify all participants generated identical group public keys
             expect(groupPublicKeyA).toBe(groupPublicKeyB);

@@ -125,7 +125,9 @@ Shape-compatible with TUI (see TUI's `command.rs`). Top-level serde tag `type`, 
 | Background state | `entrypoints/background/stateManager.ts` | `case "signingComplete"`, `case "signingProgress"` |
 | Offscreen | `entrypoints/offscreen/webrtc.ts` | `loadKeystoreForSigning`, `initiateSigningCeremony`, `_handleSigningCommitment`, `_handleSignatureShare`, `_aggregateSignatureAndBroadcast` |
 
-WASM FROST methods actually called for signing: `signing_commit()` (returns hex), `add_signing_commitment(idx, hex)`, `sign(msgHex)` (returns hex), `add_signature_share(idx, hex)`, `aggregate_signature(msgHex)` (returns hex). Participant indices are 1-based; compute as `participants.indexOf(peerId) + 1`. `signing_commit()` stores our nonce internally — do NOT also add_signing_commitment for our own index (the other half of the nonce/commitment pair is kept by the instance for `sign()`).
+WASM FROST methods actually called for signing: `signing_commit()` (returns hex), `add_signing_commitment(idx, hex)`, `sign(msgHex)` (returns hex), `add_signature_share(idx, hex)`, `aggregate_signature(msgHex)` (returns hex). Participant indices are 1-based; compute as `participants.indexOf(peerId) + 1`. Both `signing_commit()` and `sign()` auto-register the local side of their output (our commitment, then our share) into the WASM instance's internal maps — do NOT call `add_signing_commitment` / `add_signature_share` for our own index, those are peer-only. This keeps the contract uniform across every `add_*` method (peer-only) while satisfying frost-core's requirement that the signer's own commitment + share appear in the signing_package / aggregate input.
+
+DKG is analogous: `generate_round1()` returns our round-1 package as hex; `add_round1_package(idx, hex)` is called for peer packages only. `can_start_round2()` returns true once all n-1 peer packages are ingested (matches frost-core's `dkg::part2` contract which wants exactly n-1). Same for round 2.
 
 ### Testing
 

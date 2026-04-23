@@ -9,20 +9,13 @@ let wasmInitialized = false;
 export async function initializeWasmIfNeeded(): Promise<boolean> {
     if (!wasmInitialized) {
         try {
-            // For test environment, pass the WASM ArrayBuffer directly
-            if (typeof window === 'undefined' && typeof global !== 'undefined') {
-                const wasmPath = path.join(__dirname, '../../../pkg/mpc_wallet_bg.wasm');
-                const wasmBuffer = fs.readFileSync(wasmPath);
-                // Convert Node.js Buffer to ArrayBuffer
-                const arrayBuffer = new ArrayBuffer(wasmBuffer.length);
-                const view = new Uint8Array(arrayBuffer);
-                for (let i = 0; i < wasmBuffer.length; i++) {
-                    view[i] = wasmBuffer[i];
-                }
-                await wasmInit(arrayBuffer);
-            } else {
-                await wasmInit();
-            }
+            // Previous versions of this helper read the WASM bytes from
+            // `apps/browser-extension/pkg/mpc_wallet_bg.wasm` — a stale
+            // path from before core-wasm was split into its own package.
+            // The @mpc-wallet/core-wasm entry (pkg/mpc_wallet_core_wasm.js)
+            // resolves the adjacent .wasm file itself under Bun, so the
+            // no-arg form works correctly.
+            await wasmInit();
             console.log('✅ WASM initialized successfully for tests');
             wasmInitialized = true;
         } catch (error) {
@@ -40,41 +33,26 @@ export function hexEncode(str: string): string {
     return Buffer.from(str, 'utf8').toString('hex');
 }
 
-// Helper function to convert participant index to the hex key format used in DKG package maps
-export function participantIndexToHexKey(index: number, isSecp256k1: boolean): string {
-    const buffer = Buffer.alloc(32); // FROST identifiers are 32 bytes
-    if (isSecp256k1) {
-        // For Secp256k1, observed keys are like "00...0001" for index 1.
-        buffer.writeUInt32BE(index, 28); // Write 4 bytes (u32) at offset 28 for a 32-byte buffer
-    } else {
-        // For Ed25519, observed keys are like "010000..." for index 1.
-        buffer.writeUInt16LE(index, 0);  // Write 2 bytes (u16) at offset 0
-    }
-    return buffer.toString('hex');
-}
-
-// Extract package from DKG package map for specific recipient
-export function extractPackageFromMap(recipientIndex: number, packageMapHex: string, isSecp256k1: boolean): string {
+// Extract package from DKG package map for specific recipient.
+//
+// The WASM's generate_round2 output layout:
+//   outer = hex-encoded JSON of a map
+//   inner keys  = numeric u16 participant indices (JSON stringifies to "1", "2", ...)
+//   inner values = hex-encoded JSON of the per-peer round2 Package
+//
+// Earlier versions of this helper tried to reconstruct hex-encoded
+// 32-byte FROST identifiers and look those up as keys — but the WASM
+// never emitted that shape, so the lookup always missed. Use the
+// numeric-string key directly. The second arg is kept only to avoid
+// churn in callers; it has no effect.
+export function extractPackageFromMap(recipientIndex: number, packageMapHex: string, _isSecp256k1: boolean): string {
     const packageMap = JSON.parse(Buffer.from(packageMapHex, 'hex').toString());
-    let hexKey: string;
-    if (isSecp256k1) {
-        // For secp256k1, the key is 32 bytes, recipient index in the LAST 4 bytes (big-endian u32)
-        const buffer = Buffer.alloc(32);
-        buffer.writeUInt32BE(recipientIndex, 28); // Write u32 at offset 28 for big-endian
-        hexKey = buffer.toString('hex');
-    } else {
-        // For ed25519, the key is 32 bytes, recipient index in the FIRST 2 bytes (little-endian u16)
-        const buffer = Buffer.alloc(32);
-        buffer.writeUInt16LE(recipientIndex, 0); // Write u16 at offset 0 for little-endian
-        hexKey = buffer.toString('hex');
+    const key = String(recipientIndex);
+    const individualPackageHex = packageMap[key];
+    if (!individualPackageHex) {
+        throw new Error(`Package for recipient ${recipientIndex} (key "${key}") not found in map ${JSON.stringify(packageMap)}`);
     }
-    const individualPackage = packageMap[hexKey];
-    if (!individualPackage) {
-        throw new Error(`Package for recipient ${recipientIndex} (key ${hexKey}, isSecp256k1: ${isSecp256k1}) not found in map ${JSON.stringify(packageMap)}`);
-    }
-    // Return hex string instead of JSON string for WASM compatibility
-    const packageJson = JSON.stringify(individualPackage);
-    return Buffer.from(packageJson, 'utf8').toString('hex');
+    return individualPackageHex;
 }
 
 // Common session info for tests

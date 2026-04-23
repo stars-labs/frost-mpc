@@ -349,7 +349,7 @@ export class KeystoreService {
         
         return {
             version: this.keystoreIndex.version,
-            deviceId: this.keystoreIndex.deviceId,
+            device_id: this.keystoreIndex.device_id,
             exportedAt: Date.now(),
             wallets: [{
                 metadata,

@@ -325,7 +325,7 @@ describe('KeystoreService', () => {
         it('should import wallet from backup', async () => {
             const backup: KeystoreBackup = {
                 version: '1.0.0',
-                deviceId: 'device-123',
+                device_id: 'device-123',
                 exportedAt: Date.now(),
                 wallets: [{
                     metadata: mockWallets[0].metadata,

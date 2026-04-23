@@ -58,7 +58,7 @@ export class KeystoreService {
   async exportWallet(walletId: string): Promise<KeystoreBackup> {
     return {
       version: '1.0.0',
-      deviceId: 'test-device',
+      device_id: 'test-device',
       exportedAt: Date.now(),
       wallets: []
     };

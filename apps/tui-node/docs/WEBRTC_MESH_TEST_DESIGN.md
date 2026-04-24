@@ -262,6 +262,17 @@ Earlier sketches had three signature errors:
 
 ## Expected Output
 
+> **Scope note**: the specific millisecond / percentage numbers in
+> the illustrative output below (`45ms` / `52ms` / `145ms average`
+> / `2.3s rejoin` / `15ms p50 / 45ms p95` / `99.5% uptime`) are
+> **stylistic placeholders**, NOT observed benchmark results. No
+> `criterion` harness exists in the workspace to produce p50/p95
+> latency stats, no uptime tracker, no throughput benchmark. The
+> `examples/webrtc_mesh_e2e_test.rs` runner prints phase
+> progression and a final pass/fail summary but does NOT publish
+> these performance aggregates. Read the numbers as shape-of-
+> output, not benchmark-of-record.
+
 ```
 🚀 WebRTC Mesh Network E2E Test
 ================================
@@ -270,14 +281,14 @@ Phase 1: Mesh Establishment
 ✅ Alice connected to signaling server
 ✅ Bob connected to signaling server
 ✅ Charlie connected to signaling server
-✅ P1 ↔ P2 WebRTC connection established (45ms)
-✅ P1 ↔ P3 WebRTC connection established (52ms)
-✅ P2 ↔ P3 WebRTC connection established (48ms)
+✅ P1 ↔ P2 WebRTC connection established
+✅ P1 ↔ P3 WebRTC connection established
+✅ P2 ↔ P3 WebRTC connection established
 ✅ Full mesh topology achieved
 
-Phase 2: Connection Quality
-✅ Normal latency: 50ms average
-⚠️ Degraded: 500ms latency, 10% packet loss
+Phase 2: Connection Quality (simulated conditions)
+✅ Normal
+⚠️ Degraded (simulated high latency / packet loss)
 ✅ Recovered: Back to normal
 
 Phase 3: Disconnection Handling
@@ -289,8 +300,10 @@ Phase 3: Disconnection Handling
 
 Phase 4: Rejoin Process
 ✅ Bob rejoin initiated
-✅ Authentication successful
-✅ WebRTC reconnection complete (2.3s)
+✅ Authentication successful (placeholder length-check; see
+   § Security in WEBRTC_MESH_IMPLEMENTATION.md for the honest
+   scope of authenticate_peer)
+✅ WebRTC reconnection complete
 ✅ State synchronized
 ✅ Charlie rejoin initiated
 ✅ Full mesh restored
@@ -310,17 +323,17 @@ Phase 6: Signing with Rejoin
 
 Summary:
 ========
-Total Tests: 25
-Passed: 23
-Warnings: 2
-Failed: 0
-
-Performance:
-- Mesh establishment: 145ms average
-- Rejoin time: 2.3s average
-- Message latency: 15ms p50, 45ms p95
-- Reliability: 99.5% uptime
+Total Tests: <n>
+Passed: <n>
+Warnings: <n>
+Failed: <n>
 ```
+
+Earlier drafts of this block included a "Performance" trailer with
+concrete timing figures (`Mesh establishment: 145ms average /
+Rejoin time: 2.3s average / Message latency: 15ms p50, 45ms p95 /
+Reliability: 99.5% uptime`). All fabricated — removed. Adding real
+performance harness + publishing these stats is open future work.
 
 ## Security Considerations
 

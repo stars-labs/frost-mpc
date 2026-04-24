@@ -80,7 +80,7 @@ cargo run -p mpc-wallet-native
 ## Documentation
 
 ### 📚 Documentation Hub
-- [Technical Documentation](docs/MPC_WALLET_TECHNICAL_DOCUMENTATION.md) - Comprehensive technical reference (100+ pages)
+- [Technical Documentation](docs/MPC_WALLET_TECHNICAL_DOCUMENTATION.md) - Comprehensive technical reference (~1,440 lines; earlier drafts said "100+ pages" — overstated, it's closer to ~30 pages at typical print density)
 - [Contributing Guidelines](docs/CONTRIBUTING.md) - How to contribute to the project
 
 ### 🏗️ Architecture & Design

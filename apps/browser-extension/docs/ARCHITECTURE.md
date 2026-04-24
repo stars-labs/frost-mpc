@@ -270,9 +270,10 @@ broadcastToPopupPorts({
 related types, confused in earlier drafts of this doc:
 
   - **`BackgroundToOffscreenMessage`** (`messages.ts:87`) — the
-    **inner payload** union of ~17 variants covering init,
+    **inner payload** union of 19 variants covering init,
     session-lifecycle broadcast, signing requests, keystore
-    import/export.
+    import/export (earlier drafts said `~17` — off by two as
+    the signing-request family grew).
   - **`BackgroundToOffscreenWrapper`** (`messages.ts:212`) — the
     envelope around it:
     `{ type: 'fromBackground'; payload: BackgroundToOffscreenMessage }`
@@ -298,6 +299,8 @@ export type BackgroundToOffscreenMessage = BaseMessage & (
         transactionData: string; requiredSigners: number }
     | { type: 'requestMessageSignature'; signingId: string;
         message: string; fromAddress: string }
+    | { type: 'requestTransactionSignature'; signingId: string;
+        transactionData: string; fromAddress: string }
     | { type: 'exportKeystore'; chain?: ... }
     | { type: 'importKeystore'; chain: ...; keystoreData: string }
     | { type: 'getEthereumAddress' } | { type: 'getSolanaAddress' }

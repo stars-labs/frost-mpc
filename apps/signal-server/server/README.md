@@ -27,27 +27,35 @@ The server listens for WebSocket connections on `0.0.0.0:9000`.
 
 ## Protocol
 
-Clients communicate with the server using JSON messages:
+Clients communicate with the server using JSON messages with a
+`"type"` discriminator (serde `#[serde(tag = "type", rename_all =
+"snake_case")]`). The authoritative enum definitions live in
+`src/lib.rs` — `ClientMsg` at `:47` and `ServerMsg` at `:16`.
+The examples below cover only the basic signaling primitives
+that predate the monorepo; for the full 7 + 7 variant list
+including session-discovery, see the table in
+[`docs/deployment/CLOUDFLARE_DEPLOYMENT.md`](../../../docs/deployment/CLOUDFLARE_DEPLOYMENT.md)
+§ Message types handled.
 
-### Register
+### Basic signaling — Register
 
 ```json
 { "type": "register", "device_id": "your-unique-id" }
 ```
 
-### List Devices
+### Basic signaling — List Devices
 
 ```json
 { "type": "list_devices" }
 ```
 
-### Relay Message
+### Basic signaling — Relay Message
 
 ```json
 { "type": "relay", "to": "target-device-id", "data": { ... } }
 ```
 
-### Server Responses
+### Basic signaling — Server Responses
 
 - List of devices:
   ```json
@@ -61,6 +69,16 @@ Clients communicate with the server using JSON messages:
   ```json
   { "type": "error", "error": "description" }
   ```
+
+### Session-discovery variants (post-monorepo)
+
+Not shown above but shipped today — see the enum definitions and
+the CLOUDFLARE_DEPLOYMENT.md table for the full shape:
+
+- Client → server: `announce_session`, `request_active_sessions`,
+  `session_status_update`, `query_my_active_sessions`
+- Server → client: `session_available`, `sessions_for_device`,
+  `session_list_request`, `session_removed`
 
 ## License
 

@@ -574,9 +574,14 @@ guide (06334be) and tech-doc Deployment section (f591806).
 Not measured. Earlier drafts of this section quoted specific
 specs ("1 GHz single-core, 256 MB RAM, 50 MB storage" minimum;
 "2 GHz dual-core, 1 GB RAM, 200 MB storage" recommended). Those
-numbers had no source. The binary is a single-threaded
-terminal app with an async runtime underneath — modest in
-practice, but the repo doesn't benchmark a specific floor.
+numbers had no source. The binary uses `#[tokio::main]` with
+the default multi-thread runtime, so it spawns a worker-thread
+pool sized to the CPU core count — NOT single-threaded as an
+earlier draft of this paragraph claimed. The Elm render loop
+itself runs on one thread (tui-realm is single-threaded by
+design), but FROST rounds / WebSocket I/O / WebRTC peer tasks
+run on tokio workers in parallel. Modest in practice (no
+benchmarks ship to pin a specific floor).
 
 ### Environment Variables
 

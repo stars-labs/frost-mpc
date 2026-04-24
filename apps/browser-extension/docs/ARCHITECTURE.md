@@ -455,7 +455,13 @@ Earlier drafts of this block had:
 
 ### Message Validation Helpers
 
-Defined at `packages/@mpc-wallet/types/src/messages.ts:262-301`.
+Defined at `packages/@mpc-wallet/types/src/messages.ts:262-296`
+(type-guard helpers `isRpcMessage`/`isAccountManagement`/
+`isNetworkManagement`/`isUIRequest` start the block at :262;
+`validateMessage`/`validateSessionProposal`/
+`validateSessionAcceptance` close it at :296; earlier drafts
+cited `:262-301` — that range overshoots into the `Legacy
+Types` section at :298).
 All accept `PopupToBackgroundMessage` as input (NOT the legacy
 `BackgroundMessage` alias), and the type-predicate helpers use
 `msg is ...` signatures rather than plain `boolean`:

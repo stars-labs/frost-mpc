@@ -1018,8 +1018,13 @@ no benchmarks ship. What DOES ship:
   round-trips with the browser extension.
 - Online (WebRTC mesh) and offline (SD-card air-gap) ceremony
   modes.
-- 174+ Rust tests under `cargo test --workspace` covering the
-  DKG / signing / keystore paths.
+- ~180 Rust tests under `cargo test --workspace`
+  (184 `#[test]` / `#[tokio::test]` annotations as of this
+  writing; refresh count via
+  `grep -c '#\[test\]\|#\[tokio::test\]' $(find . -name '*.rs'
+  | grep -v target)`) covering the DKG / signing / keystore
+  paths. Earlier drafts said "174+"; number drifts as tests
+  land on `main`.
 
 For the latest state see
 [github.com/hecoinfo/mpc-wallet](https://github.com/hecoinfo/mpc-wallet)

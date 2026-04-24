@@ -4,11 +4,23 @@ Shared TypeScript type definitions for the MPC Wallet ecosystem.
 
 ## Installation
 
-```bash
-bun add @mpc-wallet/types
-# or
-npm install @mpc-wallet/types
+This is a **workspace-only package** — it isn't published to
+npm. The monorepo's root `package.json` is marked `"private":
+true` and workspace members consume it via
+
+```json
+"@mpc-wallet/types": "workspace:*"
 ```
+
+in their own `package.json`, resolved by Bun's workspace
+linker (see `apps/browser-extension/package.json:42` for the
+reference pattern).
+
+Earlier drafts of this README showed `bun add @mpc-wallet/types`
+/ `npm install @mpc-wallet/types` as install commands; both
+would fail for external consumers because the package isn't
+on any registry. To use these types outside the monorepo
+you would need to copy the source or publish a fork yourself.
 
 ## Usage
 
@@ -62,17 +74,25 @@ import {
 
 ## Type Organization
 
-Types are organized by domain:
+Types are organized by domain (10 domain modules + `index.ts`
+as the re-export aggregator):
 - `account.ts` - Account management types
-- `appstate.ts` - Application state types
+- `appstate.ts` - Application state types, `SupportedChain`,
+  `CURVE_COMPATIBLE_CHAINS`
 - `dkg.ts` - DKG protocol types
 - `keystore.ts` - Keystore and wallet types
-- `mesh.ts` - WebRTC mesh network types
-- `messages.ts` - Inter-component message types
+- `mesh.ts` - WebRTC mesh network types, `MeshStatus`
+- `messages.ts` - Inter-component message types (the big one —
+  `PopupToBackgroundMessage`, `BackgroundToOffscreenMessage`,
+  `OffscreenToBackgroundMessage`, `BackgroundToPopupMessage`,
+  plus `MESSAGE_TYPES` const + validation helpers)
 - `network.ts` - Blockchain network types
 - `session.ts` - MPC session types
 - `webrtc.ts` - WebRTC communication types
+  (`WebRTCAppMessage` with `webrtc_msg_type` tag)
 - `websocket.ts` - WebSocket signaling types
+- `index.ts` - re-exports everything for the `@mpc-wallet/types`
+  root import (earlier drafts of this list omitted `index.ts`)
 
 ## Development
 

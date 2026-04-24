@@ -84,7 +84,28 @@ struct and no dedicated simulator component.
 
 ## Key Event Simulation
 
-### Navigation Sequence
+> **Scope note**: the `navigate_to_offline_dkg` / `export_to_sdcard`
+> / `import_from_sdcard` code blocks below are methods of the
+> fabricated `KeyEventSimulator` struct already retracted in §
+> Components above. Keeping them here as design-intent notation
+> for what key-event-driven coverage WOULD look like. Verifications:
+>
+>   - `KeyCode::Char('e')` / `KeyCode::Char('i')` for export/import
+>     are NOT wired up — `grep -rn "KeyCode::Char\('e'\)\|KeyCode::Char\('E'\)"
+>     apps/tui-node/src/elm/` returns zero hits. Real offline
+>     export/import is reached via the `Message::ExportToSdCard` /
+>     `ImportFromSdCard` variants dispatched from the per-screen
+>     Component::on_event path (see `apps/tui-node/src/elm/message.rs`).
+>   - Mode-selection arrow-key handling IS real but the exact
+>     key sequence depends on current cursor state — treat the
+>     numbered step list as "operator intent", not a literal macro.
+>
+> For live keyboard-input coverage, see
+> `examples/test_keyboard_events.rs`, which drives the real
+> `Component::on_event` handlers with hand-built `crossterm::event::KeyEvent`
+> literals (not through any `press_key` wrapper).
+
+### Navigation Sequence (illustrative)
 
 ```rust
 fn navigate_to_offline_dkg(&self) {
@@ -111,7 +132,7 @@ fn navigate_to_offline_dkg(&self) {
 }
 ```
 
-### SD Card Operations
+### SD Card Operations (illustrative)
 
 ```rust
 // Export operation
@@ -231,7 +252,17 @@ cargo test test_offline_dkg_e2e
 
 ## Verification & Assertions
 
-### Success Criteria
+### Success Criteria (illustrative)
+
+> **Scope note**: the `verify_dkg_success` snippet below belongs
+> to the retracted `DKGTestOrchestrator` and references fields
+> / methods that don't exist on the real `MockSDCard`
+> (`list_files`, `current_round`) nor in the crate
+> (`DKGRound::Complete`). Keep as design-intent notation. The
+> real `examples/offline_dkg_demo.rs` asserts correctness by
+> printing a completion banner + `thread::join()`ing every
+> participant task without panicking; there is no centralised
+> verifier struct.
 
 ```rust
 fn verify_dkg_success(&self) -> Result<()> {

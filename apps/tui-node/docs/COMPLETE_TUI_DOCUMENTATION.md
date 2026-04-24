@@ -669,9 +669,21 @@ pub enum Command {
                    password: String, … },
 
     // DKG / signing orchestration
-    StartDKG { config: WalletConfig },   // session announce
-    StartFrostProtocol,                  // fires once mesh is up
-    StartSigning { wallet_id: String, message: String },
+    StartDKG { config: WalletConfig },         // command.rs:46 —
+                                               // session announce
+    StartFrostProtocol,                        // command.rs:53 —
+                                               // fires once mesh is up
+    StartSigning { request: SigningRequest },  // command.rs:97 —
+                                               // NOT {wallet_id, message};
+                                               // the SigningRequest struct
+                                               // carries those fields plus
+                                               // signing_id / blockchain /
+                                               // chain_id internally.
+    ApproveSignature { request_id: String },   // command.rs:98
+    RejectSignature { request_id: String },    // command.rs:99
+    Batch(Vec<Command>),                       // command.rs:121 — wraps
+                                               // multiple commands
+                                               // emitted by one update tick
 
     // …~60 more variants
 }

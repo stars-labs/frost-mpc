@@ -263,26 +263,53 @@ broadcastToPopupPorts({
 ```
 
 #### 3. Background → Offscreen Messages
-**File:** `packages/@mpc-wallet/types/src/messages.ts` — real type name is `BackgroundToOffscreenMessage` (matches the doc below) wrapped by `BackgroundToOffscreenWrapper`
+
+**File:** `packages/@mpc-wallet/types/src/messages.ts` — two
+related types, confused in earlier drafts of this doc:
+
+  - **`BackgroundToOffscreenMessage`** (`messages.ts:87`) — the
+    **inner payload** union of ~17 variants covering init,
+    session-lifecycle broadcast, signing requests, keystore
+    import/export.
+  - **`BackgroundToOffscreenWrapper`** (`messages.ts:212`) — the
+    envelope around it:
+    `{ type: 'fromBackground'; payload: BackgroundToOffscreenMessage }`
+
+Earlier drafts inverted these, defining `BackgroundToOffscreenMessage`
+as the wrapper itself and invented an `OffscreenMessage` union
+that mixed variants from both directions. Both fabrications have
+been removed. Real shape:
 
 ```typescript
-// Background forwards operations to offscreen
-export type BackgroundToOffscreenMessage = {
-    type: 'fromBackground';
-    payload: OffscreenMessage;
-}
-
-// Where OffscreenMessage includes:
-export type OffscreenMessage = BaseMessage & (
-    | { type: 'relayViaWs'; to: string; data: WebRTCSignal }
+// Inner payload (subset — see messages.ts:87-116 for the full list):
+export type BackgroundToOffscreenMessage = BaseMessage & (
+    | { type: 'getState' }
     | { type: 'init'; deviceId: string; wsUrl: string }
-    | { type: 'relayMessage'; fromdeviceId: string; data: WebSocketMessagePayload }
-    | { type: 'meshStatusUpdate'; status: MeshStatus }
-    | { type: 'dkgStateUpdate'; state: DkgState }
-    | { type: 'webrtcConnectionUpdate'; deviceId: string; connected: boolean }
-    | { type: 'sessionUpdate'; sessionInfo: SessionInfo | null; invites: SessionInfo[] }
-    | { type: 'webrtcMessage'; fromdeviceId: string; message: DataChannelMessage }
+    | { type: 'relayViaWs'; to: string; data: any }
+    | { type: 'sessionAccepted'; sessionInfo: SessionInfo;
+        currentdeviceId: string; blockchain?: ... }
+    | { type: 'sessionAllAccepted'; ... }
+    | { type: 'sessionResponseUpdate'; ... }
+    | { type: 'sessionReadyForSigning'; sessionInfo: SessionInfo;
+        blockchain?: ... }         // threshold-reached trigger
+    | { type: 'requestSigning'; signingId: string;
+        transactionData: string; requiredSigners: number }
+    | { type: 'requestMessageSignature'; signingId: string;
+        message: string; fromAddress: string }
+    | { type: 'exportKeystore'; chain?: ... }
+    | { type: 'importKeystore'; chain: ...; keystoreData: string }
+    | { type: 'getEthereumAddress' } | { type: 'getSolanaAddress' }
+    | { type: 'getDkgStatus' } | { type: 'getGroupPublicKey' }
+    | { type: 'setBlockchain'; blockchain: ... }
+    | { type: 'getWebRTCStatus' }
+    | { type: 'sendDirectMessage'; todeviceId: string; message: string }
 );
+
+// Wrapper
+export type BackgroundToOffscreenWrapper = {
+    type: 'fromBackground';
+    payload: BackgroundToOffscreenMessage;
+};
 
 // Example usage in background:
 safelySendOffscreenMessage({
@@ -296,11 +323,45 @@ safelySendOffscreenMessage({
 ```
 
 #### 4. Offscreen → Background Messages
-**File:** `packages/@mpc-wallet/types/src/messages.ts` — payload uses the same `BackgroundToOffscreenMessage` union, wrapped as `OffscreenToBackgroundWrapper`
+
+**File:** `packages/@mpc-wallet/types/src/messages.ts` — same
+inner/wrapper split:
+
+  - Inner payload: `OffscreenToBackgroundMessage` (`messages.ts:119`)
+  - Envelope: `OffscreenToBackgroundWrapper` (`messages.ts:217`)
+    — shape `{ type: 'fromOffscreen'; payload: OffscreenToBackgroundMessage }`
+
+Earlier drafts claimed the offscreen→background payload reused the
+`BackgroundToOffscreenMessage` union; not true — the offscreen-
+side union has its own variants (peer-connection status updates,
+DKG completion, signing progress, final aggregated signature, etc.)
+reflecting things only the offscreen context observes.
 
 ```typescript
-// Offscreen reports status and forwards peer messages
-// Sent as: { type: 'fromOffscreen', payload: OffscreenMessage }
+// Inner payload (subset — see messages.ts:119-170 for the full list):
+export type OffscreenToBackgroundMessage = BaseMessage & (
+    | { type: 'webrtcStatusUpdate'; deviceId: string; status: string }
+    | { type: 'webrtcConnectionUpdate'; deviceId: string;
+        connected: boolean }
+    | { type: 'peerConnectionStatusUpdate'; ... }
+    | { type: 'dataChannelStatusUpdate'; ... }
+    | { type: 'meshStatusUpdate'; status: MeshStatus }
+    | { type: 'dkgStateUpdate'; state: DkgState }
+    | { type: 'sessionUpdate'; sessionInfo: SessionInfo | null;
+        invites: SessionInfo[] }
+    | { type: 'relayViaWs'; to: string; data: any }
+    | { type: 'webrtcMessage'; fromdeviceId: string; message: any }
+    | { type: 'log'; payload: { message: string; source: string } }
+    | { type: 'dkgComplete'; groupPublicKey: string;
+        address: string | null; blockchain: 'ethereum' | 'solana';
+        sessionId: string | null; threshold: number; total: number;
+        participants: string[]; participantIndex: number | null;
+        keystoreJson: string | null }
+    | { type: 'signingProgress'; signingId: string; state: string;
+        selectedSigners: string[]; commitmentsReceived: string[];
+        sharesReceived: string[] }
+    // plus aggregated-signature variant — see messages.ts:157+
+);
 
 // Example usage in offscreen:
 chrome.runtime.sendMessage({

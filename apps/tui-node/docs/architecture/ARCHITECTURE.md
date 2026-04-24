@@ -174,13 +174,21 @@ pub struct AppState<C: Ciphersuite> {
 }
 ```
 
-No `curve_type`, `wallets: HashMap<…>`, `pending_operations: VecDeque<…>`,
-`network_status`, or `offline_mode` fields — those were listed in
-earlier drafts of this doc. Curve is per-wallet (lives in the
-keystore's `WalletMetadata`), wallets live in the keystore, signing
-requests queue through `pending_signing_requests`, and offline-mode
-is set at startup via the `--offline` CLI flag (no runtime toggle
-field).
+**What's NOT here** (earlier drafts of this doc listed these —
+verified absent via grep): `curve_type`, `wallets: HashMap<…>`,
+`pending_operations: VecDeque<…>`, `network_status`. Curve is
+per-wallet (lives in the keystore's `WalletMetadata` + is pinned
+on `Model.wallet_state.curve_type`); wallets live in the
+keystore, not a HashMap on AppState; signing requests queue
+through `pending_signing_requests`.
+
+**What IS here but worth calling out**: `pub offline_mode: bool`
+(appstate_compat.rs:77) + `pub dkg_in_progress: bool`
+(appstate_compat.rs:73). An earlier draft of THIS retraction
+claimed `offline_mode` was a fake field — it's real. The
+`offline_mode` flag is set at startup from the `--offline` CLI
+arg and is read at the signaling-setup + SD-card-export branch
+points. There is no in-app toggle to flip it mid-run.
 
 ## TUI Architecture
 

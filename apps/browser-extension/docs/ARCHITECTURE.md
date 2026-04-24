@@ -387,7 +387,10 @@ chrome.runtime.sendMessage({
 
 `MESSAGE_TYPES` is defined at
 `packages/@mpc-wallet/types/src/messages.ts:303`. Illustrative
-subset below — see source for the ~35 real entries:
+subset below — see source for the 37 real entries (count via
+`awk '/export const MESSAGE_TYPES/,/^\} as const;/' messages.ts
+| grep -Ec '^\s+[A-Z_]+:'`). Earlier drafts said `~35`; off
+by two as the keystore-management block grew.
 
 ```typescript
 export const MESSAGE_TYPES = {
@@ -448,7 +451,7 @@ Earlier drafts of this block had:
   `LIST_DEVICES: "listDevices"` (both SCREAMING_SNAKE key and
   proper camelCase value).
 - A 9-entry subset that omitted all DKG / signing / keystore
-  entries. The real enum has ~35 entries; fleshed out above.
+  entries. The real enum has 37 entries; fleshed out above.
 
 ### Message Validation Helpers
 

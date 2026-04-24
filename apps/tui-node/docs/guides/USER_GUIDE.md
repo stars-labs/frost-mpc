@@ -414,9 +414,14 @@ HSM / Mnemonic options. Earlier drafts promised:
   a share, not a BIP-39 seed.
 
 For offline backups, the working path is: export each wallet
-(`.json`+`.dat` pair), encrypt/store it elsewhere (ideally
-geographically distributed), and keep the password safe. Losing
-the password renders a `.dat` file useless.
+(single `<wallet_id>.json` file — the `WalletFile` JSON already
+wraps AES-256-GCM ciphertext internally), store the file
+elsewhere (ideally geographically distributed), and keep the
+password safe. Losing the password renders the exported JSON
+undecryptable. (Earlier drafts of this bullet described a
+`.json`+`.dat` pair and spoke of a `.dat` file becoming useless
+— no `.dat` file is produced; the ciphertext is base64-embedded
+in the JSON's `data` field.)
 
 ## Troubleshooting
 

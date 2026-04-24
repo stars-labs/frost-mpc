@@ -841,8 +841,12 @@ apps/tui-node/src/
   6d7fd5a / f7e0bad / 0363ad2 / 0214b30 / c48fbf0).
 - Key rotation — FROST share refresh in principle exists but this
   crate doesn't wire it up.
-- Key backup — real path is keystore export (.json/.dat pair);
-  "backup and recovery" in the fuller sense doesn't ship.
+- Key backup — real path is keystore export (single
+  `<wallet_id>.json` file wrapping metadata + base64 ciphertext;
+  NOT a `.json`+`.dat` pair as earlier drafts claimed, see
+  f4fc866 retraction). "Backup and recovery" in the fuller sense
+  (multi-share backup, recovery coordinators, per-device escrow)
+  doesn't ship.
 
 ### 5. Audit and Compliance (NOT implemented)
 - No structured audit log — only `tracing` output. Operators ship

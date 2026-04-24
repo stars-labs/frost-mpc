@@ -69,7 +69,7 @@ The extension is a standalone MPC client with TUI wire-protocol parity — any c
 1. **Popup** (`src/entrypoints/popup/App.svelte`) — Svelte 5 legacy reactivity (NOT runes). Lives only while the browser-action panel is open. Talks to background via `chrome.runtime.connect({name: "popup"})`.
 2. **Background SW** (`src/entrypoints/background/`) — Orchestrates. Owns `StateManager`, `SessionManager`, `WebSocketManager` (signal server), `OffscreenManager`. MV3 service workers terminate after ~30s idle; `KeepaliveController` pings during active DKG/signing states to prevent death.
 3. **Offscreen** (`src/entrypoints/offscreen/`) — Long-lived WebRTC + WASM host. Loads `@mpc-wallet/core-wasm` (FROST); holds `WebRTCManager` with all FROST state (`frostDkg`, `signingInfo`, `signingCommitments` Map, `signingShares` Map). Background↔offscreen communicate via `chrome.runtime.sendMessage` wrapped in `{type: "fromBackground"|"fromOffscreen", payload}`.
-4. **Content + injected** — Injects an EIP-1193 provider into page context. `window.ethereum.personal_sign` → content script → `background.rpcHandler.handleSignMessageRequest`.
+4. **Content + injected** — Injects an EIP-1193 provider into page context. The provider is scoped to `window.starlabEthereum` only (never `window.ethereum`, to coexist with other wallet extensions); dApps discover it via EIP-6963 `eip6963:announceProvider` events. `window.starlabEthereum.request({method: 'personal_sign', ...})` → content script → `background.rpcHandler.handleSignMessageRequest`.
 
 ### Signing pipeline (end-to-end)
 

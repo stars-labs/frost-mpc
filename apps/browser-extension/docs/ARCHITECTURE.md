@@ -35,7 +35,9 @@ The MPC Wallet Extension follows a Chrome Extension Manifest V3 architecture wit
                     │ Content Script  │
                     │                 │
                     │ - Web Page Hook │◄── Web Page
-                    │ - JSON-RPC Proxy│    (window.ethereum)
+                    │ - JSON-RPC Proxy│    (window.starlabEthereum,
+                    │                 │     NOT window.ethereum —
+                    │                 │     dApps discover via EIP-6963)
                     └─────────────────┘
 ```
 

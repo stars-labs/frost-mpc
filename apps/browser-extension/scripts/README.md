@@ -18,10 +18,14 @@ Utility scripts for development, testing, and building the MPC Wallet extension.
 ## Usage
 
 ### Running tests
-`bun test` at the browser-extension root runs all 509 tests
-(preload + module resolution come from `bunfig.toml`). Sub-suites
-are scriptable via the `test:*` entries in `package.json` (e.g.
-`bun run test:webrtc`, `bun run test:integration`).
+`bun test` at the browser-extension root runs ~530 tests
+(529 `test()` / `it()` call sites across 45 `*.test.ts`
+files as of this writing; number drifts as suites land on
+main — refresh via `grep -c 'test(\|it(' $(find . -name
+'*.test.ts')`). Preload + module resolution come from
+`bunfig.toml`. Sub-suites are scriptable via the `test:*`
+entries in `package.json` (e.g. `bun run test:webrtc`,
+`bun run test:integration`).
 
 ### Regenerate FROST fixtures
 ```bash

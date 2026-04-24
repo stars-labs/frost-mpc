@@ -376,9 +376,19 @@ View and join available sessions:
 │   Status: Collecting signatures (2/3)              │
 │   Created: 2 minutes ago                            │
 │                                                     │
-│ [Enter: Join] [R: Refresh] [F: Filter]             │
+│ [Enter: Join]  [Esc: Back]  [Ctrl+R: Refresh]      │
 └─────────────────────────────────────────────────────┘
 ```
+
+> Note: the illustrative button row at the bottom of the mock
+> above maps to real bindings (`Enter` / `Esc` per-component,
+> `Ctrl+R` global at `src/elm/app.rs:859`). Earlier drafts
+> showed `[R: Refresh] [F: Filter]` — plain `R` and `F` are
+> NOT wired up in `join_session.rs` (zero `KeyCode::Char` hits
+> in that component); refresh is `Ctrl+R` at the app level,
+> and there is no filter feature. Also "Created: 5 minutes ago"
+> is illustrative — the TUI stores ISO-8601 timestamps and
+> doesn't render relative-time deltas.
 
 ### Pending signing requests
 

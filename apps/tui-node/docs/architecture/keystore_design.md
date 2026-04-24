@@ -89,7 +89,7 @@ the `<wallet_id>.json` path.
 ```
 
 Real metadata field names come from `WalletMetadata` at
-`src/keystore/models.rs:222-273`. Notable details (verified
+`src/keystore/models.rs:222-291`. Notable details (verified
 against source — earlier drafts of THIS note had the inversions
 backwards):
 

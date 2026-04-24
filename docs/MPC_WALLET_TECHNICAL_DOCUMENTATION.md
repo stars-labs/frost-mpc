@@ -471,7 +471,7 @@ serialized shape is the `WalletFile` struct
 ```
 
 Metadata is serialized from the `WalletMetadata` struct at
-`apps/tui-node/src/keystore/models.rs:222-273`. Notable details:
+`apps/tui-node/src/keystore/models.rs:222-291`. Notable details:
 
 - `session_id` is the real field name; `wallet_id` is a
   `#[serde(alias)]` for backward-compat reads.

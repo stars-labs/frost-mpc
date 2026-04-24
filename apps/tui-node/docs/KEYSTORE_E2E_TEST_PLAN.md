@@ -80,7 +80,7 @@ format is the `WalletFile` struct defined in
 
 The wrapper fields are `version` / `encrypted` / `algorithm` /
 `data` / `metadata`; inside `metadata` sits the serialized
-`WalletMetadata` (`src/keystore/models.rs:222-273`). Earlier drafts
+`WalletMetadata` (`src/keystore/models.rs:222-291`). Earlier drafts
 of this doc showed the metadata fields hoisted to the top level
 of the JSON with a separate `.dat` blob carrying the ciphertext —
 that layout never shipped; the real serializer writes everything

@@ -289,6 +289,30 @@ The offline DKG process enables key generation without network connectivity, usi
 
 ### Step-by-Step Process
 
+> **Scope note (mocks)**: the ASCII screens below are
+> illustrative, not literal renders. Specifically absent from
+> the real TUI:
+>
+>   - An in-app "Enable Offline Mode" toggle screen — offline
+>     mode is a startup-time `--offline` CLI flag decision
+>     (see guides/offline-mode.md § Enabling Offline Mode),
+>     not a runtime confirmation dialog.
+>   - The "☑ System clock synchronized" checklist item —
+>     FROST DKG is not time-sensitive; same retraction as §
+>     Prerequisites above.
+>   - Network-interface auto-disable ("WiFi/Ethernet/Bluetooth:
+>     Will be disabled") — the TUI doesn't touch OS-level
+>     network interfaces; `--offline` just skips the signaling
+>     code path. Operators disable interfaces themselves.
+>   - Button rows like `[Enable Offline Mode] [Cancel]` —
+>     ratatui components don't render button widgets; navigation
+>     is keyboard-driven (arrow keys + Enter + Esc).
+>
+> The narrative flow (mode decision → parameter exchange →
+> round 1 commitments → round 2 shares → local finalize) is
+> correct; only the specific widgets/checklists should be read
+> as design-intent pseudo-screens.
+
 #### 1. Offline Mode Activation
 
 **Each Participant:**

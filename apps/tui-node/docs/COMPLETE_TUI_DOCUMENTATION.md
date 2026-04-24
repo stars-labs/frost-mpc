@@ -124,9 +124,16 @@ Real opportunities if someone takes perf work on:
 ### Screen Hierarchy
 
 Real Screen enum at `src/elm/model.rs:378-427` (see
-ELM_ARCHITECTURE.md § Screen Transitions for the full 23-variant
-list). Tree structure below groups by user-flow, with each leaf
-matching a real Screen variant:
+ELM_ARCHITECTURE.md § Screen Transitions for the full 25-variant
+list: Welcome, MainMenu, CreateWallet, ManageWallets, WalletDetail,
+ImportWallet, ExportWallet, PathSelection, ModeSelection,
+ThresholdConfig, TemplateSelection, WalletConfiguration,
+PasswordPrompt, DKGProgress, WalletComplete, JoinSession,
+SessionDetail, AcceptSession, SignTransaction, SigningProgress,
+SignatureComplete, Settings, NetworkSettings, SecuritySettings,
+About). Earlier drafts of this line said 23 variants — off by
+two as more screens accumulated. Tree structure below groups by
+user-flow, with each leaf matching a real Screen variant:
 
 ```
 Welcome

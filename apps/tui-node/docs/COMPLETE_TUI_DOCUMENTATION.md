@@ -387,9 +387,14 @@ the current source.
 In-memory `Model` lives for the duration of the process. On-disk
 persistence:
 
-- **Keystore files**: wallet metadata + encrypted key share at
-  `~/.frost_keystore/<device_id>/<curve>/<wallet_id>.{json,dat}`
-  — written on DKG completion, re-read on startup.
+- **Keystore files**: one `<wallet_id>.json` per wallet at
+  `~/.frost_keystore/<device_id>/<curve>/<wallet_id>.json`. The
+  JSON wraps plaintext metadata plus the base64-encoded
+  AES-256-GCM ciphertext in a `WalletFile` struct (single file,
+  NOT a `.json` + `.dat` pair as earlier drafts claimed — same
+  retraction as f4fc866 for other docs). Written on DKG
+  completion, re-read on startup (scan the keystore directory +
+  cache metadata; the encrypted share only decrypts on unlock).
 - **Signal-server log**: append-only `tracing` output at
   `--log-location` (default
   `~/.frost_keystore/logs/mpc-wallet.log`).

@@ -332,15 +332,27 @@ jobs:
 
 ## Documentation Updates Completed
 
-The docs-architect has created/updated:
-1. ✅ **README.md** - Complete setup and usage guide
-2. ✅ **ARCHITECTURE.md** - Detailed system design with diagrams
-3. ✅ **TESTING.md** - Comprehensive testing guide
-4. ✅ **API.md** - Complete API reference
-5. ✅ **DEPLOYMENT.md** - Production deployment guide
-6. ✅ **CLAUDE.md** - Updated with latest changes
+> **Scope note**: earlier draft of this block claimed six doc
+> files with ✅ checkmarks. Two of those filenames (`API.md`,
+> `DEPLOYMENT.md`) were fabricated — `find` against the repo
+> returns zero hits for them. Real doc tree:
 
-All documentation reflects the recent Elm-architecture migration
+1. ✅ `README.md` — multiple (repo root, apps/, docs/, tests/
+   subtrees all have their own)
+2. ✅ `apps/tui-node/docs/architecture/ARCHITECTURE.md` —
+   detailed system design with diagrams
+3. ✅ `docs/testing/TESTING.md` — comprehensive testing guide
+4. ❌ `API.md` — does not exist; real API surface is
+   documented inline via rustdoc on public types + the API
+   Reference section of
+   `docs/MPC_WALLET_TECHNICAL_DOCUMENTATION.md`
+5. ❌ `DEPLOYMENT.md` — does not exist; real deployment docs
+   are `docs/deployment/README.md`,
+   `docs/deployment/CLOUDFLARE_DEPLOYMENT.md`, and
+   `apps/tui-node/docs/DEPLOYMENT_GUIDE.md`
+6. ✅ `CLAUDE.md` (repo root) — architecture + conventions
+   for Claude Code sessions
+
+All documentation reflects the Elm-architecture migration
 (the pre-migration entry type was named `AppRunner`; it's now
-`ElmApp<C>` — see `apps/tui-node/src/elm/app.rs:25`) and provides
-clear guidance for developers.
+`ElmApp<C>` — see `apps/tui-node/src/elm/app.rs:25`).

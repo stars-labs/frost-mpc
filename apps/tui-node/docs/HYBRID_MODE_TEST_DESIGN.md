@@ -26,6 +26,27 @@ This document outlines the hybrid operational mode where some MPC participants o
 
 ## Test Scenarios
 
+> **Scope note**: Scenarios 2–5 below are structured as
+> "transaction signing" (ETH Transfer / SOL Transfer / SPL Token /
+> Emergency Signing) with transaction-shaped setup fields
+> (Type / Amount / To / Program). The shipped TUI signs **raw
+> bytes** (EIP-191 `personal_sign` shape over a hex-encoded
+> message), not Ethereum-transaction structs with decoded
+> Type/Amount/To fields. An external tool must serialize the
+> transaction first and hand the hex to the TUI.
+>
+> Scenario 1 (Hybrid DKG) matches what the hybrid layer at
+> `src/hybrid/` actually implements. For signing, read the
+> scenario setup as "what an external wallet would hand to the
+> TUI for signing after RLP-encoding + keccak-hashing the
+> transaction" rather than as literal TUI operations. The hybrid
+> DKG flow + SD-card exchange mechanics are accurate.
+>
+> See `apps/tui-node/docs/guides/USER_GUIDE.md § Signing Messages
+> → Scope` and the "Phase C scope: message-only field" comment
+> in `src/elm/components/sign_transaction.rs` for the honest
+> signing-surface picture.
+
 ### 🌐 Scenario 1: Hybrid DKG (2 Online + 1 Offline)
 
 **Setup:**

@@ -606,11 +606,18 @@ is `pub fn update(model: &mut Model, msg: Message) -> Option<Command>`
 ```rust
 // Real definition: apps/tui-node/src/elm/message.rs
 pub enum Message {
+    // Navigation (verified message.rs:15-18,263)
+    NavigateBack,            // line 15 — Esc
+    NavigateHome,            // line 16 — Ctrl+H
+    PushScreen(Screen),      // line 17
+    PopScreen,               // line 18
+    Quit,                    // line 263 — Ctrl+Q / Ctrl+C
+    Refresh,                 // Ctrl+R
+
     // User input events (routed from Component::on)
     SelectItem { index: usize },
-    SelectMode(Mode),
-    SelectCurve(CurveType),
-    ThresholdConfigConfirm,
+    SelectMode(WalletMode),  // line 34 — carries WalletMode, not Mode
+    SetThreshold(u16),       // line 37 — NOT ThresholdConfigConfirm
     SignTypeChar(char),
     SignBackspace,
     SignSubmit,
@@ -625,19 +632,26 @@ pub enum Message {
     DkgComplete,
     SigningComplete { signature: Vec<u8> },
     // …etc.
-
-    // Navigation
-    PushScreen(Screen),
-    PopScreen,
-    GoHome,
-    Initialize,
 }
 ```
 
 Earlier drafts listed invented variants like `Navigate(Screen)`,
 `CreateWallet(WalletConfig)`, `UpdateDKGProgress { round, progress
-}`. The real variant names differ — see the source for the
-canonical set.
+}`, `SelectCurve(CurveType)`, `ThresholdConfigConfirm`, `GoHome`.
+None exist in source:
+
+- `Navigate(Screen)` — real navigation is `PushScreen` / `PopScreen`
+  / `NavigateBack` / `NavigateHome`.
+- `SelectCurve(CurveType)` + `ThresholdConfigConfirm` — `grep`
+  returns zero hits. No CurveSelection screen exists (curve is a
+  form field on Create Wallet); threshold confirmation uses
+  `SetThreshold(u16)` + regular form submission.
+- `GoHome` — real variant name is `NavigateHome`; the model
+  helper method is `go_home` (note the naming mismatch between
+  the Message variant and the Model method).
+- `SelectMode(Mode)` — real type is `WalletMode`, not `Mode`.
+
+See the source for the canonical ~80+ variant set.
 
 ### Command Types
 

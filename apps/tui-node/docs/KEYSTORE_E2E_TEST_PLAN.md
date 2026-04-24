@@ -227,7 +227,7 @@ What actually ships under `apps/tui-node/src/`:
 | `keystore_manager.rs` | `src/keystore/storage.rs` (Keystore struct) + `src/keystore/encryption.rs` (AES-256-GCM + PBKDF2) |
 | `erc20_encoder.rs` | `src/utils/erc20_encoder.rs` ✓ |
 | `keystore_e2e_test.rs` | Not present as a single-file E2E — coverage is split across `tests/` + component unit tests |
-| `signature_verifier.rs` | Not a separate module; verification goes through `frost-core`'s `VerifyingKey::verify` (already run inside `aggregate`) plus `src/utils/eth_helper.rs` for the Ethereum ecrecover conversion path (EIP-191 signing lands as part of Phase D.1 — 31 eip/ecrecover hits across 5 files confirm this surface exists) |
+| `signature_verifier.rs` | Not a separate module; verification goes through `frost-core`'s `VerifyingKey::verify` (already run inside `aggregate`) plus `src/utils/eth_helper.rs` for the Ethereum ecrecover conversion path (EIP-191 signing, Phase D.1 landed — ~41 eip/ecrecover/personal_sign hits across 6 files as of this writing via `grep -rn 'ecrecover\|eip191\|EIP-191\|personal_sign' apps/tui-node/src`; earlier draft said "31 hits across 5 files" — drift as the phase D.1 UI surface expanded) |
 
 ### Test Data
 - Standard ERC20 transfer payloads (see `src/utils/erc20_encoder.rs` tests)

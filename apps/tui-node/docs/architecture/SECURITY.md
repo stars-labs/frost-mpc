@@ -22,7 +22,15 @@ The FROST MPC TUI Wallet implements defense-in-depth security architecture, comb
 2. **Least Privilege**: Components have minimal required permissions
 3. **Defense in Depth**: Multiple layers of security controls
 4. **Fail Secure**: System fails to a secure state
-5. **Auditability**: All security-relevant events are logged
+5. **Observability via tracing**: Ceremony-level events land in
+   the `tracing`-subscribed log (path via `--log-location`,
+   default `~/.frost_keystore/logs/mpc-wallet.log`). This is
+   unstructured informational logging, NOT a tamper-evident
+   audit log — earlier drafts of this principle claimed
+   "All security-relevant events are logged" with audit-grade
+   connotations. The § Compliance and Auditing section below
+   explicitly documents the absence of a structured audit-log
+   layer.
 
 ### Security Architecture
 

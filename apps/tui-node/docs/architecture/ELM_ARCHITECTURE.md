@@ -608,12 +608,20 @@ mod tests {
 }
 ```
 
-Real names: `PushScreen` / `PopScreen` (NOT `Navigate` /
-`NavigateBack`), `Model::new(device_id)` constructor (NOT
-`Model::default()`). There is no top-level `Message::KeyPressed`
-match arm in update — keyboard events flow through tui-realm
-component `on()` handlers first, which translate each press into
-the right typed Message variant (see KEYBOARD_HANDLING_GUIDE.md).
+Real variant names: `PushScreen(Screen)` / `PopScreen` are the
+stack-manipulation variants used in the test above; `NavigateBack`
++ `NavigateHome` (`message.rs:15,16`) are the separate navigation
+variants emitted by Esc / Ctrl+H respectively. Earlier drafts of
+this note lumped `NavigateBack` in with "NOT real" — that was an
+inverted retraction; NavigateBack IS real (see 94e97b6 for the
+broader sweep across this doc).
+
+`Model::new(device_id)` is the real constructor (NOT
+`Model::default()`); the `device_id: String` arg is required. There
+is no top-level `Message::KeyPressed` match arm in update — keyboard
+events flow through tui-realm component `on()` handlers first, which
+translate each press into the right typed Message variant (see
+KEYBOARD_HANDLING_GUIDE.md).
 
 ### Integration Testing
 
@@ -637,25 +645,39 @@ The current coverage for integration paths lives in:
 
 ## Migration Strategy
 
-### Phase 1: Parallel Implementation
+> **Historical note**: This 4-phase plan was written at the start
+> of the Elm-architecture migration. Phases 1-3 are **done** —
+> the Elm loop is the only UI runtime today; legacy non-Elm code
+> has been removed; the historical UI wireframes live under
+> `apps/tui-node/docs/archive/legacy-ui/`. Phase 4's aspirations
+> (undo/redo, time-travel debugging, telemetry/analytics) are
+> **not implemented** and aren't currently on the roadmap. Kept
+> below for historical context; grep `undo_redo` / `time_travel`
+> / `telemetry` across the workspace to confirm absence.
+
+### Phase 1: Parallel Implementation (done)
 - Implement Elm architecture alongside existing code
 - Create adapter layer to bridge old and new systems
 - Gradually migrate features
 
-### Phase 2: Feature Migration
+### Phase 2: Feature Migration (done)
 - Migrate one feature at a time
 - Start with simple screens (main menu, settings)
 - Progress to complex flows (DKG, signing)
 
-### Phase 3: Legacy Removal
+### Phase 3: Legacy Removal (done)
 - Remove old UI code once feature is migrated
 - Archive legacy documentation
 - Update tests
 
-### Phase 4: Optimization
-- Profile and optimize performance
-- Implement advanced features (undo/redo, time travel debugging)
-- Add telemetry and analytics
+### Phase 4: Optimization (aspirational — not implemented)
+- Profile and optimize performance (no `criterion` harness ships)
+- "Advanced features" like undo/redo + time-travel debugging —
+  neither has been built. The Elm loop mutates Model in place, so
+  time-travel would require snapshotting the model on every update
+  and a new UI surface to navigate snapshots; neither exists.
+- "Telemetry and analytics" — no telemetry collection ships.
+  `tracing` structured logging is the only observability path today.
 
 ## Benefits
 

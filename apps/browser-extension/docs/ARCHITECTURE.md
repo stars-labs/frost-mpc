@@ -224,24 +224,50 @@ chrome.runtime.sendMessage({
 ```
 
 #### 2. Background → Popup Messages
-**File:** `packages/@mpc-wallet/types/src/messages.ts` — real type name is `BackgroundToPopupMessage` (`PopupMessage` below is the deprecated alias)
+**File:** `packages/@mpc-wallet/types/src/messages.ts:190` — real
+type name is `BackgroundToPopupMessage` (`PopupMessage` at :231 is
+a `@deprecated` alias; both resolve to the same union).
 
 ```typescript
 // Background responds and broadcasts state updates
-export type PopupMessage = BaseMessage & (
-    | { type: 'wsStatus'; connected: boolean; reason?: string }
-    | { type: 'wsMessage'; message: ServerMsg }
-    | { type: 'deviceList'; devices: string[] }
-    | { type: 'wsError'; error: string }
-    | { type: 'fromOffscreen'; payload: OffscreenMessage }
-    | { type: 'sessionUpdate'; sessionInfo: SessionInfo | null; invites: SessionInfo[] }
-    | { type: 'meshStatusUpdate'; status: MeshStatus }
-    | { type: 'dkgStateUpdate'; state: DkgState }
-    | { type: 'webrtcConnectionUpdate'; deviceId: string; connected: boolean }
-    | { type: 'proposeSession'; session_id: string; total: number; threshold: number; participants: string[] }
-    | { type: 'acceptSession'; session_id: string; accepted: boolean }
-    | InitialStateMessage  // Full state on popup connection
-);
+export type BackgroundToPopupMessage =
+    | InitialStateMessage
+    | { type: 'wsStatus'; connected: boolean } & BaseMessage
+    | { type: 'wsError'; error: string } & BaseMessage
+    | { type: 'wsMessage'; message: any } & BaseMessage
+    | { type: 'deviceList'; devices: string[] } & BaseMessage
+    | { type: 'sessionUpdate'; sessionInfo: SessionInfo | null;
+        invites: SessionInfo[] } & BaseMessage
+    | { type: 'webrtcConnectionUpdate'; deviceId: string;
+        connected: boolean } & BaseMessage
+    | { type: 'webrtcStatusUpdate'; deviceId: string;
+        status: string } & BaseMessage
+    | { type: 'meshStatusUpdate'; status: MeshStatus } & BaseMessage
+    | { type: 'dkgStateUpdate'; state: DkgState } & BaseMessage
+    | { type: 'fromOffscreen'; payload: any } & BaseMessage
+    | { type: 'signatureRequest'; signingId: string; message: string;
+        origin: string; fromAddress: string } & BaseMessage
+    | { type: 'signatureComplete'; signingId: string;
+        signature: string } & BaseMessage
+    | { type: 'signatureError'; signingId: string;
+        error: string } & BaseMessage
+    | { type: 'transactionRequest'; signingId: string; transaction: any;
+        origin: string; fromAddress: string } & BaseMessage
+    | { type: 'accountsUpdated'; blockchain: "ethereum" | "solana";
+        accounts: WalletAccount[] } & BaseMessage;
+```
+
+Earlier drafts of this block had four classes of drift:
+
+  - Invented `proposeSession` / `acceptSession` variants — those
+    live on `PopupToBackgroundMessage` (the OTHER direction), not
+    on `BackgroundToPopupMessage`.
+  - Typed `wsMessage.message: ServerMsg` and `fromOffscreen.payload:
+    OffscreenMessage` — both are `any` in real source.
+  - Missed six real variants (`webrtcStatusUpdate`,
+    `signatureRequest`, `signatureComplete`, `signatureError`,
+    `transactionRequest`, `accountsUpdated`).
+  - Added a `reason?` field to `wsStatus` that isn't in source.
 
 // InitialStateMessage contains complete app state
 export interface InitialStateMessage extends AppState {

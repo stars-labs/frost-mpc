@@ -347,7 +347,7 @@ DKG completion, signing progress, final aggregated signature, etc.)
 reflecting things only the offscreen context observes.
 
 ```typescript
-// Inner payload (subset — see messages.ts:119-170 for the full list):
+// Inner payload (subset — see messages.ts:119-174 for the full list):
 export type OffscreenToBackgroundMessage = BaseMessage & (
     | { type: 'webrtcStatusUpdate'; deviceId: string; status: string }
     | { type: 'webrtcConnectionUpdate'; deviceId: string;

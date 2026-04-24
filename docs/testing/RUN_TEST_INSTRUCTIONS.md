@@ -61,16 +61,36 @@ Same steps as MPC-2.
 
 ## What should happen
 
-1. MPC-1 should show "Participants (3/3)" once both joiners connect
-2. MPC-2 and MPC-3 should show "Connected to other participants"
-3. All nodes should establish WebRTC connections (mesh network)
-4. DKG should start automatically once the mesh is ready
+1. MPC-1's Join Session list shows "👥 Participants (3/3):" once
+   both joiners connect (real format at
+   `apps/tui-node/src/elm/components/join_session.rs:329`).
+2. All three nodes establish pairwise WebRTC connections (mesh).
+3. The ceremony emits "🚀 Mesh ready! Starting real DKG protocol…"
+   (real at `apps/tui-node/src/elm/command.rs:1268`) and DKG
+   kicks off automatically.
+
+Earlier drafts of this checklist claimed MPC-2/MPC-3 show a
+"Connected to other participants" banner — that string doesn't
+exist in `apps/tui-node/src/` (grep returns zero hits). The
+joiner screens just render the same participant-list UI as
+MPC-1 with progressively growing `Participants (N/3)` counts.
 
 ## Monitoring
 
-- Watch the logs in each terminal for connection status
-- Look for "WebRTC CONNECTED" messages
-- Check for "Mesh ready" notifications
+Run with `RUST_LOG=info` (or `debug`) to see the per-peer
+WebRTC lifecycle. Grep-friendly log lines from
+`apps/tui-node/src/network/webrtc.rs`:
+
+- `✅ WebRTC connection ESTABLISHED with <device_id>`
+  (`webrtc.rs:370`) — per-peer success
+- `✅ All N peer connections established, sending mesh_ready`
+  (`webrtc.rs:496`) — mesh fully formed
+- `🚀 Mesh ready! Starting real DKG protocol…`
+  (`command.rs:1268`) — DKG auto-trigger
+
+Earlier drafts said to look for "WebRTC CONNECTED" — that
+uppercase string isn't emitted. The real log uses
+"WebRTC connection ESTABLISHED" (mixed case).
 
 ## Signaling
 

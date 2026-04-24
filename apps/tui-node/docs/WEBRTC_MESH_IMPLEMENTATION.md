@@ -375,10 +375,33 @@ accounting of what's actually in source see
 ## 📈 Next Steps
 
 ### Production Hardening
-1. Replace simulated WebRTC with real implementation
-2. Integrate with actual STUN/TURN servers
-3. Add persistent message storage
-4. Implement connection pooling
+
+Note: this section is about the `src/webrtc/` test-harness
+library (see scope note at the top of the doc). Production
+WebRTC is already real at `src/network/webrtc.rs` +
+`src/elm/webrtc_signaling.rs` — those files construct
+`RTCPeerConnection` objects directly from the `webrtc` crate
+and exchange real SDP/ICE through the signal server. The
+items below are harness-library gaps, not production-stack
+gaps.
+
+1. Replace the test harness's **simulated** SDP/ICE exchange
+   with a real WebRTC driver so harness tests exercise the
+   actual `webrtc` crate (earlier draft of this bullet just
+   said "Replace simulated WebRTC with real implementation"
+   — misleading about which layer is simulated).
+2. Integrate with actual STUN/TURN servers. The browser
+   extension already hard-codes Google STUN
+   (`stun.l.google.com:19302`); the TUI currently ships with
+   empty `ice_servers` (`src/network/webrtc.rs:285` +
+   `src/elm/webrtc_signaling.rs:387`). Neither the extension
+   nor the TUI ships TURN.
+3. Add persistent message storage (today `message_buffer` on
+   `WebRTCMeshManager` is an in-memory `HashMap<PeerId,
+   Vec<Vec<u8>>>` — lost on restart).
+4. Implement connection pooling (already flagged as not-
+   implemented at § 3. Performance above; repeated here as
+   aspirational roadmap).
 
 ### Enhanced Features
 1. Adaptive mesh topology (not just full mesh)

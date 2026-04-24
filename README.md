@@ -5,7 +5,7 @@
 [![TypeScript](https://img.shields.io/badge/typescript-%23007ACC.svg?style=flat&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![WebRTC](https://img.shields.io/badge/WebRTC-333333?style=flat&logo=webrtc&logoColor=white)](https://webrtc.org/)
 
-A production-ready Multi-Party Computation (MPC) wallet implementing FROST (Flexible Round-Optimized Schnorr Threshold) signatures for secure distributed key management across multiple platforms.
+A Multi-Party Computation (MPC) wallet implementing FROST (Flexible Round-Optimized Schnorr Threshold) signatures for secure distributed key management across multiple platforms. Currently early-stage development software — every workspace crate is at `0.1.0`, no tagged release has been cut, and no third-party security audit has been performed (see § Security below). Earlier drafts of this line called the repo "production-ready" — that claim contradicts all the caveats elsewhere in this README (no audit, no benchmarks, no regulatory certification) so it has been removed.
 
 ## Overview
 

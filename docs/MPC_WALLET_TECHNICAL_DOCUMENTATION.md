@@ -1288,7 +1288,9 @@ always means:
 - wrong message bytes (hash mismatch — check the signing-payload
   construction; `signing_message_hex` must be what you believed)
 - wrong group public key (probably stale keystore metadata —
-  inspect the `.json` sidecar in `~/.frost_keystore/<device_id>/<curve>/`)
+  inspect the `<wallet_id>.json` file under
+  `~/.frost_keystore/<device_id>/<curve>/`; the `metadata.group_public_key`
+  field inside the WalletFile wrapper is the authoritative value)
 - stale share from a previous DKG run (participants all need the
   same group key — rerun DKG if in doubt)
 

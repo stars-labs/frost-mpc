@@ -302,12 +302,18 @@ wiring up.
   data is fetched, and the list renders with a simple scroll
   offset (not pagination). Filtering is not implemented.
 
-#### CreateWallet / Mode+Curve+Threshold flow
-- Single-screen mode selection (Online/Offline) → curve selection
-  (secp256k1/ed25519) → threshold config → DKG ceremony.
-- Not a multi-step wizard with rollback/progress persistence —
-  each screen is discrete and `Esc` backs out without saving
-  partial state.
+#### CreateWallet wizard (Mode → Threshold → Password → DKG)
+- Real screen sequence: ModeSelection (Online/Offline) →
+  TemplateSelection → WalletConfiguration (carries curve choice
+  as a form field — NO separate CurveSelection screen) →
+  ThresholdConfig → PasswordPrompt → DKGProgress → WalletComplete.
+- Each screen is a discrete Screen variant (see Screen Hierarchy);
+  Esc backs out without saving partial state. There is no
+  wizard-style rollback-with-persisted-progress layer.
+- Earlier drafts described this as "Mode → Curve → Threshold → DKG"
+  with a standalone curve-selection step. The real flow has no
+  CurveSelection screen; curve is selected via a radio/field on
+  WalletConfiguration.
 
 #### DKGProgress
 - Gauge-based progress display during the DKG ceremony.

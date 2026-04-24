@@ -174,20 +174,36 @@ impl WebRTCMeshManager {
 ```
 
 ### 2. Connection Monitor
+
+Real struct at `apps/tui-node/src/webrtc/connection_monitor.rs:78`
+has 5 fields (three of them `Arc<Mutex<...>>`-wrapped for interior
+mutability, same pattern as RejoinCoordinator below). `ConnectionQuality`
+at `:12` carries RTT / packet-loss / bandwidth / last-heartbeat:
+
 ```rust
-struct ConnectionMonitor {
-    heartbeat_interval: Duration,
-    timeout_threshold: Duration,
-    quality_metrics: HashMap<PeerId, ConnectionQuality>,
+// struct ConnectionMonitor (:78)
+pub struct ConnectionMonitor {
+    pub heartbeat_interval: Duration,
+    pub timeout_threshold: Duration,
+    pub quality_metrics: Arc<Mutex<HashMap<PeerId, ConnectionQuality>>>,
+    pub heartbeat_sequences: Arc<Mutex<HashMap<PeerId, u64>>>,
+    pub pending_heartbeats: Arc<Mutex<HashMap<(PeerId, u64), Instant>>>,
 }
 
-struct ConnectionQuality {
+// struct ConnectionQuality (:12)
+pub struct ConnectionQuality {
     latency_ms: u32,
     packet_loss_rate: f32,
     bandwidth_kbps: u32,
     last_heartbeat: Instant,
 }
 ```
+
+Earlier sketches showed `quality_metrics: HashMap<PeerId,
+ConnectionQuality>` (bare HashMap, no Arc<Mutex<...>>) and
+omitted `heartbeat_sequences` / `pending_heartbeats` — same
+interior-mutability pattern as `RejoinCoordinator`; mutating
+methods all take `&self`, not `&mut self`.
 
 ### 3. Rejoin Coordinator
 

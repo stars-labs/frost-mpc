@@ -722,23 +722,44 @@ this crate today. Removed — add it back once
 1. **Pre-DKG Checklist**
    - Verify all participant identities
    - Test network connections
-   - Synchronize clocks
-   - Clear previous failed attempts
+   - Clear previous failed attempts (old session data
+     on disk)
+   - Earlier drafts listed "Synchronize clocks" here —
+     contradicts § Prerequisites retraction above; FROST
+     DKG is not time-sensitive.
 
 2. **During DKG**
    - Monitor progress actively
    - Keep stable network connection
    - Don't interrupt the process
-   - Save all logs for audit
+   - Capture `tracing` output via `RUST_LOG=info` /
+     `--log-location` if you want a post-hoc trace.
+     Earlier drafts said "Save all logs for audit" — no
+     audit-log emission ships (see SECURITY.md § Audit
+     logs); `tracing` is diagnostic, not a
+     tamper-evident audit trail.
 
 3. **Post-DKG**
-   - Test with small transaction
-   - Create immediate backup
+   - Create immediate backup (export each
+     `<wallet_id>.json` to offline storage)
    - Document participant info
-   - Schedule regular health checks
+   - Earlier drafts listed "Test with small transaction"
+     — the TUI doesn't construct or broadcast
+     transactions (see guides/USER_GUIDE.md § Signing
+     Messages → Scope). You can sign a test EIP-191
+     message through the normal Sign flow to verify the
+     key works, but "small transaction" would need an
+     external wallet tool.
+   - Earlier drafts also listed "Schedule regular health
+     checks" — no health-check tooling ships.
 
 4. **Security Hygiene**
    - Use dedicated devices for high-value wallets
-   - Implement proper access controls
-   - Regular security audits
+   - Implement proper access controls (OS-level —
+     keystore files are mode-600 by default via user
+     umask)
    - Practice recovery procedures
+   - Earlier drafts listed "Regular security audits" —
+     no built-in audit tooling ships; regular external
+     review is of course good practice but not a
+     feature this codebase provides.

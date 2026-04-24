@@ -491,19 +491,34 @@ sibling doc has the more detailed per-screen walkthrough.
 ### Security Recommendations
 
 1. **Device ID Security**
-   - Use unique, non-identifying device IDs
-   - Never share device IDs publicly
-   - Rotate device IDs periodically for sensitive operations
+   - Choose unique device IDs that don't leak real-world identity
+     (the device_id shows up as the `from` field on signal-server
+     relay frames, so it's visible to every participant in your
+     sessions).
+   - Keep the device_id consistent across sessions for a given
+     physical device — the keystore tree is partitioned by
+     `<device_id>/<curve>/`, so changing the flag re-homes which
+     directory the TUI reads/writes (earlier drafts of this bullet
+     suggested "Rotate device IDs periodically"; rotating would
+     orphan existing wallets under the old device_id path).
 
 2. **Network Security**
-   - Always verify signal server certificates
-   - Use VPN for additional privacy
-   - Consider offline mode for high-value transactions
+   - Connections to the signal server use `wss://` (TLS via the
+     system CA store; no certificate pinning is implemented in the
+     TUI today — that's open hardening work).
+   - Offline mode (`--offline`) is the stronger answer for
+     high-value ceremonies: no signaling, no metadata leakage,
+     the mesh never forms over public networks.
 
 3. **Keystore Management**
-   - Regular encrypted backups
-   - Store backups in multiple secure locations
-   - Test recovery procedures periodically
+   - Regular encrypted backups — export each
+     `<wallet_id>.json` (it's already AES-256-GCM encrypted, but
+     store in multiple places anyway).
+   - Losing the password renders the `data` ciphertext
+     undecryptable; there is no recovery path without the
+     password.
+   - Test the unlock flow periodically so you catch password-
+     management issues before they matter.
 
 ### Operational Guidelines
 

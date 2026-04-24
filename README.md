@@ -205,11 +205,17 @@ The repo has no `criterion` benches yet (PR welcome — see the open
 deferred work in `CLAUDE.md`). Functional coverage that exercises the
 real FROST paths:
 
-- `cargo test` — 174 tests passing across the workspace (DKG, signing,
-  keystore round-trip, HD derivation, WebRTC mesh simulator)
-- `bun test` — 509 tests passing in the browser extension (RPC,
-  session lifecycle, DKG auto-trigger, signing auto-trigger, decline
-  paths)
+- `cargo test` — ~180 tests across the workspace (184
+  `#[test]` / `#[tokio::test]` annotations as of this writing;
+  covers DKG, signing, keystore round-trip, HD derivation,
+  WebRTC mesh simulator). Refresh count via
+  `grep -c '#\[test\]\|#\[tokio::test\]' $(find . -name '*.rs'
+  | grep -v target)`.
+- `bun test` — ~530 test cases in the browser extension (529
+  `test()` / `it()` call sites across 45 `*.test.ts` files;
+  covers RPC, session lifecycle, DKG auto-trigger, signing
+  auto-trigger, decline paths). Earlier drafts said "509
+  passing"; number drifts as suites land on main.
 - FROST itself is parameter-generic over `t`/`n`; the bottleneck at
   larger cohorts is the WebRTC full-mesh degree (n·(n-1)/2 peer
   connections), not the cryptography. No hard participant cap is

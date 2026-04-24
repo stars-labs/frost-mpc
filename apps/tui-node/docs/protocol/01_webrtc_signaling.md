@@ -410,7 +410,9 @@ Broadcasts the final aggregated signature.
 1. `mpc-1` broadcasts `SigningRequest` carrying `signing_id /
    transaction_data (hex) / required_signers / blockchain /
    chain_id` (last two fields required by the real variant at
-   `signal.rs:230` — earlier drafts of this example dropped them).
+   `signal.rs:228` — earlier drafts of this example dropped them;
+   earlier version of THIS citation said `:230` which points at
+   the `transaction_data` field, not the variant declaration).
 2. Each co-signer replies with `SigningAcceptance { signing_id,
    accepted: bool }`.
 3. The coordinator publishes the chosen signer set via

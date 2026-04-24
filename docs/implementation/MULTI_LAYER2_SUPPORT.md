@@ -26,16 +26,24 @@ export type SupportedChain =
   | "solana" | "sui";
 ```
 
-**Added Curve Compatibility System:**
+**Added Curve Compatibility System** (real signatures — verified at
+`packages/@mpc-wallet/types/src/appstate.ts:183-200`):
 ```typescript
-export const CURVE_COMPATIBLE_CHAINS = {
-  secp256k1: ["ethereum", "polygon", "arbitrum", "optimism", "base"] as const,
-  ed25519: ["solana", "sui"] as const,
-} as const;
+export const CURVE_COMPATIBLE_CHAINS: Record<string, SupportedChain[]> = {
+  'secp256k1': ['ethereum', 'polygon', 'arbitrum', 'optimism', 'base'],
+  'ed25519': ['solana', 'sui'],
+};
 
-export function getCompatibleChains(curve: "secp256k1" | "ed25519"): readonly SupportedChain[]
-export function getRequiredCurve(chain: SupportedChain): "secp256k1" | "ed25519"
+export function getCompatibleChains(curveType: string): SupportedChain[]
+export function getRequiredCurve(chain: SupportedChain): 'secp256k1' | 'ed25519'
 ```
+
+Earlier drafts of this block used `Record<curve, readonly …[]>` /
+`as const` tuples and literal-typed `curve: "secp256k1" | "ed25519"`
+parameters. The real code widens to `Record<string, SupportedChain[]>`
+and takes `curveType: string` with a runtime fallback (returns
+`[]` for unknown keys) — keeps the door open for future curve
+strings without requiring a union-type bump across the codebase.
 
 **Fixed Default State Consistency:**
 ```typescript

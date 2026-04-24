@@ -1,5 +1,38 @@
 # FROST MPC Offline Mode
 
+> **Scope note (heavy retraction)**: The "CLI Commands" and
+> "Usage Example" sections below describe a **REPL / slash-command
+> system that does not exist**. The TUI is a ratatui keyboard-
+> driven app, not a line-mode CLI with `/offline on`,
+> `/export_signing_request`, `/import_commitments`, etc. Every
+> `/<name>` style command in this doc is fabricated —
+> `grep -rn 'handle_slash_command\|"/export\|"/import\|"/offline on'
+> apps/tui-node/src` returns zero hits.
+>
+> **What's accurate**: the conceptual 5-phase flow (coordinator
+> prepares signing request → signers emit commitments →
+> coordinator builds signing package → signers emit signature
+> shares → coordinator aggregates), and the broad shape of the
+> `OfflineData` envelope wrapping each artefact. Real envelope
+> is defined at `apps/tui-node/src/offline/types.rs:12` with
+> fields `version / data_type / session_id / created_at /
+> expires_at / data`.
+>
+> **How the TUI really exposes offline mode**: launch with
+> `--offline` CLI flag (`apps/tui-node/src/bin/mpc-wallet-tui.rs:32`),
+> navigate the arrow-key menu to Create New Wallet → select
+> offline mode / or Join Session for the signer role. Individual
+> export / import steps are surfaced via per-screen buttons /
+> Enter key confirmations, not single-letter slash commands. No
+> runtime-toggle exists — offline mode is a startup decision.
+>
+> The JSON field sketches under § Data Formats are indicative of
+> the `data` payload shape for each `OfflineDataType` variant
+> (see `src/offline/types.rs` for the authoritative enum), but
+> the exact hex-encoding / nesting may drift; consult the
+> frost-core round1::Package / round2::Package serde
+> representations for ground truth on commitment/share bytes.
+
 ## Overview
 
 The offline mode enables air-gapped threshold signing where nodes operate without network connectivity. Signature shares are transferred via SD cards or other removable media, providing maximum security for high-value operations.

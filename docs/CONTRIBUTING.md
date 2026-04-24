@@ -451,8 +451,14 @@ cargo test --workspace --lib --tests --exclude mpc-wallet-native
 # TypeScript tests only (run from apps/browser-extension).
 cd apps/browser-extension && bun test
 
-# With coverage (requires `cargo install cargo-tarpaulin`).
+# With coverage — not wired into the workspace. No
+# tarpaulin/grcov/llvm-cov config file ships, and no CI step
+# produces a coverage report. If you want coverage locally:
+cargo install cargo-tarpaulin
 cargo tarpaulin --workspace --exclude mpc-wallet-native --out Html
+#   — runs standalone (no .tarpaulin.toml required). The `--exclude
+#   mpc-wallet-native` guard matches test-all.sh's headless-run
+#   exclusion.
 ```
 
 ## Documentation

@@ -276,12 +276,23 @@ struct — earlier drafts of this doc claimed a specific public
 struct with `reconnect_strategy` / `message_handler` fields that
 don't exist. The real flow:
 
-- Connection bootstrapped by `Command::ConnectWebSocket`
+- Connection bootstrapped by `Command::ReconnectWebSocket`
+  (`command.rs:26`). There is intentionally no separate
+  `ConnectWebSocket` variant — the comment at `command.rs:23`
+  explicitly notes that `ReconnectWebSocket` covers the
+  first-connect path too. Earlier drafts of THIS bullet cited
+  `Command::ConnectWebSocket`; the variant doesn't exist
+  (grep returns zero hits).
 - Inbound messages (`ServerMsg` envelopes — see
   `apps/signal-server/server/src/lib.rs` for the enum) decode
-  back to `Message` variants
-- Outbound messages (`ClientMsg`) emit via the `Command::SendWs*`
-  variants
+  back to `Message` variants.
+- Outbound messages are `ClientMsg` envelopes. The Elm loop
+  emits them through specific Command variants
+  (`SendNetworkMessage`, `BroadcastMessage`, `StartDKG`,
+  `StartSigning`, etc.) that internally wrap the ClientMsg
+  before pushing into the WS sink. There is no umbrella
+  `Command::SendWs*` family — earlier drafts of this bullet
+  claimed one.
 
 ### WebRTC Mesh
 

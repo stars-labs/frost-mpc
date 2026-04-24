@@ -99,7 +99,11 @@ new_sqlite_classes = ["Devices"]
 
 - Canonical deployment reference:
   [`docs/deployment/CLOUDFLARE_DEPLOYMENT.md`](../../../docs/deployment/CLOUDFLARE_DEPLOYMENT.md)
-  + [`docs/signal-server/docs/deployment/cloudflare-deployment.md`](../docs/deployment/cloudflare-deployment.md)
+  + [`apps/signal-server/docs/deployment/cloudflare-deployment.md`](../docs/deployment/cloudflare-deployment.md)
+  (the in-crate quick-reference companion — earlier draft mislabeled
+  this link as `docs/signal-server/docs/...` which doesn't exist;
+  the link target `../docs/...` correctly resolves to the
+  sibling `apps/signal-server/docs/` subtree)
 - [Cloudflare Durable Objects docs](https://developers.cloudflare.com/durable-objects/)
 - [worker-rs](https://github.com/cloudflare/workers-rs) — the Rust
   SDK this crate uses

@@ -547,13 +547,22 @@ WASM entry point: `loadKeystoreForSigning`, `initiateSigningCeremony`,
 `_aggregateSignatureAndBroadcast`. See CLAUDE.md for the signing
 pipeline end-to-end.
 
-#### Content script + injected provider (`src/entrypoints/content/`)
+#### Content script + injected provider (`src/entrypoints/content/` + `src/entrypoints/injected/`)
 
-Standard EIP-1193 pattern: the content script injects a
-`window.ethereum` object into page context; RPC calls
-(`eth_requestAccounts`, `eth_sendTransaction`, `personal_sign`, etc.)
-cross into the content-script world and then into the background
-service worker via `chrome.runtime.sendMessage`.
+The content script injects an EIP-1193-compatible provider into
+page context as **`window.starlabEthereum`** (NOT
+`window.ethereum`, to coexist with other wallet extensions — see
+`src/entrypoints/injected/index.ts:599-604`). dApps discover the
+provider via EIP-6963 `eip6963:announceProvider` events rather
+than a `window.ethereum` prototype chain (see
+[`docs/implementation/EIP-6963-IMPLEMENTATION.md`](implementation/EIP-6963-IMPLEMENTATION.md)).
+RPC calls (`eth_requestAccounts`, `eth_sendTransaction`,
+`personal_sign`, etc.) cross from page context → content-script
+world → background service worker via `chrome.runtime.sendMessage`.
+
+Earlier drafts of this paragraph described the injection site as
+`window.ethereum` — not accurate; the extension deliberately
+avoids `window.ethereum` to not clobber other wallets.
 
 ### Terminal UI
 

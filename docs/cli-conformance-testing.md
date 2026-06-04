@@ -184,7 +184,7 @@ and, where a GUI exposes it, a cross-client case (§5.3).
 | ERR-4 | signing requested for unknown wallet id | error event, no hang |
 | ERR-5 | peer drops mid-DKG | timeout → error, no deadlock |
 | ERR-6 | duplicate session announcement | idempotent; not double-joined |
-| ERR-7 | malformed JSONL request to `serve` | `Error{code:"bad_request"}`, loop continues |
+| ERR-7 | malformed JSONL request to `serve` | `Error{code:"bad_request"}`, loop continues — **L3** ✅ (real process; survives + answers next cmd) |
 
 ### 3.5 Security / policy
 

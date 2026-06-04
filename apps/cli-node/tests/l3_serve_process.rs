@@ -63,6 +63,14 @@ impl ServeProc {
         Ok(())
     }
 
+    /// Send a raw line verbatim (for malformed-input tests).
+    async fn send_raw(&mut self, line: &str) -> anyhow::Result<()> {
+        self.stdin.write_all(line.as_bytes()).await?;
+        self.stdin.write_all(b"\n").await?;
+        self.stdin.flush().await?;
+        Ok(())
+    }
+
     /// Read the next JSONL event (any type).
     async fn next_event(&mut self, secs: u64) -> anyhow::Result<Value> {
         let line = timeout(Duration::from_secs(secs), self.lines.next_line())
@@ -183,6 +191,33 @@ async fn dkg_2_of_2_across_serve_processes() {
 
     a.quit().await;
     b.quit().await;
+}
+
+/// ERR-7: a malformed JSONL line is rejected cleanly (`Error{code:"bad_request"}`)
+/// and the daemon's input loop SURVIVES — a subsequent valid command still
+/// works. Exercises the real serve process's stdin error handling end to end.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[ignore = "spawns a serve process; run with --ignored"]
+async fn malformed_jsonl_is_rejected_and_loop_survives() {
+    // No signal server needed — this never connects.
+    let ks = tempfile::TempDir::new().unwrap();
+    let mut p = ServeProc::spawn("err7-node", &ks.path().to_string_lossy(), "ws://127.0.0.1:1")
+        .await
+        .expect("spawn");
+    p.wait_for("ready", 10).await.expect("ready");
+
+    // Garbage in → a bad_request error out, no crash.
+    p.send_raw("this is not json {{{").await.unwrap();
+    let err = p.wait_for("error", 10).await.expect("error event");
+    assert_eq!(err["code"], "bad_request", "unexpected error: {err}");
+
+    // The loop must still be alive: a valid command still gets answered.
+    p.send(json!({"cmd": "status"})).await.unwrap();
+    let status = p.wait_for("status", 10).await.expect("status after bad input");
+    assert_eq!(status["device_id"], "err7-node");
+
+    eprintln!("✅ ERR-7: bad_request emitted, loop survived");
+    p.quit().await;
 }
 
 /// LIFE-2 (faithful, in L3): DKG across two processes, then KILL both and bring

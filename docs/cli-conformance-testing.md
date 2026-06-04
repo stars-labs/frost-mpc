@@ -138,7 +138,7 @@ and, where a GUI exposes it, a cross-client case (§5.3).
 
 | ID | Flow | Expected behavior |
 |---|---|---|
-| ERR-1 | wrong password on unlock | clean error, no panic, no partial state |
+| ERR-1 | wrong password on unlock | clean error, no panic, no partial state — **L1** ✅ (`WalletUnlockFailed`, "Invalid password") |
 | ERR-2 | round2 package arrives before local part2 | buffered + re-fed (regression #20) |
 | ERR-3 | joiner receives real total/threshold (not hardcoded) | regression #19 |
 | ERR-4 | signing requested for unknown wallet id | error event, no hang |

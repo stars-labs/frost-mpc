@@ -13,8 +13,8 @@
 //!   cargo test -p mpc-wallet-cli --test conformance_matrix -- --ignored --nocapture
 
 use mpc_wallet_cli::simulate::{
-    run_reload_list_simulation, run_signing_simulation, run_simulation, SimulateOpts,
-    SIM_WALLET_LABEL,
+    run_reload_list_simulation, run_reload_unlock_simulation, run_signing_simulation,
+    run_simulation, SimulateOpts, SIM_WALLET_LABEL,
 };
 
 fn init_logs() {
@@ -180,6 +180,47 @@ async fn reload_preserves_wallet_label() {
     }
 
     report_and_assert("RELOAD-LABEL", &rows);
+}
+
+/// ERR-1: a wrong password is rejected cleanly (no panic, no partial state),
+/// and the correct password unlocks (positive control proves the probe
+/// actually exercises the unlock path). node 0's DKG password is
+/// "sim-password-0".
+#[tokio::test(flavor = "multi_thread", worker_threads = 8)]
+#[ignore = "real WebRTC/DKG over loopback; run with --ignored"]
+async fn wrong_password_rejected_cleanly() {
+    init_logs();
+    let mut rows = Vec::new();
+
+    // Wrong password → must be rejected.
+    match run_reload_unlock_simulation(opts(2, 2), "definitely-not-the-password").await {
+        Ok(r) => rows.push(Row {
+            ok: r.failed && !r.unlocked,
+            detail: format!("failed={} unlocked={} error={:?}", r.failed, r.unlocked, r.error),
+            label: "ERR-1 wrong password rejected".to_string(),
+        }),
+        Err(e) => rows.push(Row {
+            label: "ERR-1 wrong password rejected".to_string(),
+            ok: false,
+            detail: format!("error: {e}"),
+        }),
+    }
+
+    // Correct password → must unlock (control).
+    match run_reload_unlock_simulation(opts(2, 2), "sim-password-0").await {
+        Ok(r) => rows.push(Row {
+            ok: r.unlocked && !r.failed,
+            detail: format!("unlocked={} failed={}", r.unlocked, r.failed),
+            label: "ERR-1 correct password unlocks".to_string(),
+        }),
+        Err(e) => rows.push(Row {
+            label: "ERR-1 correct password unlocks".to_string(),
+            ok: false,
+            detail: format!("error: {e}"),
+        }),
+    }
+
+    report_and_assert("ERR-1", &rows);
 }
 
 fn report_and_assert(group: &str, rows: &[Row]) {

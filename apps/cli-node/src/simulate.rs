@@ -451,6 +451,91 @@ pub async fn run_reload_list_simulation(
     })
 }
 
+/// Outcome of a reload-and-unlock attempt (ERR-1).
+#[derive(Debug, Serialize)]
+pub struct UnlockAttemptResult {
+    /// True iff the keystore unlocked (correct password).
+    pub unlocked: bool,
+    /// True iff the unlock was cleanly rejected (`WalletUnlockFailed`).
+    pub failed: bool,
+    /// The rejection message, if any.
+    pub error: Option<String>,
+    pub elapsed_ms: u128,
+}
+
+impl UnlockAttemptResult {
+    pub fn to_json(&self) -> String {
+        serde_json::to_string_pretty(self).unwrap_or_else(|_| "{}".into())
+    }
+}
+
+/// ERR-1: run DKG, tear node 0 down, then on a FRESH runner over node 0's
+/// keystore attempt to unlock-and-sign with `password`. A wrong password must
+/// be rejected cleanly (`WalletUnlockFailed`) — no panic, no partial state —
+/// while the correct password unlocks. The unlock reads the keystore directly
+/// and fires before any mesh is needed, so this is fast and deterministic (no
+/// network, immune to the ghost-task issue that blocks in-process LIFE-2).
+pub async fn run_reload_unlock_simulation(
+    opts: SimulateOpts,
+    password: &str,
+) -> anyhow::Result<UnlockAttemptResult> {
+    let started = Instant::now();
+
+    let c = dkg_cluster(&opts).await?;
+    if !c.agreed {
+        anyhow::bail!("DKG did not agree; aborting reload-unlock");
+    }
+    let wallet_id = c.outcomes[0].wallet_id.clone();
+    let device_id = c.device_ids[0].clone();
+    let keystore_path = c.keystores[0].path().to_string_lossy().into_owned();
+
+    for tx in &c.senders {
+        let _ = tx.send(Message::Quit);
+    }
+    drop(c.senders);
+    drop(c.receivers);
+    tokio::time::sleep(Duration::from_millis(500)).await;
+
+    // (unlocked, error) — exactly one of WalletUnlocked / WalletUnlockFailed.
+    let (utx, mut urx) = unbounded_channel::<(bool, Option<String>)>();
+    let cb = move |_model: &Model, msg: Option<&Message>| {
+        match msg {
+            Some(Message::WalletUnlocked { .. }) => {
+                let _ = utx.send((true, None));
+            }
+            Some(Message::WalletUnlockFailed { error }) => {
+                let _ = utx.send((false, Some(error.clone())));
+            }
+            _ => {}
+        }
+    };
+    // No network: unlock reads the keystore directly.
+    let tx = spawn_secp256k1(device_id, keystore_path, String::new(), cb);
+    tx.send(Message::HeadlessSign {
+        wallet_id,
+        message: "err1-unlock-probe".into(),
+        encoding: "utf8".into(),
+        password: password.to_string(),
+    })?;
+
+    let (unlocked, error) = tokio::time::timeout(Duration::from_secs(15), urx.recv())
+        .await
+        .map_err(|_| anyhow::anyhow!("timed out waiting for unlock outcome"))?
+        .ok_or_else(|| anyhow::anyhow!("runner produced no unlock outcome"))?;
+
+    // Stop the runner (a correct unlock would otherwise proceed to a mesh-
+    // dependent signing attempt we don't drive here).
+    let _ = tx.send(Message::Quit);
+    drop(c.keystores);
+
+    Ok(UnlockAttemptResult {
+        unlocked,
+        failed: !unlocked,
+        error,
+        elapsed_ms: started.elapsed().as_millis(),
+    })
+}
+
 /// Verify a FROST(secp256k1) signature against the group verifying key.
 fn verify_secp256k1(group_key_hex: &str, message_hex: &str, sig_hex: &str) -> anyhow::Result<bool> {
     use frost_secp256k1::{Signature, VerifyingKey};

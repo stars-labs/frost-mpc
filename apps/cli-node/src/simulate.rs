@@ -362,7 +362,8 @@ pub async fn run_signing_simulation_enc(
     )
     .await?;
 
-    let verified = verify_secp256k1(&c.group_key, &signed_message, &signature).unwrap_or(false);
+    let verified =
+        verify_signature(&opts.curve, &c.group_key, &signed_message, &signature).unwrap_or(false);
 
     Ok(SigningResult {
         nodes,
@@ -661,9 +662,34 @@ pub async fn run_late_join_discovery_simulation(
     })
 }
 
+/// Verify a produced FROST signature against the group key for the given curve.
+fn verify_signature(
+    curve: &str,
+    group_key_hex: &str,
+    message_hex: &str,
+    sig_hex: &str,
+) -> anyhow::Result<bool> {
+    if curve == "ed25519" {
+        verify_ed25519(group_key_hex, message_hex, sig_hex)
+    } else {
+        verify_secp256k1(group_key_hex, message_hex, sig_hex)
+    }
+}
+
 /// Verify a FROST(secp256k1) signature against the group verifying key.
 fn verify_secp256k1(group_key_hex: &str, message_hex: &str, sig_hex: &str) -> anyhow::Result<bool> {
     use frost_secp256k1::{Signature, VerifyingKey};
+    let vk_bytes = hex::decode(group_key_hex)?;
+    let msg = hex::decode(message_hex)?;
+    let sig_bytes = hex::decode(sig_hex)?;
+    let vk = VerifyingKey::deserialize(&vk_bytes)?;
+    let sig = Signature::deserialize(&sig_bytes)?;
+    Ok(vk.verify(&msg, &sig).is_ok())
+}
+
+/// Verify a FROST(ed25519) signature against the group verifying key.
+fn verify_ed25519(group_key_hex: &str, message_hex: &str, sig_hex: &str) -> anyhow::Result<bool> {
+    use frost_ed25519::{Signature, VerifyingKey};
     let vk_bytes = hex::decode(group_key_hex)?;
     let msg = hex::decode(message_hex)?;
     let sig_bytes = hex::decode(sig_hex)?;

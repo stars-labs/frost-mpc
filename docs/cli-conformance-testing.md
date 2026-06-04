@@ -104,7 +104,7 @@ and, where a GUI exposes it, a cross-client case (§5.3).
 | SIG-1 | sign with exactly threshold signers | the common case |
 | SIG-2 | sign with more than threshold available (quorum subset) | aggregator picks a quorum |
 | SIG-3 | sign secp256k1 → verify against group key | `verify_secp256k1` |
-| SIG-4 | sign ed25519 → verify | needs ed25519 runner (§7) |
+| SIG-4 | sign ed25519 → verify | **L1** ✅ (raw-bytes sign; 2-of-2 & 2-of-3 verify) |
 | SIG-5 | dApp `personal_sign`-shaped message (Ethereum) | extension-originated in cross-client |
 | SIG-6 | raw hex message vs utf8 message | `encoding` field — **L1** ✅ (hex-decode path → EIP-191 → verify) |
 | SIG-7 | co-signer decline (explicit rejection) | extension `SigningDecline` path |
@@ -437,8 +437,8 @@ behavior by default.
    and made `HeadlessRunner::new` seed `curve_type` from `C` (it previously relied on the
    default being secp256k1 — which silently mis-curved an ed25519 runner). `simulate`
    accepts `curve=ed25519` and switches the spawn fn; DKG-5 (2-of-2 & 2-of-3 ed25519)
-   passes. Still open: SIG-4 (ed25519 sign+verify, needs a `frost_ed25519` verify in the
-   harness) and the Solana address golden.
+   passes. SIG-4 (ed25519 sign+verify) is also done — `verify_signature` dispatches to
+   `verify_ed25519`/`verify_secp256k1` by curve. Still open: the Solana address golden.
 
 4. **Deterministic test entropy hook (test-only).** An opt-in seed (behind a
    `#[cfg(test)]` / hidden flag) so a run can be made reproducible for trace stability

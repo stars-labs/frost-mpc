@@ -159,6 +159,32 @@ async fn sign_matrix() {
     report_and_assert("SIGN", &rows);
 }
 
+/// SIG-4: ed25519 sign + verify. Exercises the ed25519 signing ceremony end to
+/// end (raw-bytes signing — no EIP-191 hash) and verifies against the ed25519
+/// group key.
+#[tokio::test(flavor = "multi_thread", worker_threads = 8)]
+#[ignore = "real WebRTC/DKG+signing over loopback; run with --ignored"]
+async fn sign_ed25519_verifies() {
+    init_logs();
+    let mut rows = Vec::new();
+    let cases = [(2u16, 2u16), (3, 2)];
+    let msg = "ed25519 conformance signing payload";
+
+    for (n, t) in cases {
+        let label = format!("SIG-4 ed25519 {t}-of-{n}");
+        match run_signing_simulation_enc(opts_curve(n as usize, t, "ed25519"), msg, "utf8").await {
+            Ok(r) => rows.push(Row {
+                ok: r.verified && !r.signature.is_empty(),
+                detail: format!("verified={} {}ms", r.verified, r.elapsed_ms),
+                label,
+            }),
+            Err(e) => rows.push(Row { label, ok: false, detail: format!("error: {e}") }),
+        }
+    }
+
+    report_and_assert("SIG-4", &rows);
+}
+
 /// SIG-6: sign a HEX-encoded message. Exercises HeadlessSign's hex-decode path
 /// (decode → EIP-191 hash → FROST), which the utf8 matrix never touches. The
 /// produced signature must verify against the group key.

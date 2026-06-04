@@ -181,7 +181,7 @@ and, where a GUI exposes it, a cross-client case (§5.3).
 | ERR-1 | wrong password on unlock | clean error, no panic, no partial state — **L1** ✅ (`WalletUnlockFailed`, "Invalid password") |
 | ERR-2 | round2 package arrives before local part2 | buffered + re-fed (regression #20) |
 | ERR-3 | joiner receives real total/threshold (not hardcoded) | regression #19 |
-| ERR-4 | signing requested for unknown wallet id | error event, no hang |
+| ERR-4 | signing requested for unknown wallet id | error event, no hang — **L1** ✅ (`WalletUnlockFailed`, fast lane) |
 | ERR-5 | peer drops mid-DKG | timeout → error, no deadlock |
 | ERR-6 | duplicate session announcement | idempotent; not double-joined |
 | ERR-7 | malformed JSONL request to `serve` | `Error{code:"bad_request"}`, loop continues — **L3** ✅ (real process; survives + answers next cmd) |

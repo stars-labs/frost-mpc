@@ -662,6 +662,52 @@ pub async fn run_late_join_discovery_simulation(
     })
 }
 
+/// ERR-4: attempt to sign a wallet that doesn't exist. A fresh runner over an
+/// empty keystore (no DKG, no network) is asked to sign a bogus wallet_id; the
+/// unlock must fail cleanly (`WalletUnlockFailed`) rather than hang or panic.
+/// Fast + deterministic — no signal server, no WebRTC.
+pub async fn run_unknown_wallet_sign_simulation() -> anyhow::Result<UnlockAttemptResult> {
+    let started = Instant::now();
+    let ks = tempfile::TempDir::new()?;
+    let (utx, mut urx) = unbounded_channel::<(bool, Option<String>)>();
+    let cb = move |_model: &Model, msg: Option<&Message>| match msg {
+        Some(Message::WalletUnlocked { .. }) => {
+            let _ = utx.send((true, None));
+        }
+        Some(Message::WalletUnlockFailed { error }) => {
+            let _ = utx.send((false, Some(error.clone())));
+        }
+        _ => {}
+    };
+    let tx = spawn_secp256k1(
+        "err4-node".into(),
+        ks.path().to_string_lossy().into_owned(),
+        String::new(),
+        cb,
+    );
+    tx.send(Message::HeadlessSign {
+        wallet_id: "wallet-does-not-exist".into(),
+        message: "err4".into(),
+        encoding: "utf8".into(),
+        password: "pw".into(),
+    })?;
+
+    let (unlocked, error) = tokio::time::timeout(Duration::from_secs(10), urx.recv())
+        .await
+        .map_err(|_| anyhow::anyhow!("timed out — sign of unknown wallet hung (no clean error)"))?
+        .ok_or_else(|| anyhow::anyhow!("runner produced no unlock outcome"))?;
+
+    let _ = tx.send(Message::Quit);
+    drop(ks);
+
+    Ok(UnlockAttemptResult {
+        unlocked,
+        failed: !unlocked,
+        error,
+        elapsed_ms: started.elapsed().as_millis(),
+    })
+}
+
 /// Verify a produced FROST signature against the group key for the given curve.
 fn verify_signature(
     curve: &str,
@@ -717,5 +763,16 @@ mod tests {
         assert!(result.agreed, "nodes disagreed: {:?}", result.outcomes);
         assert_eq!(result.outcomes.len(), 2);
         assert!(!result.group_public_key.is_empty());
+    }
+
+    /// ERR-4: signing a wallet that doesn't exist fails cleanly (no DKG, no
+    /// network) — fast lane.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn unknown_wallet_sign_fails_cleanly() {
+        let r = run_unknown_wallet_sign_simulation()
+            .await
+            .expect("did not hang");
+        assert!(r.failed && !r.unlocked, "expected clean failure, got {r:?}");
+        assert!(r.error.is_some(), "expected an error message");
     }
 }

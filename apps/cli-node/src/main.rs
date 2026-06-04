@@ -8,6 +8,7 @@
 //! IMPORTANT: stdout carries ONLY protocol JSON. All logs go to stderr.
 
 use clap::{Parser, Subcommand};
+use mpc_wallet_cli::oneshot::{self, OneShotOpts};
 use mpc_wallet_cli::protocol;
 use mpc_wallet_cli::serve::{self, ServeOpts};
 use mpc_wallet_cli::simulate::{self, SimulateOpts};
@@ -26,8 +27,114 @@ enum Command {
     /// Run a full N-node DKG in one process (embedded signal server) and
     /// print a JSON summary. Self-contained — ideal for CI / smoke tests.
     Simulate(SimulateArgs),
+    /// Wallet one-shot commands (list / create).
+    Wallet {
+        #[command(subcommand)]
+        sub: WalletCmd,
+    },
+    /// Session one-shot commands (join).
+    Session {
+        #[command(subcommand)]
+        sub: SessionCmd,
+    },
+    /// Initiate a threshold signing and block until it completes.
+    Sign {
+        #[arg(long)]
+        wallet_id: String,
+        #[arg(long)]
+        message: String,
+        #[arg(long, default_value = "utf8")]
+        encoding: String,
+        #[arg(long)]
+        password: String,
+        #[command(flatten)]
+        common: OneShot,
+    },
     /// Print the command/event protocol catalog as JSON (self-discovery).
     Schema,
+}
+
+/// Shared flags for one-shot commands.
+#[derive(clap::Args)]
+struct OneShot {
+    #[arg(long, default_value = "cli-node")]
+    device_id: String,
+    #[arg(long, default_value = "~/.frost_keystore")]
+    keystore: String,
+    #[arg(long, default_value = "wss://panda.qzz.io")]
+    signal_server: String,
+    #[arg(long, default_value_t = 90)]
+    timeout: u64,
+    #[arg(long, default_value = "")]
+    log_level: String,
+}
+
+#[derive(Subcommand)]
+enum WalletCmd {
+    /// List wallets in the keystore (no network).
+    List {
+        #[command(flatten)]
+        common: OneShot,
+    },
+    /// Create a shared wallet via DKG; blocks until complete.
+    Create {
+        #[arg(long, default_value = "Wallet")]
+        name: String,
+        #[arg(long, default_value_t = 2)]
+        threshold: u16,
+        #[arg(long, default_value_t = 3)]
+        total: u16,
+        #[arg(long)]
+        password: String,
+        #[command(flatten)]
+        common: OneShot,
+    },
+}
+
+#[derive(Subcommand)]
+enum SessionCmd {
+    /// Join a discovered DKG/signing session; blocks until complete.
+    Join {
+        #[arg(long)]
+        session_id: String,
+        #[arg(long)]
+        password: String,
+        #[command(flatten)]
+        common: OneShot,
+    },
+}
+
+impl OneShot {
+    fn init_and_opts(&self) -> OneShotOpts {
+        if !self.log_level.is_empty() {
+            let _ = tracing_subscriber::fmt()
+                .with_writer(std::io::stderr)
+                .with_env_filter(
+                    tracing_subscriber::EnvFilter::try_new(&self.log_level)
+                        .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")),
+                )
+                .with_ansi(false)
+                .try_init();
+        }
+        OneShotOpts {
+            device_id: self.device_id.clone(),
+            keystore_path: expand_tilde(&self.keystore),
+            signal_url: self.signal_server.clone(),
+            timeout_secs: self.timeout,
+        }
+    }
+}
+
+/// Exit 0 if the one-shot reported success, else 1.
+fn finish(ok: anyhow::Result<bool>) -> anyhow::Result<()> {
+    match ok {
+        Ok(true) => Ok(()),
+        Ok(false) => std::process::exit(1),
+        Err(e) => {
+            eprintln!("error: {e}");
+            std::process::exit(1);
+        }
+    }
 }
 
 #[derive(clap::Args)]
@@ -79,6 +186,37 @@ async fn main() -> anyhow::Result<()> {
             println!("{}", protocol::schema_json());
             Ok(())
         }
+        Command::Wallet { sub } => match sub {
+            WalletCmd::List { common } => {
+                finish(oneshot::wallet_list(common.init_and_opts()).await)
+            }
+            WalletCmd::Create {
+                name,
+                threshold,
+                total,
+                password,
+                common,
+            } => finish(
+                oneshot::wallet_create(common.init_and_opts(), name, threshold, total, password)
+                    .await,
+            ),
+        },
+        Command::Session { sub } => match sub {
+            SessionCmd::Join {
+                session_id,
+                password,
+                common,
+            } => finish(oneshot::session_join(common.init_and_opts(), session_id, password).await),
+        },
+        Command::Sign {
+            wallet_id,
+            message,
+            encoding,
+            password,
+            common,
+        } => finish(
+            oneshot::sign(common.init_and_opts(), wallet_id, message, encoding, password).await,
+        ),
         Command::Simulate(args) => {
             if !args.log_level.is_empty() {
                 let _ = tracing_subscriber::fmt()

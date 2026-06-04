@@ -6,6 +6,7 @@
 //! one-shot subcommands — not buried in the binary.
 
 pub mod bridge;
+pub mod oneshot;
 pub mod protocol;
 pub mod serve;
 pub mod simulate;

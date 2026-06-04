@@ -555,18 +555,34 @@ mpc-wallet-cli`), so a protocol change shows up as a fixture diff in the PR.
 
 Each phase is independently mergeable and leaves the tree green.
 
-- **Phase 1 — L1 matrix.** Turn the §3 catalog into parametric CLI↔CLI tests on top of the
-  existing `simulate`/`e2e_dkg` machinery. Highest ROI; pure Rust; no new infra. Add
-  `session_announced` event (#7.1) along the way.
-- **Phase 2 — L2 golden traces.** Add `--trace` (#7.2), normalize, freeze fixtures, wire
-  the golden diff into `rust-fast`. Establishes the protocol spec artifact.
-- **Phase 3 — ed25519 runner (#7.3).** Unlocks DKG-5/SIG-4 and the Solana address golden.
-- **Phase 4 — L3a (CLI↔native).** In-process; reuses Phase-1 machinery + native's
-  `core_adapter`. First reverse-check harness.
-- **Phase 5 — L3c + L4 (CLI↔extension).** The crown jewel: real server + Playwright +
-  differential oracle. Highest cost, catches the cross-impl bug class nothing else can.
-- **Phase 6 — L3b (CLI↔TUI via PTY).** Lower priority (the TUI shares the core that L1
-  already covers; only the View/keystroke wiring is unique), but closes the matrix.
+> **Status (live).** Phases 1–3 are done and a substantial L3 foundation is in place;
+> the harness has already found and fixed **5 real bugs** (see §13). Remaining work is the
+> heavier cross-client infra (Phases 5–6) and the wire-frame half of L2.
+
+- **Phase 1 — L1 matrix.** ✅ **Done.** `tests/conformance_matrix.rs` covers DKG
+  (2-of-2/2-of-3/3-of-3/3-of-5/2-of-4, secp256k1 + ed25519), signing (threshold + quorum
+  subset, secp256k1 + ed25519 + hex), LIFE-1/3/4, ERR-1/4. `session_announced` (#7.1)
+  added. Wired into the CI e2e job.
+- **Phase 2 — L2 goldens.** ◑ **Partial.** Event-contract golden + normalizer
+  (`src/trace.rs`, `tests/event_contract.rs`) and the ETH/BTC/SOL address goldens
+  (`bridge.rs`) are done and in the fast lane. The **wire-frame `--trace` capture** (#7.2)
+  is still pending (needs WS-layer instrumentation).
+- **Phase 3 — ed25519 runner (#7.3).** ✅ **Done.** `spawn_ed25519`; DKG-5 + SIG-4 pass;
+  Solana address golden landed.
+- **L3 foundation + tests.** ✅ **Done (beyond the original plan).**
+  `tests/l3_serve_process.rs` drives real `serve` subprocesses over JSONL: cross-process
+  DKG, **LIFE-2 cold-restart signing** (the two-race fix), ERR-7 (malformed input), SEC-5
+  (no password leak), SIG-8 (auto-approve). Reusable `ServeProc` harness.
+- **Phase 4 — L3a (CLI↔native).** ⏸ **Deprioritized.** Native reuses the *same*
+  `HeadlessRunner`/core as the CLI, so an in-process CLI↔native test would mostly re-cover
+  CLI↔CLI. Low marginal value vs the extension; do only if native grows client-specific
+  logic.
+- **Phase 5 — L3c + L4 (CLI↔extension).** ⬜ **Pending — the real remaining prize.** Real
+  server + Playwright + differential oracle against the address/event goldens. The only
+  layer that crosses the Rust-core ↔ independent-TS/WASM boundary. Needs dedicated
+  scaffolding (browser automation, extension build in CI).
+- **Phase 6 — L3b (CLI↔TUI via PTY).** ⬜ **Pending, low priority.** TUI shares the L1-
+  covered core; only View/keystroke wiring is unique.
 
 ---
 
@@ -603,3 +619,23 @@ layers — in-process matrix, golden traces, cross-client interop, differential 
 give fast always-on regression coverage of the core plus deep, scheduled coverage of the
 one boundary nothing else tests: the Rust core against the independent TypeScript/WASM
 extension.
+
+---
+
+## 13. Bugs found (and fixed) by building this harness
+
+The point of a conformance oracle is to find bugs; here is the running tally. Every one was
+surfaced by writing a test that exercised a real path, verifiable against external ground
+truth or a cross-client invariant — exactly the failure classes §1 predicted.
+
+| # | Bug | Surfaced by | Fix |
+|---|---|---|---|
+| 1 | Headless/CLI nodes never replayed sessions announced before they connected (the extension auto-replays). | LIFE-4 | `HeadlessRefreshSessions` → `LoadSessions`; CLI `list_sessions` now replays. |
+| 2 | Ethereum address derived by hashing the compressed key's X coordinate, not `keccak(X‖Y)` — every secp256k1 wallet showed a wrong address that didn't match its signing key, and disagreed with the keystore's own derivation. | ETH address golden (vs generator-G vector) | Decompress via `k256` before keccak. |
+| 3 | Bitcoin had no address derivation at all (registered chain → "not implemented"). | BTC address golden (vs BIP-173 vector) | Implement P2WPKH (bech32 segwit-v0 of `hash160`). |
+| 4 | Cold-start signing stalled — (A) the WebRTC offer was dropped (relay handling lived only in DKG driver loops), then (B) the first `SIGN_COMMIT` raced ahead of the co-signer's session setup and was dropped. | LIFE-2 (L3 cold restart) | (A) always-on relay handler; (B) pre-session commit buffer. |
+| 5 | The warm signing path reuses the DKG session id; the CLI bridge deduped discovered sessions by id alone, so it never emitted a `signing_request` for a signing session reusing a DKG id — silently breaking discovery for every CLI co-signer. | SIG-8 (auto-approve e2e) | Dedup per `(kind, id)`. |
+
+Bugs 1, 2, 4, 5 are in the **shared Rust core** (so they affected TUI/native/CLI alike);
+2 and 3 are also exactly the cross-impl correctness class the L4 address oracle targets.
+None had any prior test.

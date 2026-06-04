@@ -4554,6 +4554,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "mpc-wallet-cli"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "tui-node",
+ "webrtc-signal-server",
+]
+
+[[package]]
 name = "mpc-wallet-core-wasm"
 version = "0.1.0"
 dependencies = [

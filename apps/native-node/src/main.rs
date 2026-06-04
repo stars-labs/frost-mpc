@@ -21,11 +21,26 @@ async fn main() -> Result<()> {
     let window = MainWindow::new()?;
     
     // Set initial device ID
+    let device_id = "native-node-001".to_string();
     let app_state = window.global::<AppState>();
-    app_state.set_device_id("native-node-001".into());
-    
-    // Create core adapter with shared logic
-    let adapter = Arc::new(CoreAdapter::new(window.as_weak()));
+    app_state.set_device_id(device_id.clone().into());
+
+    // Keystore lives alongside the TUI's (~/.frost_keystore) so wallets
+    // created/imported by either client are visible to the other.
+    let keystore_path = format!(
+        "{}/.frost_keystore",
+        std::env::var("HOME").unwrap_or_else(|_| ".".to_string())
+    );
+    // Default signal server (matches the TUI default + browser extension).
+    let signal_url = "wss://panda.qzz.io".to_string();
+
+    // Create core adapter with shared logic (real headless Elm backend).
+    let adapter = Arc::new(CoreAdapter::new(
+        window.as_weak(),
+        device_id,
+        keystore_path,
+        signal_url,
+    ));
     
     // Set up UI callbacks
     {
@@ -43,10 +58,19 @@ async fn main() -> Result<()> {
     
     {
         let adapter = adapter.clone();
-        window.on_create_wallet(move || {
+        let win = window.as_weak();
+        window.on_create_wallet(move |name| {
+            // Read the keystore password on the UI thread (the Slint global
+            // is !Send) before handing off to the async backend.
+            let pw = win
+                .upgrade()
+                .map(|w| w.global::<AppState>().get_dkg_password().to_string())
+                .unwrap_or_default();
             let adapter = adapter.clone();
+            let name = name.to_string();
             tokio::spawn(async move {
-                if let Err(e) = adapter.create_wallet().await {
+                adapter.set_dkg_password(pw);
+                if let Err(e) = adapter.create_wallet(name).await {
                     println!("Failed to create wallet: {}", e);
                 }
             });
@@ -93,10 +117,16 @@ async fn main() -> Result<()> {
     
     {
         let adapter = adapter.clone();
+        let win = window.as_weak();
         window.on_join_session(move |session_id| {
+            let pw = win
+                .upgrade()
+                .map(|w| w.global::<AppState>().get_dkg_password().to_string())
+                .unwrap_or_default();
             let adapter = adapter.clone();
             let session_id = session_id.to_string();
             tokio::spawn(async move {
+                adapter.set_dkg_password(pw);
                 if let Err(e) = adapter.join_session(session_id).await {
                     println!("Failed to join session: {}", e);
                 }

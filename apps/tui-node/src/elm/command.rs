@@ -59,7 +59,19 @@ pub enum Command {
     /// Calls `protocal::dkg::process_dkg_round2` which finalises the key with
     /// `part3` once all Round 2 packages for us have arrived.
     ProcessDKGRound2 { from_device: String, package_bytes: Vec<u8> },
-    JoinDKG { session_id: String },
+    JoinDKG {
+        session_id: String,
+        /// Session shape known to the joiner from the discovered announcement.
+        /// Seeded into `AppState.session` so the joiner agrees on `total`
+        /// immediately, rather than defaulting to 3 and racing on a later
+        /// `SessionAvailable` re-broadcast (the headless joiner has already
+        /// consumed that broadcast to discover the session). Curve falls back
+        /// to the `available_sessions` lookup when empty.
+        total: u16,
+        threshold: u16,
+        proposer_id: String,
+        curve_type: String,
+    },
     CancelDKG,
     /// Encrypt the just-produced FROST key share with `password` and
     /// persist it to the keystore, then emit `Message::DKGFinalized`.
@@ -77,6 +89,9 @@ pub enum Command {
         password: String,
         keystore_path: String,
         wallet_name: String,
+        /// Optional user-chosen display label (creator only). Persisted as
+        /// keystore `metadata.label`; `None` → UI falls back to wallet_name.
+        wallet_label: Option<String>,
     },
     /// Hot-load an existing wallet: decrypt the keystore file with
     /// `password`, deserialize the `(KeyPackage, PublicKeyPackage)` tuple
@@ -833,8 +848,24 @@ impl Command {
                 )
                 .await;
                 // `process_dkg_round1` internally transitions to Round 2 and
-                // calls `handle_trigger_dkg_round2` when it has received all
-                // `session.total` packages, so nothing else to do here.
+                // calls `handle_trigger_dkg_round2`. On fast transports the
+                // round2 re-feed inside that path can complete DKG right here
+                // (peer round2 arrived before our part2), so check for the
+                // finished key and notify the UI — same detection as
+                // ProcessDKGRound2 below.
+                let group_key_hex = {
+                    let state = app_state.lock().await;
+                    state
+                        .public_key_package
+                        .as_ref()
+                        .and_then(|pkg| pkg.verifying_key().serialize().ok())
+                        .map(hex::encode)
+                };
+                if let Some(hex) = group_key_hex {
+                    let _ = tx.send(Message::DKGKeyGenerated {
+                        group_pubkey_hex: hex,
+                    });
+                }
             }
 
             Command::ProcessDKGRound2 {
@@ -870,8 +901,8 @@ impl Command {
                 }
             }
 
-            Command::JoinDKG { session_id } => {
-                info!("Joining DKG session: {}", session_id);
+            Command::JoinDKG { session_id, total: known_total, threshold: known_threshold, proposer_id: known_proposer, curve_type: known_curve } => {
+                info!("Joining DKG session: {} ({}-of-{})", session_id, known_threshold, known_total);
                 let _ = tx.send(Message::Info {
                     message: format!("🔗 Joining DKG session: {}", session_id)
                 });
@@ -935,17 +966,30 @@ impl Command {
                 // as soon as the creator's SessionAvailable arrives on the broadcast.
                 {
                     let mut state = app_state.lock().await;
-                    let curve_type = state.available_sessions.iter()
-                        .find(|s| s.session_code == session_id)
-                        .map(|s| s.curve_type.clone())
-                        .unwrap_or_else(|| "Ed25519".to_string());
-                    info!("📊 Joining session with curve type: {}", curve_type);
+                    // Prefer the curve the joiner already learned from the
+                    // announcement; fall back to the available_sessions lookup.
+                    let curve_type = if !known_curve.is_empty() {
+                        known_curve.clone()
+                    } else {
+                        state.available_sessions.iter()
+                            .find(|s| s.session_code == session_id)
+                            .map(|s| s.curve_type.clone())
+                            .unwrap_or_else(|| "Ed25519".to_string())
+                    };
+                    info!("📊 Joining session with curve type: {}, total {}", curve_type, known_total);
                     state.session = Some(crate::protocal::signal::SessionInfo {
                         session_id: session_id.clone(),
-                        proposer_id: "unknown".to_string(),
+                        proposer_id: if known_proposer.is_empty() {
+                            "unknown".to_string()
+                        } else {
+                            known_proposer.clone()
+                        },
                         participants: vec![device_id.clone()],
-                        threshold: 2,
-                        total: 3,
+                        // Seed the REAL shape from the discovered announcement so
+                        // `session.total` is correct from the start (no race on a
+                        // later SessionAvailable re-broadcast).
+                        threshold: known_threshold,
+                        total: known_total,
                         session_type: crate::protocal::signal::SessionType::DKG,
                         curve_type,
                         coordination_type: "Network".to_string(),
@@ -957,7 +1001,7 @@ impl Command {
                 let tx_msg = tx_clone.clone();
                 let session_id_clone = session_id.clone();
                 let device_id_clone = device_id.clone();
-                let session_total = 3u16; // Will be updated from SessionAvailable.
+                let session_total = known_total; // Known from the discovered announcement.
                 let our_session_id = {
                     let state = app_state.lock().await;
                     state.session.as_ref().map(|s| s.session_id.clone())
@@ -1456,7 +1500,7 @@ impl Command {
                 });
             }
 
-            Command::FinalizeWalletFromDkg { password, keystore_path, wallet_name } => {
+            Command::FinalizeWalletFromDkg { password, keystore_path, wallet_name, wallet_label } => {
                 // Runs right after `Message::DKGKeyGenerated`. Pulls the
                 // FROST output from AppState, serializes the key share,
                 // encrypts it with `password`, and writes the wallet file.
@@ -1621,6 +1665,7 @@ impl Command {
                     None,                // description (deprecated)
                     participant_index,
                     participants_sorted,
+                    wallet_label,        // optional user-chosen display label
                 ) {
                     Ok(id) => id,
                     Err(e) => {

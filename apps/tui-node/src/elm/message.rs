@@ -18,6 +18,24 @@ pub enum Message {
     PopScreen,
     ForceRemount,
     
+    // Headless control messages — used by non-TUI front-ends (e.g. the
+    // native Slint app) that drive the same Elm core without the
+    // multi-screen keyboard flow. Each one seeds the model state the
+    // interactive screens would have set, then hands off to the exact
+    // same downstream path (SubmitPassword → creator/joiner DKG). The
+    // TUI never emits these.
+    HeadlessCreateWallet {
+        config: WalletConfig,
+        password: String,
+        /// Optional user display label (→ keystore metadata.label).
+        label: String,
+    },
+    HeadlessJoinSession {
+        session_id: String,
+        password: String,
+        label: String,
+    },
+
     // Wallet management messages
     CreateWallet { config: WalletConfig },
     SelectWallet { wallet_id: String },

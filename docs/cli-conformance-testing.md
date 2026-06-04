@@ -112,12 +112,27 @@ and, where a GUI exposes it, a cross-client case (§5.3).
 
 ### 3.3 Persistence / lifecycle
 
-| ID | Flow | Notes |
-|---|---|---|
-| LIFE-1 | DKG → keystore written → reload → list shows wallet | cold-start replay |
-| LIFE-2 | reload → sign with persisted share (no re-DKG) | the bug that bit the headless sign path |
-| LIFE-3 | wallet label/name round-trips through keystore | `WalletMetadata.label` / `display_name()` |
-| LIFE-4 | session announced before our connect is still discoverable | `request_active_sessions` replay |
+| ID | Flow | Notes | Layer |
+|---|---|---|---|
+| LIFE-1 | DKG → keystore written → reload → list shows wallet | cold-start replay; pure keystore round-trip | **L1** ✅ |
+| LIFE-2 | reload → sign with persisted share (no re-DKG) | the bug that bit the headless sign path | **L3** (see note) |
+| LIFE-3 | wallet label/name round-trips through keystore | `WalletMetadata.label` / `display_name()` | L1 |
+| LIFE-4 | session announced before our connect is still discoverable | `request_active_sessions` replay | L1/L3 |
+
+> **LIFE-2 is an L3 (process-isolation) test, not L1.** A faithful cold-restart
+> *re-signing* requires the previous node to be truly gone. In-process, the CLI
+> `HeadlessRunner` has no shutdown that aborts its spawned tasks — `Message::Quit`
+> only breaks the Elm loop, so the old node's WebSocket/reconnect tasks **and its
+> WebRTC ICE agents stay alive**. On the same host those ghost ICE agents answer
+> the fresh node's connectivity checks with a mismatched DTLS fingerprint, so the
+> new signing mesh's data channel never opens (observed: the post-reload
+> `SIGN_COMMIT` retries exhaust; the channel only opens ~100s later). Pointing the
+> reloaded nodes at a fresh signal server fixes WS discovery but not the ICE
+> interference. Real process death (the L3 `serve`-subprocess harness, where the OS
+> reclaims sockets/tasks on SIGKILL) is the only faithful way to test LIFE-2 —
+> which is also exactly the production condition (a restart kills the process).
+> LIFE-1 (the persistence half — the share is on disk and reloads with the right
+> group key) is fully covered in L1.
 
 ### 3.4 Error & edge cases
 

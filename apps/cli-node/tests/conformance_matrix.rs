@@ -12,7 +12,9 @@
 //! `#[ignore]` by default (real UDP/ICE on loopback, ~seconds per case). Run:
 //!   cargo test -p mpc-wallet-cli --test conformance_matrix -- --ignored --nocapture
 
-use mpc_wallet_cli::simulate::{run_signing_simulation, run_simulation, SimulateOpts};
+use mpc_wallet_cli::simulate::{
+    run_reload_list_simulation, run_signing_simulation, run_simulation, SimulateOpts,
+};
 
 fn init_logs() {
     let _ = tracing_subscriber::fmt()
@@ -113,6 +115,41 @@ async fn sign_matrix() {
     }
 
     report_and_assert("SIGN", &rows);
+}
+
+/// LIFE-1: cold-start persistence. Run DKG, tear node 0's runner down, bring
+/// a FRESH runner up on the SAME keystore, and list wallets — the persisted
+/// share must reappear with the original group key. Pure keystore round-trip
+/// (no network), so deterministic. (Faithful re-signing after restart, LIFE-2,
+/// needs real process death and lives in the L3 serve-subprocess harness — an
+/// in-process reload leaves the old node's WebRTC ICE agents alive, which
+/// corrupt a new mesh; see docs/cli-conformance-testing.md.)
+#[tokio::test(flavor = "multi_thread", worker_threads = 8)]
+#[ignore = "real WebRTC/DKG over loopback; run with --ignored"]
+async fn reload_lists_persisted_wallet() {
+    init_logs();
+    let cases = [(2u16, 2u16), (3, 2)];
+    let mut rows = Vec::new();
+
+    for (n, t) in cases {
+        let label = format!("RELOAD-LIST {t}-of-{n}");
+        match run_reload_list_simulation(opts(n as usize, t)).await {
+            Ok(r) => rows.push(Row {
+                ok: r.persisted,
+                detail: format!(
+                    "persisted={} {}ms group={}… ({} wallet(s) reloaded)",
+                    r.persisted,
+                    r.elapsed_ms,
+                    &r.expected_group_public_key[..8.min(r.expected_group_public_key.len())],
+                    r.reloaded_group_keys.len(),
+                ),
+                label,
+            }),
+            Err(e) => rows.push(Row { label, ok: false, detail: format!("error: {e}") }),
+        }
+    }
+
+    report_and_assert("RELOAD-LIST", &rows);
 }
 
 fn report_and_assert(group: &str, rows: &[Row]) {

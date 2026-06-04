@@ -144,11 +144,20 @@ struct Cluster {
     senders: Vec<UnboundedSender<Message>>,
     receivers: Vec<UnboundedReceiver<Evt>>,
     // Keystores must outlive the runners.
-    _keystores: Vec<tempfile::TempDir>,
+    keystores: Vec<tempfile::TempDir>,
     outcomes: Vec<NodeOutcome>,
     group_key: String,
     agreed: bool,
     elapsed_ms: u128,
+}
+
+/// Spawn an embedded signal server on an ephemeral loopback port and return
+/// its `ws://` URL. The server task runs until the process exits.
+async fn embedded_signal_server() -> anyhow::Result<String> {
+    let listener = TcpListener::bind("127.0.0.1:0").await?;
+    let port = listener.local_addr()?.port();
+    tokio::spawn(webrtc_signal_server::run(listener));
+    Ok(format!("ws://127.0.0.1:{port}"))
 }
 
 fn validate(opts: &SimulateOpts) -> anyhow::Result<()> {
@@ -171,12 +180,7 @@ async fn dkg_cluster(opts: &SimulateOpts) -> anyhow::Result<Cluster> {
 
     let ws_url = match &opts.signal_url {
         Some(u) => u.clone(),
-        None => {
-            let listener = TcpListener::bind("127.0.0.1:0").await?;
-            let port = listener.local_addr()?.port();
-            tokio::spawn(webrtc_signal_server::run(listener));
-            format!("ws://127.0.0.1:{port}")
-        }
+        None => embedded_signal_server().await?,
     };
 
     let mut keystores = Vec::new();
@@ -249,12 +253,56 @@ async fn dkg_cluster(opts: &SimulateOpts) -> anyhow::Result<Cluster> {
         device_ids,
         senders,
         receivers,
-        _keystores: keystores,
+        keystores,
         outcomes,
         group_key,
         agreed,
         elapsed_ms: started.elapsed().as_millis(),
     })
+}
+
+/// Drive a threshold signing once a cluster is connected and the wallet is
+/// available: node 0 initiates, co-signers 1..threshold join the signing
+/// session, then we await the aggregated signature on the initiator. Shared
+/// by the fresh-DKG and reload-from-disk signing paths.
+async fn drive_signing(
+    senders: &[UnboundedSender<Message>],
+    receivers: &mut [UnboundedReceiver<Evt>],
+    wallet_id: String,
+    message: &str,
+    threshold: u16,
+    timeout_secs: u64,
+) -> anyhow::Result<(String, String)> {
+    // Initiator (node 0) announces the signing request.
+    senders[0].send(Message::HeadlessSign {
+        wallet_id,
+        message: message.to_string(),
+        encoding: "utf8".into(),
+        password: "sim-password-0".into(),
+    })?;
+
+    // Co-signers 1..threshold approve by joining the signing session.
+    for i in 1..(threshold as usize) {
+        let session_id = match wait_for(&mut receivers[i], 20, |e| {
+            matches!(e, Evt::SessionDiscovered { signing: true, .. })
+        })
+        .await?
+        {
+            Evt::SessionDiscovered { id, .. } => id,
+            _ => unreachable!(),
+        };
+        senders[i].send(Message::HeadlessJoinSession {
+            session_id,
+            password: format!("sim-password-{i}"),
+            label: String::new(),
+        })?;
+    }
+
+    // Wait for the aggregated signature on the initiator.
+    match wait_for(&mut receivers[0], timeout_secs, |e| matches!(e, Evt::SignDone { .. })).await? {
+        Evt::SignDone { signature, message } => Ok((signature, message)),
+        _ => unreachable!(),
+    }
 }
 
 /// Run DKG only and return a summary.
@@ -286,41 +334,9 @@ pub async fn run_signing_simulation(
     }
     let wallet_id = c.outcomes[0].wallet_id.clone();
 
-    // Initiator (node 0) announces the signing request.
-    c.senders[0].send(Message::HeadlessSign {
-        wallet_id,
-        message: message.to_string(),
-        encoding: "utf8".into(),
-        password: "sim-password-0".into(),
-    })?;
-
-    // Co-signers 1..threshold approve by joining the signing session.
-    for i in 1..(threshold as usize) {
-        let session_id = match wait_for(&mut c.receivers[i], 20, |e| {
-            matches!(e, Evt::SessionDiscovered { signing: true, .. })
-        })
-        .await?
-        {
-            Evt::SessionDiscovered { id, .. } => id,
-            _ => unreachable!(),
-        };
-        c.senders[i].send(Message::HeadlessJoinSession {
-            session_id,
-            password: format!("sim-password-{i}"),
-            label: String::new(),
-        })?;
-    }
-
-    // Wait for the aggregated signature on the initiator.
     let (signature, signed_message) =
-        match wait_for(&mut c.receivers[0], opts.timeout_secs, |e| {
-            matches!(e, Evt::SignDone { .. })
-        })
-        .await?
-        {
-            Evt::SignDone { signature, message } => (signature, message),
-            _ => unreachable!(),
-        };
+        drive_signing(&c.senders, &mut c.receivers, wallet_id, message, threshold, opts.timeout_secs)
+            .await?;
 
     let verified = verify_secp256k1(&c.group_key, &signed_message, &signature).unwrap_or(false);
 
@@ -331,6 +347,93 @@ pub async fn run_signing_simulation(
         signature,
         signed_message,
         verified,
+        elapsed_ms: started.elapsed().as_millis(),
+    })
+}
+
+/// Outcome of a reload-and-list (LIFE-1) run.
+#[derive(Debug, Serialize)]
+pub struct ReloadListResult {
+    /// Group key the DKG produced (what the reload must rediscover).
+    pub expected_group_public_key: String,
+    /// Group keys the fresh runner loaded from the persisted keystore.
+    pub reloaded_group_keys: Vec<String>,
+    /// True iff the expected key reappeared after the cold reload.
+    pub persisted: bool,
+    pub elapsed_ms: u128,
+}
+
+impl ReloadListResult {
+    pub fn to_json(&self) -> String {
+        serde_json::to_string_pretty(self).unwrap_or_else(|_| "{}".into())
+    }
+}
+
+/// LIFE-1: run DKG, tear the original node 0 runner down, then bring a FRESH
+/// runner up on node 0's SAME keystore directory and list its wallets — the
+/// persisted share must reappear with the original group key.
+///
+/// This is a pure keystore round-trip: the fresh runner is never connected to
+/// the network (no `TriggerReconnect`), so it's fully deterministic and free
+/// of the in-process "ghost task" interference that makes a faithful
+/// cold-restart *re-signing* (LIFE-2) impossible in one process — `Quit` only
+/// breaks the Elm loop, leaving the old node's WebRTC/WS tasks (and their ICE
+/// agents) alive to corrupt a new mesh. Faithful LIFE-2 needs real process
+/// death and belongs in the L3 `serve`-subprocess harness (see
+/// docs/cli-conformance-testing.md).
+pub async fn run_reload_list_simulation(
+    opts: SimulateOpts,
+) -> anyhow::Result<ReloadListResult> {
+    let started = Instant::now();
+
+    let c = dkg_cluster(&opts).await?;
+    if !c.agreed {
+        anyhow::bail!("DKG did not agree; aborting reload-list");
+    }
+    let expected_group_public_key = c.group_key.clone();
+    let device_id = c.device_ids[0].clone();
+    let keystore_path = c.keystores[0].path().to_string_lossy().into_owned();
+
+    // Tear down the original runners; keep the TempDirs (in `c`) alive so the
+    // on-disk keystores persist for the fresh runner to read.
+    for tx in &c.senders {
+        let _ = tx.send(Message::Quit);
+    }
+    drop(c.senders);
+    drop(c.receivers);
+    tokio::time::sleep(Duration::from_millis(500)).await;
+
+    // Fresh runner on node 0's keystore. The runner auto-sends ListWallets on
+    // startup (see HeadlessRunner::run), so the persisted wallets land in the
+    // model without any network. Capture their group keys via the sync hook.
+    let (wtx, mut wrx) = unbounded_channel::<Vec<String>>();
+    let cb = move |model: &Model, _msg: Option<&Message>| {
+        let keys: Vec<String> = model
+            .wallet_state
+            .wallets
+            .iter()
+            .map(|w| w.group_public_key.clone())
+            .collect();
+        if !keys.is_empty() {
+            let _ = wtx.send(keys);
+        }
+    };
+    // Signal URL is irrelevant — we never connect.
+    let _tx = spawn_secp256k1(device_id, keystore_path, String::new(), cb);
+
+    let reloaded_group_keys = tokio::time::timeout(Duration::from_secs(10), wrx.recv())
+        .await
+        .map_err(|_| anyhow::anyhow!("timed out waiting for reloaded wallet list"))?
+        .ok_or_else(|| anyhow::anyhow!("reloaded runner produced no wallet list"))?;
+
+    let persisted = reloaded_group_keys.contains(&expected_group_public_key);
+
+    drop(c.keystores);
+
+    Ok(ReloadListResult {
+        expected_group_public_key,
+        reloaded_group_keys,
+        persisted,
         elapsed_ms: started.elapsed().as_millis(),
     })
 }

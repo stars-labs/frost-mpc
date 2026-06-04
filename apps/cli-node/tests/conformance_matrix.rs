@@ -1,0 +1,125 @@
+//! L1 conformance matrix — Phase 1 of docs/cli-conformance-testing.md.
+//!
+//! Drives the §3 flow catalog entirely through CLI↔CLI runners in-process
+//! (embedded signal server, real WebRTC over loopback, real FROST). This is
+//! the always-on regression net for the shared Rust Elm core: every (n, t)
+//! shape and the threshold-quorum signing path run here.
+//!
+//! Unlike the per-flow tests in `e2e_dkg.rs`, the matrix runs the WHOLE table
+//! and reports EVERY failure at the end (no early abort) — a partial protocol
+//! regression shows which shapes broke, not just the first.
+//!
+//! `#[ignore]` by default (real UDP/ICE on loopback, ~seconds per case). Run:
+//!   cargo test -p mpc-wallet-cli --test conformance_matrix -- --ignored --nocapture
+
+use mpc_wallet_cli::simulate::{run_signing_simulation, run_simulation, SimulateOpts};
+
+fn init_logs() {
+    let _ = tracing_subscriber::fmt()
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("tui_node=warn,webrtc=warn")),
+        )
+        .with_test_writer()
+        .try_init();
+}
+
+fn opts(nodes: usize, threshold: u16) -> SimulateOpts {
+    SimulateOpts {
+        nodes,
+        threshold,
+        curve: "secp256k1".into(),
+        signal_url: None,
+        // Larger sets need more ICE/DKG time; scale with node count.
+        timeout_secs: 60 + (nodes as u64) * 20,
+    }
+}
+
+/// One row's verdict, accumulated so the whole matrix runs before asserting.
+struct Row {
+    label: String,
+    ok: bool,
+    detail: String,
+}
+
+/// DKG catalog: DKG-1 (2-of-2), DKG-2 (2-of-3), DKG-3 (3-of-5), plus a small
+/// t-of-n sweep (DKG-4). Each must finish with every node agreeing on one
+/// non-empty group key.
+#[tokio::test(flavor = "multi_thread", worker_threads = 8)]
+#[ignore = "real WebRTC/DKG over loopback; run with --ignored"]
+async fn dkg_matrix() {
+    init_logs();
+    // (nodes, threshold)
+    let cases = [(2u16, 2u16), (3, 2), (3, 3), (5, 3), (4, 2)];
+    let mut rows = Vec::new();
+
+    for (n, t) in cases {
+        let label = format!("DKG {t}-of-{n}");
+        match run_simulation(opts(n as usize, t)).await {
+            Ok(r) => {
+                let ok = r.agreed
+                    && r.outcomes.len() == n as usize
+                    && !r.group_public_key.is_empty();
+                rows.push(Row {
+                    detail: format!(
+                        "agreed={} outcomes={} {}ms group={}…",
+                        r.agreed,
+                        r.outcomes.len(),
+                        r.elapsed_ms,
+                        &r.group_public_key[..8.min(r.group_public_key.len())]
+                    ),
+                    ok,
+                    label,
+                });
+            }
+            Err(e) => rows.push(Row { label, ok: false, detail: format!("error: {e}") }),
+        }
+    }
+
+    report_and_assert("DKG", &rows);
+}
+
+/// Signing catalog: SIG-1 (sign with exactly threshold signers) and SIG-2
+/// (sign with a threshold quorum when MORE than threshold are available —
+/// `run_signing_simulation` recruits exactly `threshold` of `nodes`). Every
+/// produced signature must verify against the group key.
+#[tokio::test(flavor = "multi_thread", worker_threads = 8)]
+#[ignore = "real WebRTC/DKG+signing over loopback; run with --ignored"]
+async fn sign_matrix() {
+    init_logs();
+    // (nodes, threshold): (2,2) exact; (3,2)/(5,3) are quorum-subset (SIG-2).
+    let cases = [(2u16, 2u16), (3, 2), (5, 3)];
+    let msg = "conformance-matrix signing payload";
+    let mut rows = Vec::new();
+
+    for (n, t) in cases {
+        let label = format!("SIGN {t}-of-{n}");
+        match run_signing_simulation(opts(n as usize, t), msg).await {
+            Ok(r) => {
+                let ok = r.verified && !r.signature.is_empty();
+                rows.push(Row {
+                    detail: format!(
+                        "verified={} {}ms sig={}…",
+                        r.verified,
+                        r.elapsed_ms,
+                        &r.signature[..16.min(r.signature.len())]
+                    ),
+                    ok,
+                    label,
+                });
+            }
+            Err(e) => rows.push(Row { label, ok: false, detail: format!("error: {e}") }),
+        }
+    }
+
+    report_and_assert("SIGN", &rows);
+}
+
+fn report_and_assert(group: &str, rows: &[Row]) {
+    eprintln!("\n=== {group} conformance matrix ===");
+    for r in rows {
+        eprintln!("  [{}] {} — {}", if r.ok { "ok" } else { "FAIL" }, r.label, r.detail);
+    }
+    let failed: Vec<&str> = rows.iter().filter(|r| !r.ok).map(|r| r.label.as_str()).collect();
+    assert!(failed.is_empty(), "{group} matrix had failures: {failed:?}");
+}

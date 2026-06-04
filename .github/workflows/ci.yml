@@ -40,6 +40,12 @@ jobs:
         run: cargo test -p mpc-wallet-cli --test e2e_dkg --locked -- --ignored --test-threads=1
         timeout-minutes: 12
 
+      # L1 conformance matrix (docs/cli-conformance-testing.md): the full
+      # (n,t) DKG + quorum-signing table, reporting every shape that breaks.
+      - name: L1 conformance matrix (DKG/sign over all shapes)
+        run: cargo test -p mpc-wallet-cli --test conformance_matrix --locked -- --ignored --test-threads=1
+        timeout-minutes: 12
+
   extension:
     name: Browser extension tests
     runs-on: ubuntu-latest

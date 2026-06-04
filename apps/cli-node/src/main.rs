@@ -9,9 +9,11 @@
 
 use clap::{Parser, Subcommand};
 use mpc_wallet_cli::oneshot::{self, OneShotOpts};
+use mpc_wallet_cli::policy::{self, AutoApprovePolicy};
 use mpc_wallet_cli::protocol;
 use mpc_wallet_cli::serve::{self, ServeOpts};
 use mpc_wallet_cli::simulate::{self, SimulateOpts};
+use std::sync::Arc;
 
 #[derive(Parser)]
 #[command(name = "mpc-wallet-cli", version, about = "Headless MPC wallet CLI")]
@@ -45,8 +47,8 @@ enum Command {
         message: String,
         #[arg(long, default_value = "utf8")]
         encoding: String,
-        #[arg(long)]
-        password: String,
+        #[command(flatten)]
+        pw: PasswordArgs,
         #[command(flatten)]
         common: OneShot,
     },
@@ -69,6 +71,27 @@ struct OneShot {
     log_level: String,
 }
 
+/// Password input (file/env preferred over the argv-visible flag).
+#[derive(clap::Args)]
+struct PasswordArgs {
+    #[arg(long)]
+    password: Option<String>,
+    #[arg(long)]
+    password_env: Option<String>,
+    #[arg(long)]
+    password_file: Option<String>,
+}
+
+impl PasswordArgs {
+    fn resolve(&self) -> anyhow::Result<String> {
+        policy::resolve_password(
+            self.password.as_deref(),
+            self.password_env.as_deref(),
+            self.password_file.as_deref(),
+        )
+    }
+}
+
 #[derive(Subcommand)]
 enum WalletCmd {
     /// List wallets in the keystore (no network).
@@ -84,8 +107,8 @@ enum WalletCmd {
         threshold: u16,
         #[arg(long, default_value_t = 3)]
         total: u16,
-        #[arg(long)]
-        password: String,
+        #[command(flatten)]
+        pw: PasswordArgs,
         #[command(flatten)]
         common: OneShot,
     },
@@ -97,8 +120,8 @@ enum SessionCmd {
     Join {
         #[arg(long)]
         session_id: String,
-        #[arg(long)]
-        password: String,
+        #[command(flatten)]
+        pw: PasswordArgs,
         #[command(flatten)]
         common: OneShot,
     },
@@ -176,6 +199,25 @@ struct ServeArgs {
     /// tracing filter (stderr).
     #[arg(long, default_value = "info")]
     log_level: String,
+
+    /// Auto-approve incoming signing requests (OFF by default).
+    #[arg(long)]
+    auto_approve: bool,
+    /// Restrict auto-approval to these wallet ids (repeatable; empty = any).
+    #[arg(long = "approve-wallet")]
+    approve_wallet: Vec<String>,
+    /// Cap the number of auto-approvals for this process.
+    #[arg(long)]
+    approve_max: Option<usize>,
+    /// Password to unlock the wallet when auto-approving (discouraged on argv).
+    #[arg(long)]
+    approve_password: Option<String>,
+    /// Env var holding the auto-approve password.
+    #[arg(long)]
+    approve_password_env: Option<String>,
+    /// File holding the auto-approve password.
+    #[arg(long)]
+    approve_password_file: Option<String>,
 }
 
 #[tokio::main]
@@ -194,29 +236,42 @@ async fn main() -> anyhow::Result<()> {
                 name,
                 threshold,
                 total,
-                password,
+                pw,
                 common,
-            } => finish(
-                oneshot::wallet_create(common.init_and_opts(), name, threshold, total, password)
+            } => {
+                let password = pw.resolve()?;
+                finish(
+                    oneshot::wallet_create(
+                        common.init_and_opts(),
+                        name,
+                        threshold,
+                        total,
+                        password,
+                    )
                     .await,
-            ),
+                )
+            }
         },
         Command::Session { sub } => match sub {
             SessionCmd::Join {
                 session_id,
-                password,
+                pw,
                 common,
-            } => finish(oneshot::session_join(common.init_and_opts(), session_id, password).await),
+            } => {
+                let password = pw.resolve()?;
+                finish(oneshot::session_join(common.init_and_opts(), session_id, password).await)
+            }
         },
         Command::Sign {
             wallet_id,
             message,
             encoding,
-            password,
+            pw,
             common,
-        } => finish(
-            oneshot::sign(common.init_and_opts(), wallet_id, message, encoding, password).await,
-        ),
+        } => {
+            let password = pw.resolve()?;
+            finish(oneshot::sign(common.init_and_opts(), wallet_id, message, encoding, password).await)
+        }
         Command::Simulate(args) => {
             if !args.log_level.is_empty() {
                 let _ = tracing_subscriber::fmt()
@@ -263,11 +318,27 @@ async fn main() -> anyhow::Result<()> {
                 .init();
 
             let keystore_path = expand_tilde(&args.keystore);
+            let approve_password = if args.auto_approve {
+                policy::resolve_password(
+                    args.approve_password.as_deref(),
+                    args.approve_password_env.as_deref(),
+                    args.approve_password_file.as_deref(),
+                )?
+            } else {
+                String::new()
+            };
+            let auto_approve = Arc::new(AutoApprovePolicy::new(
+                args.auto_approve,
+                args.approve_wallet,
+                args.approve_max,
+            ));
             serve::serve(ServeOpts {
                 device_id: args.device_id,
                 keystore_path,
                 signal_url: args.signal_server,
                 curve: args.curve,
+                auto_approve,
+                approve_password,
             })
             .await
         }

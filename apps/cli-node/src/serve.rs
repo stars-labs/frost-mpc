@@ -12,12 +12,13 @@
 use std::sync::{Arc, Mutex};
 
 use tokio::io::{AsyncBufReadExt, BufReader};
-use tokio::sync::mpsc::unbounded_channel;
+use tokio::sync::mpsc::{unbounded_channel, UnboundedSender};
 use tui_node::elm::headless::spawn_secp256k1;
 use tui_node::elm::model::{WalletConfig, WalletMode};
 use tui_node::elm::{Message, Model};
 
 use crate::bridge::{Bridge, Snapshot};
+use crate::policy::AutoApprovePolicy;
 use crate::protocol::{CliCommand, CliEvent, CliRequest, PROTOCOL_VERSION};
 
 /// Runtime configuration for `serve`.
@@ -25,9 +26,14 @@ pub struct ServeOpts {
     pub device_id: String,
     pub keystore_path: String,
     pub signal_url: String,
-    /// P1 supports secp256k1 only (the runner ciphersuite is fixed at
-    /// spawn). The field is surfaced now so the contract is stable.
+    /// secp256k1 only for now (the runner ciphersuite is fixed at spawn).
     pub curve: String,
+    /// Auto-approval policy for incoming signing requests (disabled unless
+    /// the operator opts in). Shared so the runner callback can consume it.
+    pub auto_approve: std::sync::Arc<AutoApprovePolicy>,
+    /// Password used to unlock the wallet when auto-approving. Ignored unless
+    /// `auto_approve` is enabled.
+    pub approve_password: String,
 }
 
 pub async fn serve(opts: ServeOpts) -> anyhow::Result<()> {
@@ -66,6 +72,14 @@ pub async fn serve(opts: ServeOpts) -> anyhow::Result<()> {
     let snapshot_for_sync = snapshot.clone();
     let pending_for_sync = pending_create.clone();
     let pending_sign_for_sync = pending_sign.clone();
+    // Auto-approve plumbing: the callback can't capture the runner sender
+    // (chicken-and-egg with spawn), so route it through a OnceLock set right
+    // after spawn returns.
+    let approve_sender: Arc<std::sync::OnceLock<UnboundedSender<Message>>> =
+        Arc::new(std::sync::OnceLock::new());
+    let approve_sender_cb = approve_sender.clone();
+    let policy = opts.auto_approve.clone();
+    let approve_pw = opts.approve_password.clone();
     let runner_tx = spawn_secp256k1(
         opts.device_id.clone(),
         opts.keystore_path.clone(),
@@ -84,12 +98,34 @@ pub async fn serve(opts: ServeOpts) -> anyhow::Result<()> {
                     CliEvent::SignatureComplete { correlates, .. } if correlates.is_none() => {
                         *correlates = pending_sign_for_sync.lock().unwrap().take();
                     }
+                    // Policy-gated auto-approval: join the signing session to
+                    // contribute our share, only if the operator opted in AND
+                    // the request passes the policy (allowlist + budget).
+                    CliEvent::SigningRequest { session_id, wallet, .. } => {
+                        if policy.try_approve(wallet) {
+                            if let Some(tx) = approve_sender_cb.get() {
+                                let _ = tx.send(Message::HeadlessJoinSession {
+                                    session_id: session_id.clone(),
+                                    password: approve_pw.clone(),
+                                    label: String::new(),
+                                });
+                                let _ = out_for_sync.send(CliEvent::Error {
+                                    correlates: None,
+                                    code: "auto_approved".into(),
+                                    message: format!(
+                                        "auto-approved signing request for {wallet} ({session_id})"
+                                    ),
+                                });
+                            }
+                        }
+                    }
                     _ => {}
                 }
                 let _ = out_for_sync.send(ev);
             }
         },
     );
+    let _ = approve_sender.set(runner_tx.clone());
 
     // --- input loop: stdin JSONL → runner / snapshot replies ---
     let stdin = tokio::io::stdin();

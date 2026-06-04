@@ -1,15 +1,15 @@
-//! In-process multi-node DKG simulation (#21).
+//! In-process multi-node DKG (+ optional signing) simulation (#21/#23).
 //!
-//! Runs a full N-node FROST DKG inside one process against an embedded
+//! Runs a full N-node FROST ceremony inside one process against an embedded
 //! signal server on an ephemeral port — real WebRTC over loopback, real
-//! crypto, isolated per-node keystores. One self-contained command for CI
-//! and LLM smoke-testing; also the shared orchestration the e2e test uses.
+//! crypto, isolated per-node keystores. Self-contained for CI / LLM
+//! smoke-testing; also the shared orchestration the e2e tests use.
 
 use std::time::{Duration, Instant};
 
 use serde::Serialize;
 use tokio::net::TcpListener;
-use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver};
+use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 use tui_node::elm::headless::spawn_secp256k1;
 use tui_node::elm::model::{WalletConfig, WalletMode};
 use tui_node::elm::{Message, Model};
@@ -48,17 +48,40 @@ impl SimulationResult {
     }
 }
 
+/// Result of a DKG-then-sign run.
+#[derive(Debug, Serialize)]
+pub struct SigningResult {
+    pub nodes: usize,
+    pub threshold: u16,
+    pub group_public_key: String,
+    /// Hex (no 0x) signature produced by the ceremony.
+    pub signature: String,
+    /// Hex (no 0x) bytes that were actually signed (EIP-191 hash for secp256k1).
+    pub signed_message: String,
+    /// True iff `signature` verifies against `group_public_key` for `signed_message`.
+    pub verified: bool,
+    pub elapsed_ms: u128,
+}
+
+impl SigningResult {
+    pub fn to_json(&self) -> String {
+        serde_json::to_string_pretty(self).unwrap_or_else(|_| "{}".into())
+    }
+}
+
 #[derive(Debug, Clone)]
 enum Evt {
     Connected,
-    SessionDiscovered(String),
+    SessionDiscovered { id: String, signing: bool },
     DkgDone { wallet_id: String, group_key: String },
+    SignDone { signature: String, message: String },
 }
 
 fn watcher() -> (
     Box<dyn Fn(&Model, Option<&Message>) + Send>,
     UnboundedReceiver<Evt>,
 ) {
+    use tui_node::protocal::signal::SessionType;
     let (tx, rx) = unbounded_channel::<Evt>();
     let closure = move |model: &Model, msg: Option<&Message>| {
         if model.network_state.connected {
@@ -67,7 +90,10 @@ fn watcher() -> (
         if let Some(m) = msg {
             match m {
                 Message::SessionDiscovered { session } => {
-                    let _ = tx.send(Evt::SessionDiscovered(session.session_id.clone()));
+                    let _ = tx.send(Evt::SessionDiscovered {
+                        id: session.session_id.clone(),
+                        signing: matches!(session.session_type, SessionType::Signing { .. }),
+                    });
                 }
                 Message::DKGFinalized {
                     wallet_id,
@@ -79,6 +105,14 @@ fn watcher() -> (
                         group_key: group_pubkey_hex.clone(),
                     });
                 }
+                Message::SigningComplete {
+                    message, signature, ..
+                } => {
+                    let _ = tx.send(Evt::SignDone {
+                        signature: hex::encode(signature),
+                        message: hex::encode(message),
+                    });
+                }
                 _ => {}
             }
         }
@@ -86,11 +120,7 @@ fn watcher() -> (
     (Box::new(closure), rx)
 }
 
-async fn wait_for<F>(
-    rx: &mut UnboundedReceiver<Evt>,
-    secs: u64,
-    pred: F,
-) -> anyhow::Result<Evt>
+async fn wait_for<F>(rx: &mut UnboundedReceiver<Evt>, secs: u64, pred: F) -> anyhow::Result<Evt>
 where
     F: Fn(&Evt) -> bool,
 {
@@ -107,8 +137,21 @@ where
     .map_err(|_| anyhow::anyhow!("timed out after {secs}s waiting for event"))?
 }
 
-/// Run the simulation and return a structured result.
-pub async fn run_simulation(opts: SimulateOpts) -> anyhow::Result<SimulationResult> {
+/// A live N-node cluster that has completed DKG. Runners stay alive (their
+/// senders/receivers are retained) so callers can drive signing afterwards.
+struct Cluster {
+    device_ids: Vec<String>,
+    senders: Vec<UnboundedSender<Message>>,
+    receivers: Vec<UnboundedReceiver<Evt>>,
+    // Keystores must outlive the runners.
+    _keystores: Vec<tempfile::TempDir>,
+    outcomes: Vec<NodeOutcome>,
+    group_key: String,
+    agreed: bool,
+    elapsed_ms: u128,
+}
+
+fn validate(opts: &SimulateOpts) -> anyhow::Result<()> {
     if opts.curve != "secp256k1" {
         anyhow::bail!("simulate currently supports curve=secp256k1 only");
     }
@@ -118,9 +161,14 @@ pub async fn run_simulation(opts: SimulateOpts) -> anyhow::Result<SimulationResu
     if opts.threshold < 1 || opts.threshold as usize > opts.nodes {
         anyhow::bail!("threshold must be in 1..=nodes");
     }
+    Ok(())
+}
+
+/// Spin up the embedded signal server (if needed) + N runners and run DKG.
+async fn dkg_cluster(opts: &SimulateOpts) -> anyhow::Result<Cluster> {
+    validate(opts)?;
     let started = Instant::now();
 
-    // Embedded signal server unless an external one was provided.
     let ws_url = match &opts.signal_url {
         Some(u) => u.clone(),
         None => {
@@ -131,7 +179,6 @@ pub async fn run_simulation(opts: SimulateOpts) -> anyhow::Result<SimulationResu
         }
     };
 
-    // Spawn the runners.
     let mut keystores = Vec::new();
     let mut senders = Vec::new();
     let mut receivers = Vec::new();
@@ -150,7 +197,6 @@ pub async fn run_simulation(opts: SimulateOpts) -> anyhow::Result<SimulationResu
         receivers.push(rx);
     }
 
-    // Connect everyone.
     for tx in &senders {
         let _ = tx.send(Message::TriggerReconnect);
     }
@@ -158,7 +204,6 @@ pub async fn run_simulation(opts: SimulateOpts) -> anyhow::Result<SimulationResu
         wait_for(rx, 15, |e| matches!(e, Evt::Connected)).await?;
     }
 
-    // node 0 creates; the rest join the announced session.
     senders[0].send(Message::HeadlessCreateWallet {
         config: WalletConfig {
             name: "sim".into(),
@@ -171,10 +216,13 @@ pub async fn run_simulation(opts: SimulateOpts) -> anyhow::Result<SimulationResu
     })?;
 
     for (i, rx) in receivers.iter_mut().enumerate().skip(1) {
-        let session_id = match wait_for(rx, 20, |e| matches!(e, Evt::SessionDiscovered(_))).await? {
-            Evt::SessionDiscovered(id) => id,
-            _ => unreachable!(),
-        };
+        let session_id =
+            match wait_for(rx, 20, |e| matches!(e, Evt::SessionDiscovered { signing: false, .. }))
+                .await?
+            {
+                Evt::SessionDiscovered { id, .. } => id,
+                _ => unreachable!(),
+            };
         senders[i].send(Message::HeadlessJoinSession {
             session_id,
             password: format!("sim-password-{i}"),
@@ -182,7 +230,6 @@ pub async fn run_simulation(opts: SimulateOpts) -> anyhow::Result<SimulationResu
         })?;
     }
 
-    // Collect each node's finalization.
     let mut outcomes = Vec::new();
     for (i, rx) in receivers.iter_mut().enumerate() {
         let done = wait_for(rx, opts.timeout_secs, |e| matches!(e, Evt::DkgDone { .. })).await?;
@@ -195,21 +242,108 @@ pub async fn run_simulation(opts: SimulateOpts) -> anyhow::Result<SimulationResu
         }
     }
 
-    let first_key = outcomes.first().map(|o| o.group_public_key.clone()).unwrap_or_default();
-    let agreed = !first_key.is_empty()
-        && outcomes.iter().all(|o| o.group_public_key == first_key);
+    let group_key = outcomes.first().map(|o| o.group_public_key.clone()).unwrap_or_default();
+    let agreed = !group_key.is_empty() && outcomes.iter().all(|o| o.group_public_key == group_key);
 
-    // Keystores must outlive the ceremony.
-    drop(keystores);
-
-    Ok(SimulationResult {
-        nodes: opts.nodes,
-        threshold: opts.threshold,
-        agreed,
-        group_public_key: first_key,
+    Ok(Cluster {
+        device_ids,
+        senders,
+        receivers,
+        _keystores: keystores,
         outcomes,
+        group_key,
+        agreed,
         elapsed_ms: started.elapsed().as_millis(),
     })
+}
+
+/// Run DKG only and return a summary.
+pub async fn run_simulation(opts: SimulateOpts) -> anyhow::Result<SimulationResult> {
+    let nodes = opts.nodes;
+    let threshold = opts.threshold;
+    let c = dkg_cluster(&opts).await?;
+    Ok(SimulationResult {
+        nodes,
+        threshold,
+        agreed: c.agreed,
+        group_public_key: c.group_key,
+        outcomes: c.outcomes,
+        elapsed_ms: c.elapsed_ms,
+    })
+}
+
+/// Run DKG, then sign `message` with a quorum, and verify the signature.
+pub async fn run_signing_simulation(
+    opts: SimulateOpts,
+    message: &str,
+) -> anyhow::Result<SigningResult> {
+    let nodes = opts.nodes;
+    let threshold = opts.threshold;
+    let started = Instant::now();
+    let mut c = dkg_cluster(&opts).await?;
+    if !c.agreed {
+        anyhow::bail!("DKG did not agree; aborting signing");
+    }
+    let wallet_id = c.outcomes[0].wallet_id.clone();
+
+    // Initiator (node 0) announces the signing request.
+    c.senders[0].send(Message::HeadlessSign {
+        wallet_id,
+        message: message.to_string(),
+        encoding: "utf8".into(),
+        password: "sim-password-0".into(),
+    })?;
+
+    // Co-signers 1..threshold approve by joining the signing session.
+    for i in 1..(threshold as usize) {
+        let session_id = match wait_for(&mut c.receivers[i], 20, |e| {
+            matches!(e, Evt::SessionDiscovered { signing: true, .. })
+        })
+        .await?
+        {
+            Evt::SessionDiscovered { id, .. } => id,
+            _ => unreachable!(),
+        };
+        c.senders[i].send(Message::HeadlessJoinSession {
+            session_id,
+            password: format!("sim-password-{i}"),
+            label: String::new(),
+        })?;
+    }
+
+    // Wait for the aggregated signature on the initiator.
+    let (signature, signed_message) =
+        match wait_for(&mut c.receivers[0], opts.timeout_secs, |e| {
+            matches!(e, Evt::SignDone { .. })
+        })
+        .await?
+        {
+            Evt::SignDone { signature, message } => (signature, message),
+            _ => unreachable!(),
+        };
+
+    let verified = verify_secp256k1(&c.group_key, &signed_message, &signature).unwrap_or(false);
+
+    Ok(SigningResult {
+        nodes,
+        threshold,
+        group_public_key: c.group_key,
+        signature,
+        signed_message,
+        verified,
+        elapsed_ms: started.elapsed().as_millis(),
+    })
+}
+
+/// Verify a FROST(secp256k1) signature against the group verifying key.
+fn verify_secp256k1(group_key_hex: &str, message_hex: &str, sig_hex: &str) -> anyhow::Result<bool> {
+    use frost_secp256k1::{Signature, VerifyingKey};
+    let vk_bytes = hex::decode(group_key_hex)?;
+    let msg = hex::decode(message_hex)?;
+    let sig_bytes = hex::decode(sig_hex)?;
+    let vk = VerifyingKey::deserialize(&vk_bytes)?;
+    let sig = Signature::deserialize(&sig_bytes)?;
+    Ok(vk.verify(&msg, &sig).is_ok())
 }
 
 #[cfg(test)]

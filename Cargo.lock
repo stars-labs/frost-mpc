@@ -4559,6 +4559,8 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
+ "frost-core",
+ "frost-secp256k1",
  "hex",
  "serde",
  "serde_json",

@@ -405,6 +405,14 @@ pub fn update(model: &mut Model, msg: Message) -> Option<Command> {
             model.wallet_state.pending_sign_session_id = None;
             model.wallet_state.pending_raw_message =
                 if curve == "secp256k1" { Some(raw) } else { None };
+            // Clear any leftover DKG-creation/join state so SubmitPassword's
+            // cold-start *sign* gate (creating_wallet.is_none() &&
+            // active_session.is_none()) is taken — otherwise a wallet we just
+            // created would re-route into the creator/joiner DKG branch.
+            model.wallet_state.creating_wallet = None;
+            model.active_session = None;
+            model.wallet_state.password_prompt_purpose =
+                crate::elm::model::PasswordPromptPurpose::Unlock;
             Some(Command::SendMessage(Message::SubmitPassword { value: password }))
         }
 

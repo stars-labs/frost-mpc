@@ -44,6 +44,9 @@ struct SimulateArgs {
     /// Overall timeout in seconds.
     #[arg(long, default_value_t = 90)]
     timeout: u64,
+    /// If set, after DKG sign this message with a quorum and verify it.
+    #[arg(long)]
+    sign: Option<String>,
     /// tracing filter (stderr); empty to silence.
     #[arg(long, default_value = "")]
     log_level: String,
@@ -88,16 +91,23 @@ async fn main() -> anyhow::Result<()> {
                     .try_init();
             }
             let threshold = args.threshold.unwrap_or(args.nodes as u16);
-            let result = simulate::run_simulation(SimulateOpts {
+            let opts = SimulateOpts {
                 nodes: args.nodes,
                 threshold,
                 curve: args.curve,
                 signal_url: None,
                 timeout_secs: args.timeout,
-            })
-            .await?;
-            println!("{}", result.to_json());
-            if result.agreed {
+            };
+            let ok = if let Some(msg) = args.sign {
+                let r = simulate::run_signing_simulation(opts, &msg).await?;
+                println!("{}", r.to_json());
+                r.verified
+            } else {
+                let r = simulate::run_simulation(opts).await?;
+                println!("{}", r.to_json());
+                r.agreed
+            };
+            if ok {
                 Ok(())
             } else {
                 std::process::exit(1);

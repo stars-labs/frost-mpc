@@ -95,6 +95,12 @@ pub async fn serve(opts: ServeOpts) -> anyhow::Result<()> {
                     CliEvent::DkgComplete { correlates, .. } if correlates.is_none() => {
                         *correlates = pending_for_sync.lock().unwrap().take();
                     }
+                    // Announcement is mid-ceremony: correlate with the create
+                    // command but DON'T consume the id — DkgComplete still
+                    // needs it to close the loop.
+                    CliEvent::SessionAnnounced { correlates, .. } if correlates.is_none() => {
+                        *correlates = *pending_for_sync.lock().unwrap();
+                    }
                     CliEvent::SignatureComplete { correlates, .. } if correlates.is_none() => {
                         *correlates = pending_sign_for_sync.lock().unwrap().take();
                     }

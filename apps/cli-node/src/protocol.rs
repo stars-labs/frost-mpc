@@ -103,6 +103,15 @@ pub enum CliEvent {
     },
     /// A joinable session was discovered/announced.
     SessionAvailable { session: SessionEntry },
+    /// This node created and announced a session (DKG/signing). Emitted as
+    /// soon as the real session id is known, so a driver that issued
+    /// `create_wallet` learns the generated id without scraping
+    /// `session_available`. Carries `correlates` (the create command id).
+    SessionAnnounced {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        correlates: Option<u64>,
+        session_id: String,
+    },
     /// Wallet list (reply to `list_wallets` / on change).
     Wallets { wallets: Vec<WalletEntry> },
     /// Sessions list (reply to `list_sessions`).
@@ -206,6 +215,7 @@ pub fn schema_json() -> String {
             {"event": "connection", "fields": {"connected": "bool"}},
             {"event": "status", "fields": {"connected": "bool", "device_id": "string", "wallets": "[WalletEntry]"}},
             {"event": "session_available", "fields": {"session": "SessionEntry"}},
+            {"event": "session_announced", "fields": {"correlates?": "u64", "session_id": "string"}},
             {"event": "wallets", "fields": {"wallets": "[WalletEntry]"}},
             {"event": "sessions", "fields": {"sessions": "[SessionEntry]"}},
             {"event": "dkg_progress", "fields": {"session_id": "string", "round": "u8", "received": "usize", "need": "usize"}},
@@ -323,6 +333,25 @@ mod tests {
         assert_eq!(v["event"], "dkg_complete");
         assert_eq!(v["correlates"], 3);
         assert_eq!(v["wallet_id"], "w");
+    }
+
+    #[test]
+    fn session_announced_omits_correlates_when_none() {
+        let ann = CliEvent::SessionAnnounced {
+            correlates: None,
+            session_id: "dkg_42".into(),
+        };
+        let v: serde_json::Value = serde_json::from_str(&ann.to_line()).unwrap();
+        assert_eq!(v["event"], "session_announced");
+        assert_eq!(v["session_id"], "dkg_42");
+        assert!(v.get("correlates").is_none(), "None correlates must be omitted");
+
+        let ann = CliEvent::SessionAnnounced {
+            correlates: Some(9),
+            session_id: "dkg_42".into(),
+        };
+        let v: serde_json::Value = serde_json::from_str(&ann.to_line()).unwrap();
+        assert_eq!(v["correlates"], 9);
     }
 
     #[test]

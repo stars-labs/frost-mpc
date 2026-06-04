@@ -75,6 +75,18 @@ impl Bridge {
                         group_public_key: group_pubkey_hex.clone(),
                     });
                 }
+                Message::UpdateDKGSessionId { real_session_id } => {
+                    // Creator side: the real DKG session id is now known.
+                    // Emit once (dedupe via the same set so a re-sync of the
+                    // same id doesn't re-announce). `correlates` is stamped by
+                    // the serve layer from the originating create command.
+                    if self.announced_sessions.insert(real_session_id.clone()) {
+                        events.push(CliEvent::SessionAnnounced {
+                            correlates: None,
+                            session_id: real_session_id.clone(),
+                        });
+                    }
+                }
                 Message::SessionDiscovered { session } => {
                     if self.announced_sessions.insert(session.session_id.clone()) {
                         // Signing sessions surface as a signing_request (a
@@ -297,6 +309,29 @@ mod tests {
     #[test]
     fn derive_address_handles_bad_hex() {
         assert_eq!(derive_address("not-hex", "secp256k1"), "");
+    }
+
+    #[test]
+    fn update_dkg_session_id_emits_session_announced_once() {
+        let mut b = Bridge::new();
+        let model = Model::new("d".to_string());
+        let _ = b.on_sync(&model, None);
+        let msg = Message::UpdateDKGSessionId {
+            real_session_id: "dkg_real_7".to_string(),
+        };
+        let first = b.on_sync(&model, Some(&msg));
+        let ann = first.iter().find_map(|e| match e {
+            CliEvent::SessionAnnounced { session_id, correlates } => {
+                Some((session_id.clone(), *correlates))
+            }
+            _ => None,
+        });
+        assert_eq!(ann, Some(("dkg_real_7".to_string(), None)));
+        // Same id again → no duplicate announcement.
+        let second = b.on_sync(&model, Some(&msg));
+        assert!(!second
+            .iter()
+            .any(|e| matches!(e, CliEvent::SessionAnnounced { .. })));
     }
 
     #[test]

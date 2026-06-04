@@ -220,7 +220,7 @@ and, where a GUI exposes it, a cross-client case (§5.3).
 | SEC-2 | auto-approve respects allowlist | off-allowlist wallet refused |
 | SEC-3 | auto-approve respects budget | N+1th approval refused |
 | SEC-4 | password never on argv in test harness | always `--password-file`/`--password-env` |
-| SEC-5 | password never appears in any emitted event or trace | grep assertion over JSONL + trace |
+| SEC-5 | password never appears in any emitted event or trace | **L3** ✅ (scans all stdout events for a sentinel password) |
 
 ---
 

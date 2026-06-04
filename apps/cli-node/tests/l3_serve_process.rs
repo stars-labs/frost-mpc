@@ -111,6 +111,24 @@ impl ServeProc {
         }
     }
 
+    /// Collect every event line for up to `secs`, returning them as raw
+    /// strings (used to scan the whole output stream, e.g. for secret leaks).
+    async fn drain_lines(&mut self, secs: u64) -> Vec<String> {
+        let mut out = Vec::new();
+        let deadline = Instant::now() + Duration::from_secs(secs);
+        loop {
+            let remaining = deadline.saturating_duration_since(Instant::now());
+            if remaining.is_zero() {
+                break;
+            }
+            match timeout(remaining, self.lines.next_line()).await {
+                Ok(Ok(Some(line))) => out.push(line),
+                _ => break,
+            }
+        }
+        out
+    }
+
     async fn quit(&mut self) {
         let _ = self.send(json!({"cmd": "quit"})).await;
         let _ = timeout(Duration::from_secs(5), self.child.wait()).await;
@@ -191,6 +209,44 @@ async fn dkg_2_of_2_across_serve_processes() {
 
     a.quit().await;
     b.quit().await;
+}
+
+/// SEC-5: the wallet password must NEVER appear in any event emitted on
+/// stdout. Passwords enter via stdin commands only; the daemon must not echo
+/// them back in acks, announcements, errors, or any other event. Guards against
+/// accidental secret leakage into the protocol stream (and anything tee'ing it).
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[ignore = "spawns a serve process; run with --ignored"]
+async fn password_never_appears_in_events() {
+    const SECRET: &str = "SEC5-correct-horse-battery-staple-SENTINEL";
+    let ks = tempfile::TempDir::new().unwrap();
+    // No real signal server; create_wallet still carries the password and the
+    // daemon acks/announces, which is enough to catch any echo.
+    let mut p = ServeProc::spawn("sec5-node", &ks.path().to_string_lossy(), "ws://127.0.0.1:1")
+        .await
+        .expect("spawn");
+    p.wait_for("ready", 10).await.expect("ready");
+
+    p.send(json!({
+        "id": 1, "cmd": "create_wallet", "name": "sec5", "threshold": 2, "total": 2,
+        "password": SECRET
+    }))
+    .await
+    .unwrap();
+    p.send(json!({"cmd": "status"})).await.unwrap();
+    p.send(json!({"cmd": "list_wallets"})).await.unwrap();
+
+    // Collect everything the daemon emits for a couple of seconds.
+    let lines = p.drain_lines(3).await;
+    assert!(!lines.is_empty(), "expected some events");
+    for line in &lines {
+        assert!(
+            !line.contains(SECRET),
+            "password leaked into an emitted event: {line}"
+        );
+    }
+    eprintln!("✅ SEC-5: scanned {} event lines, no password leak", lines.len());
+    p.quit().await;
 }
 
 /// ERR-7: a malformed JSONL line is rejected cleanly (`Error{code:"bad_request"}`)

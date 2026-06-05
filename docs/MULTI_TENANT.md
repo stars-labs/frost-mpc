@@ -1,9 +1,14 @@
 # Multi-tenant isolation — decision (#31)
 
-**Decision:** for now, **one signal-server instance per tenant** (Option 1, zero
-code). Implement **room namespacing** (Option 2) only when a single hosted
-endpoint must serve multiple tenants. Cloudflare DO-per-room (Option 3) is the
-scale path for the hosted product.
+**Decision:** **Option 3 — Cloudflare Worker, one Durable Object instance per
+room — is implemented** and is the production multi-tenant path (panda.qzz.io).
+Option 1 (separate standalone-server instances) remains fine for local/dev or
+air-gapped setups. Option 2 (room namespacing inside the standalone Rust server)
+stays deferred — only needed if the *standalone* server must be multi-tenant.
+
+> **Status:** ✅ Option 3 shipped (`apps/signal-server/cloudflare-worker`,
+> see §"Option 3 — implemented"). Clients select a tenant purely by URL
+> (`wss://panda.qzz.io/?room=<tenant>`); no client code change.
 
 ---
 
@@ -90,14 +95,55 @@ working). Not started — gated on the "single hosted endpoint" requirement.
 
 ---
 
+## Option 3 — implemented (Cloudflare Worker, DO per room)
+
+The production worker (`apps/signal-server/cloudflare-worker/src/lib.rs`) routes
+each connection to a Durable Object instance **named after its room**:
+
+```rust
+let room = extract_room(&req);            // ?room=<tenant>, sanitized, default "global"
+let id = env.durable_object("Devices")?.id_from_name(&room)?;
+id.get_stub()?.fetch_with_request(req).await
+```
+
+Why this is full isolation, by construction:
+- `id_from_name(room)` is a deterministic 1:1 room→instance map. Different rooms ⇒
+  different DO instances ⇒ **separate `state.storage()` and separate live
+  WebSocket sets**. The existing device/session/relay logic is unchanged — each
+  instance simply only ever sees its own room's traffic. No per-message filtering,
+  no shared map to leak across tenants.
+- `room` is sanitized to `[A-Za-z0-9_-]` (≤64 chars); blank/invalid ⇒ `"global"`,
+  which is also the no-room default, so **existing clients keep working** unchanged.
+- **No new DO binding and no migration** — same `Devices` class, just more
+  instances. `wrangler.toml` is untouched.
+
+### Client usage (no code change)
+Put the tenant in the signal URL:
+```
+CLI/TUI : --signal-server 'wss://panda.qzz.io/?room=acme'
+extension: set the signal server to wss://panda.qzz.io/?room=acme
+default  : wss://panda.qzz.io  → room "global"
+```
+Use the `<tenant>-<role>-<n>` device-id convention within a room.
+
+### Verification
+- `sanitize_room` unit tests (host): `cargo test -p webrtc-signal-server-cloudflare-worker` (5 pass).
+- Edge build: `cargo check --target wasm32-unknown-unknown` (or `worker-build --release`).
+- End-to-end isolation (manual / miniflare): connect device `a` to `?room=x` and
+  device `b` to `?room=y`; `a`'s `request_active_sessions` and the `devices`
+  roster must never include `b` or `b`'s announced sessions, and a relay `a→b` is
+  undeliverable (different instance). Automating this needs `wrangler dev`
+  (miniflare); tracked alongside #33's harness work.
+
 ## Recommendation summary
 
-- **Today (demos, ≤ handful of tenants):** Option 1 — one instance per tenant.
-  No code; do it via deployment/ops.
-- **Hosted multi-tenant endpoint:** implement Option 2 (plan above); then port to
-  Option 3 (Cloudflare DO-per-room) for scale.
-- Either way, adopt the `<tenant>-<role>-<n>` device-id convention now — it's free
-  and prevents the collision class (#29).
+- **Hosted multi-tenant endpoint (production):** ✅ **Option 3 (shipped)** — one
+  Cloudflare DO instance per `?room=<tenant>`. Pick a room per tenant in the URL.
+- **Local / dev / air-gapped:** Option 1 — one standalone instance per tenant
+  (the CF worker isn't involved there).
+- **Option 2** (room namespacing in the standalone Rust server) stays deferred —
+  only if the *standalone* server itself must be multi-tenant. Plan above.
+- Adopt the `<tenant>-<role>-<n>` device-id convention within each room — it's
+  free and prevents the collision class (#29).
 
-Tracking: issue #31. Implement Option 2 when the single-endpoint requirement is
-real — say the word and it's ~half a day's work.
+Tracking: issue #31. Option 3 implemented; Option 2 remains optional/deferred.

@@ -577,11 +577,82 @@ impl DurableObject for Devices {
     }
 }
 
+/// Sanitize a tenant/room name into a safe Durable Object instance name.
+/// Keeps only `[A-Za-z0-9_-]`, caps length, and falls back to `"global"` when
+/// empty/invalid (which is also the no-room default → backward compatible).
+fn sanitize_room(raw: &str) -> String {
+    const MAX: usize = 64;
+    let s: String = raw
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_')
+        .take(MAX)
+        .collect();
+    if s.is_empty() {
+        "global".to_string()
+    } else {
+        s
+    }
+}
+
+/// Extract the room/tenant from the request URL query (`?room=<tenant>`).
+/// Absent → `"global"`.
+fn extract_room(req: &Request) -> String {
+    let raw = req
+        .url()
+        .ok()
+        .and_then(|u| {
+            u.query_pairs()
+                .find(|(k, _)| k == "room")
+                .map(|(_, v)| v.into_owned())
+        })
+        .unwrap_or_default();
+    sanitize_room(&raw)
+}
+
 #[event(fetch)]
 async fn fetch(req: Request, env: Env, _ctx: Context) -> Result<Response> {
-    // Route all websocket requests to the Devices Durable Object
+    // Multi-tenant routing (Option 3, #31): every `?room=<tenant>` maps to its
+    // OWN Durable Object instance. Each instance has independent storage and
+    // its own set of WebSocket connections, so tenants are fully isolated —
+    // a device in room A never sees room B's devices/sessions/relays, with no
+    // per-message filtering. No `room` ⇒ "global" (backward compatible).
+    let room = extract_room(&req);
     let devices_ns = env.durable_object("Devices")?;
-    let id = devices_ns.id_from_name("global")?;
+    let id = devices_ns.id_from_name(&room)?;
     let stub = id.get_stub()?;
     stub.fetch_with_request(req).await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::sanitize_room;
+
+    #[test]
+    fn empty_or_invalid_falls_back_to_global() {
+        assert_eq!(sanitize_room(""), "global");
+        assert_eq!(sanitize_room("!@#$"), "global"); // all stripped
+    }
+
+    #[test]
+    fn keeps_safe_chars() {
+        assert_eq!(sanitize_room("acme"), "acme");
+        assert_eq!(sanitize_room("acme-cohort_1"), "acme-cohort_1");
+    }
+
+    #[test]
+    fn strips_unsafe_chars() {
+        assert_eq!(sanitize_room("a/c..me ?x"), "acmex");
+    }
+
+    #[test]
+    fn caps_length() {
+        let long = "a".repeat(200);
+        assert_eq!(sanitize_room(&long).len(), 64);
+    }
+
+    #[test]
+    fn distinct_tenants_map_to_distinct_names() {
+        // Different rooms must produce different DO instance names (isolation).
+        assert_ne!(sanitize_room("acme"), sanitize_room("globex"));
+    }
 }

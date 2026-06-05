@@ -50,8 +50,13 @@ struct Args {
 fn with_room(url: &str, room: Option<&str>) -> String {
     match room {
         Some(r) if !r.is_empty() && !url.contains("room=") => {
-            let sep = if url.contains('?') { '&' } else { '?' };
-            format!("{url}{sep}room={r}")
+            if url.contains('?') {
+                format!("{url}&room={r}")
+            } else if url.splitn(2, "://").nth(1).unwrap_or(url).contains('/') {
+                format!("{url}?room={r}")
+            } else {
+                format!("{url}/?room={r}") // no path → WS handshake needs one
+            }
         }
         _ => url.to_string(),
     }

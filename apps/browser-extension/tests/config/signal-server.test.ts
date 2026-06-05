@@ -78,9 +78,10 @@ describe('Tenant room (multi-tenant #31)', () => {
     });
 
     it('mergeRoom appends room as a query param', () => {
-        expect(mergeRoom('wss://h', 'abcdefghij012345')).toBe('wss://h?room=abcdefghij012345');
-        expect(mergeRoom('wss://h?x=1', 'r')).toBe('wss://h?x=1&room=r');
-        expect(mergeRoom('wss://h?room=keep', 'r')).toBe('wss://h?room=keep'); // already present
+        expect(mergeRoom('wss://h', 'abcdefghij012345')).toBe('wss://h/?room=abcdefghij012345');
+        expect(mergeRoom('wss://h/p', 'r')).toBe('wss://h/p?room=r');
+        expect(mergeRoom('wss://h/?x=1', 'r')).toBe('wss://h/?x=1&room=r');
+        expect(mergeRoom('wss://h/?room=keep', 'r')).toBe('wss://h/?room=keep'); // already present
         expect(mergeRoom('wss://h', null)).toBe('wss://h'); // no room → unchanged
     });
 
@@ -99,7 +100,7 @@ describe('Tenant room (multi-tenant #31)', () => {
     it('getSignalServerUrl merges a stored room', async () => {
         await setRoom('7f3a9c2e-4b1d-4e8a-9c2f-001122334455');
         expect(await getSignalServerUrl()).toBe(
-            'wss://panda.qzz.io?room=7f3a9c2e-4b1d-4e8a-9c2f-001122334455',
+            'wss://panda.qzz.io/?room=7f3a9c2e-4b1d-4e8a-9c2f-001122334455',
         );
     });
 

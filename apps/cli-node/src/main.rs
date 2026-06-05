@@ -374,10 +374,32 @@ async fn main() -> anyhow::Result<()> {
 fn with_room(url: &str, room: Option<&str>) -> String {
     match room {
         Some(r) if !r.is_empty() && !url.contains("room=") => {
-            let sep = if url.contains('?') { '&' } else { '?' };
-            format!("{url}{sep}room={r}")
+            if url.contains('?') {
+                format!("{url}&room={r}")
+            } else if url.splitn(2, "://").nth(1).unwrap_or(url).contains('/') {
+                // already has a path → just add the query
+                format!("{url}?room={r}")
+            } else {
+                // no path (e.g. wss://host) → a WS handshake needs one
+                format!("{url}/?room={r}")
+            }
         }
         _ => url.to_string(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::with_room;
+    #[test]
+    fn with_room_inserts_path_and_query() {
+        assert_eq!(with_room("wss://h", Some("r")), "wss://h/?room=r");
+        assert_eq!(with_room("wss://h/", Some("r")), "wss://h/?room=r");
+        assert_eq!(with_room("wss://h/p", Some("r")), "wss://h/p?room=r");
+        assert_eq!(with_room("wss://h/?x=1", Some("r")), "wss://h/?x=1&room=r");
+        assert_eq!(with_room("wss://h/?room=keep", Some("r")), "wss://h/?room=keep");
+        assert_eq!(with_room("wss://h", None), "wss://h");
+        assert_eq!(with_room("wss://h", Some("")), "wss://h");
     }
 }
 

@@ -39,11 +39,16 @@ export function isValidRoom(room: string): boolean {
     return /^[A-Za-z0-9_-]+$/.test(room) && room.length >= MIN_ROOM_LEN;
 }
 
-/** Append `room` to a ws URL as a query param (`?room=` / `&room=`). */
+/**
+ * Append `room` to a ws URL as a query param. Ensures a path exists before the
+ * query (`wss://host` → `wss://host/?room=…`) — a WebSocket handshake to a bare
+ * host with a query but no path is malformed and gets rejected.
+ */
 export function mergeRoom(url: string, room: string | null | undefined): string {
     if (!room || url.includes("room=")) return url;
-    const sep = url.includes("?") ? "&" : "?";
-    return `${url}${sep}room=${room}`;
+    if (url.includes("?")) return `${url}&room=${room}`;
+    const afterScheme = url.split("://")[1] ?? url;
+    return afterScheme.includes("/") ? `${url}?room=${room}` : `${url}/?room=${room}`;
 }
 
 /** Read the stored room, or null if unset/unavailable. */

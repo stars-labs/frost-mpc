@@ -656,3 +656,24 @@ truth or a cross-client invariant — exactly the failure classes §1 predicted.
 Bugs 1, 2, 4, 5 are in the **shared Rust core** (so they affected TUI/native/CLI alike);
 2 and 3 are also exactly the cross-impl correctness class the L4 address oracle targets.
 None had any prior test.
+
+### Cross-impl crypto: verified correct (by inspection)
+
+A static check of the extension's independent crypto answered the most important L4
+question without a browser:
+
+- **Address derivation.** The extension's WASM (`@mpc-wallet/core-wasm`) derives Ethereum
+  addresses via `frost-core::Secp256k1Curve::get_eth_address`, which **decompresses the key
+  correctly** (`k256::from_sec1_bytes → to_encoded_point(false) → keccak(X‖Y)[12..]`). So
+  bug #2 was specific to the divergent `tui_node::blockchain_config` impl (now fixed to
+  match); the extension was already correct. Pin this with the same golden vectors when the
+  browser harness lands.
+- **FROST compatibility.** `core-wasm` builds on the same `frost_secp256k1` / `frost_ed25519`
+  crates as the CLI/TUI/native, so DKG packages and signatures are cross-compatible *by
+  construction* — the risk isn't the crypto, it's the protocol glue.
+
+What remains for **L3c** is therefore the extension's **TypeScript orchestration layer**
+(`webSocketManager`, `session-parse.ts`, the offscreen WebRTC/WASM host) driven end-to-end
+in a real browser against CLI peers — exactly the layer the wire-frame goldens (§5.2) now
+specify the contract for. That's a dedicated browser-automation effort (Playwright + MV3
+extension load + WASM build), not an autonomous-loop increment.

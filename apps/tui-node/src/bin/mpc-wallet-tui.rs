@@ -36,6 +36,25 @@ struct Args {
     /// Example: --signal-server ws://localhost:9000
     #[arg(long, default_value = "wss://panda.qzz.io")]
     signal_server: String,
+
+    /// Tenant room (REQUIRED by the deployed server). A strong shared id all
+    /// participants of a ceremony use; merged into the signal URL as
+    /// `?room=<id>`. Generate with `uuidgen`. Without it the server rejects
+    /// the connection.
+    #[arg(long)]
+    room: Option<String>,
+}
+
+/// Merge a `room` into the signal URL as a query param (`?room=` / `&room=`).
+/// No-op when absent — the server then rejects with a clear error.
+fn with_room(url: &str, room: Option<&str>) -> String {
+    match room {
+        Some(r) if !r.is_empty() && !url.contains("room=") => {
+            let sep = if url.contains('?') { '&' } else { '?' };
+            format!("{url}{sep}room={r}")
+        }
+        _ => url.to_string(),
+    }
 }
 
 #[tokio::main]
@@ -91,7 +110,12 @@ async fn main() -> anyhow::Result<()> {
     }
 
     // Run the Elm-based TUI application
-    run_elm_tui(device_id, args.signal_server, args.offline).await
+    run_elm_tui(
+        device_id,
+        with_room(&args.signal_server, args.room.as_deref()),
+        args.offline,
+    )
+    .await
 }
 
 /// Run the Elm Architecture TUI

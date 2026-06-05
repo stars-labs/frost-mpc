@@ -10,6 +10,11 @@ import {
     SIGNAL_SERVER_STORAGE_KEY,
     getSignalServerUrl,
     setSignalServerUrl,
+    mergeRoom,
+    isValidRoom,
+    newRoom,
+    getRoom,
+    setRoom,
 } from '../../src/config/signal-server';
 
 describe('Signal server config', () => {
@@ -64,5 +69,46 @@ describe('Signal server config', () => {
     it('setSignalServerUrl rejects arbitrary strings', async () => {
         const ok = await setSignalServerUrl('not a url');
         expect(ok).toBe(false);
+    });
+});
+
+describe('Tenant room (multi-tenant #31)', () => {
+    beforeEach(async () => {
+        await chrome.storage.local.clear();
+    });
+
+    it('mergeRoom appends room as a query param', () => {
+        expect(mergeRoom('wss://h', 'abcdefghij012345')).toBe('wss://h?room=abcdefghij012345');
+        expect(mergeRoom('wss://h?x=1', 'r')).toBe('wss://h?x=1&room=r');
+        expect(mergeRoom('wss://h?room=keep', 'r')).toBe('wss://h?room=keep'); // already present
+        expect(mergeRoom('wss://h', null)).toBe('wss://h'); // no room → unchanged
+    });
+
+    it('isValidRoom requires >=16 safe chars', () => {
+        expect(isValidRoom('acme')).toBe(false);
+        expect(isValidRoom('')).toBe(false);
+        expect(isValidRoom('bad room!!!!!!!!!')).toBe(false); // space/!
+        expect(isValidRoom('a'.repeat(16))).toBe(true);
+        expect(isValidRoom('7f3a9c2e-4b1d-4e8a-9c2f-001122334455')).toBe(true);
+    });
+
+    it('newRoom produces an accepted room', () => {
+        expect(isValidRoom(newRoom())).toBe(true);
+    });
+
+    it('getSignalServerUrl merges a stored room', async () => {
+        await setRoom('7f3a9c2e-4b1d-4e8a-9c2f-001122334455');
+        expect(await getSignalServerUrl()).toBe(
+            'wss://panda.qzz.io?room=7f3a9c2e-4b1d-4e8a-9c2f-001122334455',
+        );
+    });
+
+    it('setRoom rejects weak rooms', async () => {
+        expect(await setRoom('acme')).toBe(false);
+        expect(await getRoom()).toBeNull();
+    });
+
+    it('no room → URL has none (server will reject)', async () => {
+        expect(await getSignalServerUrl()).toBe('wss://panda.qzz.io');
     });
 });

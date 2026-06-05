@@ -65,6 +65,12 @@ struct OneShot {
     keystore: String,
     #[arg(long, default_value = "wss://panda.qzz.io")]
     signal_server: String,
+    /// Tenant room (REQUIRED by the server): a strong, shared id all
+    /// participants of a ceremony use. Merged into the signal URL as
+    /// `?room=<id>`. Generate one with `uuidgen`. Without it the server
+    /// rejects the connection.
+    #[arg(long)]
+    room: Option<String>,
     #[arg(long, default_value_t = 90)]
     timeout: u64,
     #[arg(long, default_value = "")]
@@ -142,7 +148,7 @@ impl OneShot {
         OneShotOpts {
             device_id: self.device_id.clone(),
             keystore_path: expand_tilde(&self.keystore),
-            signal_url: self.signal_server.clone(),
+            signal_url: with_room(&self.signal_server, self.room.as_deref()),
             timeout_secs: self.timeout,
         }
     }
@@ -177,11 +183,15 @@ struct SimulateArgs {
     /// If set, after DKG sign this message with a quorum and verify it.
     #[arg(long)]
     sign: Option<String>,
-    /// External signal server URL (e.g. wss://panda.qzz.io/?room=test). When
-    /// omitted, an isolated server is embedded in-process. Use this to smoke-
-    /// test a deployed/remote server (incl. a specific multi-tenant room).
+    /// External signal server URL (e.g. wss://panda.qzz.io). When omitted, an
+    /// isolated server is embedded in-process. Use this to smoke-test a
+    /// deployed/remote server.
     #[arg(long)]
     signal_server: Option<String>,
+    /// Tenant room merged into `--signal-server` as `?room=<id>` (the deployed
+    /// server requires a strong room). Ignored when no `--signal-server`.
+    #[arg(long)]
+    room: Option<String>,
     /// tracing filter (stderr); empty to silence.
     #[arg(long, default_value = "")]
     log_level: String,
@@ -198,6 +208,10 @@ struct ServeArgs {
     /// Signal server URL.
     #[arg(long, default_value = "wss://panda.qzz.io")]
     signal_server: String,
+    /// Tenant room (REQUIRED by the server) merged as `?room=<id>`. All
+    /// participants of a ceremony must use the same strong id (e.g. a UUID).
+    #[arg(long)]
+    room: Option<String>,
     /// Ciphersuite (P1: secp256k1 only).
     #[arg(long, default_value = "secp256k1")]
     curve: String,
@@ -293,7 +307,10 @@ async fn main() -> anyhow::Result<()> {
                 nodes: args.nodes,
                 threshold,
                 curve: args.curve,
-                signal_url: args.signal_server.clone(),
+                signal_url: args
+                    .signal_server
+                    .as_deref()
+                    .map(|u| with_room(u, args.room.as_deref())),
                 timeout_secs: args.timeout,
             };
             let ok = if let Some(msg) = args.sign {
@@ -340,13 +357,27 @@ async fn main() -> anyhow::Result<()> {
             serve::serve(ServeOpts {
                 device_id: args.device_id,
                 keystore_path,
-                signal_url: args.signal_server,
+                signal_url: with_room(&args.signal_server, args.room.as_deref()),
                 curve: args.curve,
                 auto_approve,
                 approve_password,
             })
             .await
         }
+    }
+}
+
+/// Merge a tenant `room` into a signal-server URL as a `room` query param.
+/// No-op when `room` is None/empty (the server then rejects the connection,
+/// which surfaces a clear "a strong ?room is required" error). Appends with
+/// `?` or `&` depending on whether the URL already has a query.
+fn with_room(url: &str, room: Option<&str>) -> String {
+    match room {
+        Some(r) if !r.is_empty() && !url.contains("room=") => {
+            let sep = if url.contains('?') { '&' } else { '?' };
+            format!("{url}{sep}room={r}")
+        }
+        _ => url.to_string(),
     }
 }
 

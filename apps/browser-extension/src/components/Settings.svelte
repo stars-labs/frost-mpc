@@ -14,6 +14,34 @@
     import { themeMode, setTheme, type ThemeMode } from "../lib/theme";
     import Button from "../lib/ui/Button.svelte";
     import Icon from "../lib/ui/Icon.svelte";
+    import {
+        getRoom,
+        setRoom,
+        newRoom,
+        isValidRoom,
+    } from "../config/signal-server";
+
+    // Tenant room (multi-tenant signal server, #31). The hosted server routes
+    // each ?room=<id> to an isolated instance and REQUIRES a strong room.
+    let signalRoom = "";
+    let roomStatus = "";
+    onMount(async () => {
+        signalRoom = (await getRoom()) ?? "";
+    });
+    function genRoom() {
+        signalRoom = newRoom();
+        roomStatus = "Generated — Save, then share this exact id with co-signers.";
+    }
+    async function saveRoom() {
+        const r = signalRoom.trim();
+        if (!isValidRoom(r)) {
+            roomStatus = "✗ Need ≥16 chars of [A-Za-z0-9_-] (use Generate).";
+            return;
+        }
+        roomStatus = (await setRoom(r))
+            ? "✓ Saved. Reconnect to apply."
+            : "✗ Save failed.";
+    }
     const dispatch = createEventDispatcher<{
         backToWallet: { chain: string; curve: string };
     }>();
@@ -285,6 +313,28 @@
                 </button>
             {/each}
         </div>
+    </div>
+
+    <!-- Signal server / tenant room -->
+    <div class="card card-pad space-y-2">
+        <h3 class="section-title">Signal server room</h3>
+        <p class="text-xs text-muted">
+            The hosted server requires a strong room. All co-signers of a wallet
+            must use the <strong>same</strong> room. Reconnect after changing it.
+        </p>
+        <div class="flex items-center gap-2">
+            <input
+                type="text"
+                class="input flex-1 text-xs"
+                placeholder="strong room id (shared)"
+                bind:value={signalRoom}
+            />
+            <Button variant="ghost" size="sm" on:click={genRoom}>Generate</Button>
+            <Button size="sm" on:click={saveRoom}>Save</Button>
+        </div>
+        {#if roomStatus}
+            <span class="text-xs text-muted">{roomStatus}</span>
+        {/if}
     </div>
 
     <!-- Network -->

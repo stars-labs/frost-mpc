@@ -25,12 +25,6 @@
     import CreateWalletForm from "../../components/CreateWalletForm.svelte";
     import { MESSAGE_TYPES } from "@mpc-wallet/types/messages";
     import { hashMessage } from "viem";
-    import {
-        getRoom,
-        setRoom,
-        newRoom,
-        isValidRoom,
-    } from "../../config/signal-server";
 
     // Theme (system | light | dark). initTheme() applies the saved mode
     // and live-tracks the OS preference while in "system". The cycle
@@ -58,28 +52,6 @@
     let showDeveloper = false;
 
     onMount(() => initTheme());
-
-    // Tenant room (multi-tenant signal server, #31). The hosted server routes
-    // each ?room=<id> to an isolated instance and REQUIRES a strong room.
-    let signalRoom = "";
-    let roomStatus = "";
-    onMount(async () => {
-        signalRoom = (await getRoom()) ?? "";
-    });
-    function genRoom() {
-        signalRoom = newRoom();
-        roomStatus = "Generated — Save, then share this exact id with co-signers.";
-    }
-    async function saveRoom() {
-        const r = signalRoom.trim();
-        if (!isValidRoom(r)) {
-            roomStatus = "✗ Need ≥16 chars of [A-Za-z0-9_-] (use Generate).";
-            return;
-        }
-        roomStatus = (await setRoom(r))
-            ? "✓ Saved. Reconnect (reopen / toggle) to apply."
-            : "✗ Save failed.";
-    }
     onDestroy(() => unsubTheme());
 
     // Hero card: reveal the raw group public key on demand + a tiny
@@ -2537,30 +2509,6 @@
                         ? 'badge-success'
                         : 'badge-danger'}"
                     >{appState.wsConnected ? "Connected" : "Disconnected"}</span
-                >
-            </div>
-
-            <!-- Tenant room (multi-tenant) -->
-            <div class="space-y-1.5">
-                <span class="label mb-0">Tenant room</span>
-                <div class="flex items-center gap-2">
-                    <input
-                        type="text"
-                        class="input flex-1 text-xs"
-                        placeholder="strong room id (shared with co-signers)"
-                        bind:value={signalRoom}
-                    />
-                    <Button variant="ghost" size="sm" on:click={genRoom}
-                        >Generate</Button
-                    >
-                    <Button size="sm" on:click={saveRoom}>Save</Button>
-                </div>
-                {#if roomStatus}
-                    <span class="text-xs opacity-70">{roomStatus}</span>
-                {/if}
-                <span class="text-xs opacity-50"
-                    >All co-signers of a wallet must use the same room. Required
-                    by the hosted server.</span
                 >
             </div>
 

@@ -577,26 +577,36 @@ impl DurableObject for Devices {
     }
 }
 
-/// Sanitize a tenant/room name into a safe Durable Object instance name.
-/// Keeps only `[A-Za-z0-9_-]`, caps length, and falls back to `"global"` when
-/// empty/invalid (which is also the no-room default → backward compatible).
+/// Minimum room length. A room name IS the tenant boundary (it selects the
+/// Durable Object instance), so it must be unguessable to stop two unrelated
+/// tenants from colliding on a casual name like "acme"/"test". 16+ chars of
+/// `[A-Za-z0-9_-]` forces a high-entropy id (use a UUID / 128-bit token).
+const MIN_ROOM_LEN: usize = 16;
+
+/// Keep only `[A-Za-z0-9_-]`, cap length. Pure; no fallback.
 fn sanitize_room(raw: &str) -> String {
     const MAX: usize = 64;
-    let s: String = raw
-        .chars()
+    raw.chars()
         .filter(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_')
         .take(MAX)
-        .collect();
-    if s.is_empty() {
-        "global".to_string()
+        .collect()
+}
+
+/// A room is valid only if it sanitizes to at least `MIN_ROOM_LEN` chars.
+/// There is intentionally **no `"global"`/default fallback** — a missing or
+/// weak room is rejected (see `fetch`) rather than silently shared, so tenant
+/// names can't collide.
+fn validate_room(raw: &str) -> Option<String> {
+    let s = sanitize_room(raw);
+    if s.len() >= MIN_ROOM_LEN {
+        Some(s)
     } else {
-        s
+        None
     }
 }
 
-/// Extract the room/tenant from the request URL query (`?room=<tenant>`).
-/// Absent → `"global"`.
-fn extract_room(req: &Request) -> String {
+/// Extract + validate the room from `?room=<id>`. `None` ⇒ missing/too weak.
+fn extract_room(req: &Request) -> Option<String> {
     let raw = req
         .url()
         .ok()
@@ -606,17 +616,24 @@ fn extract_room(req: &Request) -> String {
                 .map(|(_, v)| v.into_owned())
         })
         .unwrap_or_default();
-    sanitize_room(&raw)
+    validate_room(&raw)
 }
 
 #[event(fetch)]
 async fn fetch(req: Request, env: Env, _ctx: Context) -> Result<Response> {
-    // Multi-tenant routing (Option 3, #31): every `?room=<tenant>` maps to its
-    // OWN Durable Object instance. Each instance has independent storage and
-    // its own set of WebSocket connections, so tenants are fully isolated —
-    // a device in room A never sees room B's devices/sessions/relays, with no
-    // per-message filtering. No `room` ⇒ "global" (backward compatible).
-    let room = extract_room(&req);
+    // Multi-tenant routing (Option 3, #31): every `?room=<id>` maps to its OWN
+    // Durable Object instance — independent storage + its own connection set,
+    // so tenants are fully isolated with no per-message filtering. The room name
+    // IS the boundary, so it is MANDATORY and must be strong (>= 16 chars); a
+    // missing/weak room is rejected (NOT backward compatible by design — there
+    // is no shared "global" bucket two tenants could land in).
+    let Some(room) = extract_room(&req) else {
+        return Response::error(
+            "a strong ?room=<id> is required (>= 16 chars of [A-Za-z0-9_-]); \
+             use a high-entropy id such as a UUID",
+            400,
+        );
+    };
     let devices_ns = env.durable_object("Devices")?;
     let id = devices_ns.id_from_name(&room)?;
     let stub = id.get_stub()?;
@@ -625,34 +642,43 @@ async fn fetch(req: Request, env: Env, _ctx: Context) -> Result<Response> {
 
 #[cfg(test)]
 mod tests {
-    use super::sanitize_room;
+    use super::{sanitize_room, validate_room, MIN_ROOM_LEN};
 
     #[test]
-    fn empty_or_invalid_falls_back_to_global() {
-        assert_eq!(sanitize_room(""), "global");
-        assert_eq!(sanitize_room("!@#$"), "global"); // all stripped
+    fn rejects_missing_or_weak_rooms() {
+        // No fallback: empty, too-short, and casual names are all rejected.
+        assert_eq!(validate_room(""), None);
+        assert_eq!(validate_room("acme"), None);
+        assert_eq!(validate_room("test"), None);
+        assert_eq!(validate_room("global"), None);
+        assert_eq!(validate_room("!@#$ %^&"), None); // strips to empty
+        // 15 chars is still too short (threshold is 16).
+        assert_eq!(validate_room(&"a".repeat(MIN_ROOM_LEN - 1)), None);
     }
 
     #[test]
-    fn keeps_safe_chars() {
-        assert_eq!(sanitize_room("acme"), "acme");
-        assert_eq!(sanitize_room("acme-cohort_1"), "acme-cohort_1");
+    fn accepts_strong_rooms() {
+        let uuid = "7f3a9c2e-4b1d-4e8a-9c2f-001122334455";
+        assert_eq!(validate_room(uuid).as_deref(), Some(uuid));
+        assert!(validate_room(&"a".repeat(MIN_ROOM_LEN)).is_some()); // exactly 16 ok
     }
 
     #[test]
-    fn strips_unsafe_chars() {
+    fn strips_unsafe_chars_before_length_check() {
+        // After stripping spaces/dots/slashes this is < 16 → rejected.
+        assert_eq!(validate_room("a/c..me ?x"), None);
         assert_eq!(sanitize_room("a/c..me ?x"), "acmex");
     }
 
     #[test]
     fn caps_length() {
-        let long = "a".repeat(200);
-        assert_eq!(sanitize_room(&long).len(), 64);
+        assert_eq!(sanitize_room(&"a".repeat(200)).len(), 64);
     }
 
     #[test]
-    fn distinct_tenants_map_to_distinct_names() {
-        // Different rooms must produce different DO instance names (isolation).
-        assert_ne!(sanitize_room("acme"), sanitize_room("globex"));
+    fn distinct_strong_tenants_map_to_distinct_names() {
+        let a = validate_room("acme-cohort-0001-xyz").unwrap();
+        let b = validate_room("globex-cohort-0001-xyz").unwrap();
+        assert_ne!(a, b); // different rooms → different DO instances
     }
 }

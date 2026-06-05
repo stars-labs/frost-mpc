@@ -112,19 +112,29 @@ Why this is full isolation, by construction:
   WebSocket sets**. The existing device/session/relay logic is unchanged — each
   instance simply only ever sees its own room's traffic. No per-message filtering,
   no shared map to leak across tenants.
-- `room` is sanitized to `[A-Za-z0-9_-]` (≤64 chars); blank/invalid ⇒ `"global"`,
-  which is also the no-room default, so **existing clients keep working** unchanged.
+- The room name **is** the tenant boundary, so it is **mandatory and must be
+  strong** — sanitized to `[A-Za-z0-9_-]` and **≥ 16 chars**; a missing/weak room
+  is **rejected (HTTP 400)**, with **no `"global"` fallback**. This is a
+  deliberate **breaking change** (not backward compatible): it removes the shared
+  bucket two tenants could collide on. Solves the *tenant-name collision* problem —
+  you can't pick a guessable name like `acme`; use a high-entropy id (UUID).
+  Adversarial join-with-known-id is still possible (the room is a bearer
+  capability); the real fix for that is auth-derived rooms (Option B in §"Options",
+  still deferred) — but even an intruder can't steal keys (FROST identifiers come
+  from the enrolled participant set).
 - **No new DO binding and no migration** — same `Devices` class, just more
   instances. `wrangler.toml` is untouched.
 
 ### Client usage (no code change)
 Put the tenant in the signal URL:
 ```
-CLI/TUI : --signal-server 'wss://panda.qzz.io/?room=acme'
-extension: set the signal server to wss://panda.qzz.io/?room=acme
-default  : wss://panda.qzz.io  → room "global"
+CLI/TUI : --signal-server 'wss://panda.qzz.io/?room=<uuid>'
+extension: set the signal server to wss://panda.qzz.io/?room=<uuid>
+(no room) : REJECTED (HTTP 400) — a strong ?room is required
 ```
-Use the `<tenant>-<role>-<n>` device-id convention within a room.
+Generate a room with `uuidgen` / `python3 -c 'import uuid;print(uuid.uuid4())'`
+and share the **same** URL with all ceremony participants. Use a `<role>-<n>`
+device-id convention within a room.
 
 ### Verification
 - `sanitize_room` unit tests (host): `cargo test -p webrtc-signal-server-cloudflare-worker` (5 pass).

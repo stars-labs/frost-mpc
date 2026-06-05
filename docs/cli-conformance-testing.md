@@ -322,6 +322,17 @@ recording WebSocket proxy (rather than a `--trace` tee, which would have needed 
 instrumentation) and pins the normalized type vocabulary + session-discovery frame shapes.
 The same normal form is what the L4 oracle will diff the extension against.
 
+> **Observation (not a bug) from the signing wire golden:** the signing
+> `announce_session` carries `blockchain: "secp256k1"` — i.e. the *curve*, not a
+> chain like `ethereum`. This is a limitation, not a correctness defect: the
+> headless/TUI sign API (`HeadlessSign{wallet_id, message, encoding, password}`)
+> has no per-chain context — a secp256k1 wallet is multi-chain, and the message is
+> hashed by curve (EIP-191 for secp256k1), so the signature verifies regardless.
+> An extension co-signer parsing this sees the curve where it might expect a chain
+> name; worth aligning when the extension-interop layer lands (give the sign API a
+> `chain` field, or have `session-parse.ts` tolerate a curve value). The golden
+> pins the current shape so the change is visible if/when it's made.
+
 ### 5.3 L3 — Cross-client interop (CLI as automated peer)
 
 **What:** Drive a real ceremony where the CLI supplies N−1 peers and the **client under

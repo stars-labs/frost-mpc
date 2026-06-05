@@ -1356,11 +1356,12 @@
                 keystoreStatus = response.status;
                 console.log("[UI] Keystore status:", keystoreStatus);
                 
-                // Check if we need to prompt for password
-                if (keystoreStatus.initialized && keystoreStatus.locked) {
-                    showUnlockPrompt();
-                }
-                
+                // Do NOT auto-pop the Unlock modal on popup open — it was
+                // forcing a password prompt every time the popup opened with a
+                // locked wallet, blocking the UI (incl. Settings). The user
+                // unlocks on demand via the header unlock (🔓) button, or when
+                // an action that needs the key prompts for it.
+
                 // Check for pending imports
                 checkPendingImports();
             }
@@ -1412,8 +1413,8 @@
                 checkPendingImports();
             } else {
                 console.error("[UI] Failed to unlock keystore:", response?.error);
-                // Show error and prompt again
-                setTimeout(() => showUnlockPrompt(), 500);
+                // Don't auto-re-pop the modal (it created an inescapable loop on
+                // a wrong password). The user can retry via the header 🔓 button.
             }
         });
     }
@@ -1534,6 +1535,17 @@
                 aria-label="Lock wallet"
             >
                 <Icon name="lock" size={18} />
+            </button>
+        {:else if keystoreStatus.initialized && keystoreStatus.locked}
+            <!-- On-demand unlock — we no longer auto-pop the password modal on
+                 open, so this is how you unlock when you actually want to. -->
+            <button
+                class="icon-btn"
+                on:click={showUnlockPrompt}
+                title="Unlock wallet"
+                aria-label="Unlock wallet"
+            >
+                <Icon name="lock-open" size={18} />
             </button>
         {/if}
 

@@ -13,7 +13,7 @@ use std::sync::{Arc, Mutex};
 
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::sync::mpsc::{unbounded_channel, UnboundedSender};
-use tui_node::elm::headless::spawn_secp256k1;
+use tui_node::elm::headless::{spawn_ed25519, spawn_secp256k1};
 use tui_node::elm::model::{WalletConfig, WalletMode};
 use tui_node::elm::{Message, Model};
 
@@ -26,7 +26,8 @@ pub struct ServeOpts {
     pub device_id: String,
     pub keystore_path: String,
     pub signal_url: String,
-    /// secp256k1 only for now (the runner ciphersuite is fixed at spawn).
+    /// "secp256k1" (default) or "ed25519" — the runner ciphersuite, fixed at
+    /// spawn. ed25519 produces standard RFC-8032 signatures.
     pub curve: String,
     /// Auto-approval policy for incoming signing requests (disabled unless
     /// the operator opts in). Shared so the runner callback can consume it.
@@ -80,11 +81,7 @@ pub async fn serve(opts: ServeOpts) -> anyhow::Result<()> {
     let approve_sender_cb = approve_sender.clone();
     let policy = opts.auto_approve.clone();
     let approve_pw = opts.approve_password.clone();
-    let runner_tx = spawn_secp256k1(
-        opts.device_id.clone(),
-        opts.keystore_path.clone(),
-        opts.signal_url.clone(),
-        move |model: &Model, msg: Option<&Message>| {
+    let cb = move |model: &Model, msg: Option<&Message>| {
             let mut b = bridge_for_sync.lock().unwrap();
             let events = b.on_sync(model, msg);
             *snapshot_for_sync.lock().unwrap() = b.snapshot(model);
@@ -129,8 +126,23 @@ pub async fn serve(opts: ServeOpts) -> anyhow::Result<()> {
                 }
                 let _ = out_for_sync.send(ev);
             }
-        },
-    );
+        }
+    ;
+    let runner_tx = if opts.curve == "ed25519" {
+        spawn_ed25519(
+            opts.device_id.clone(),
+            opts.keystore_path.clone(),
+            opts.signal_url.clone(),
+            cb,
+        )
+    } else {
+        spawn_secp256k1(
+            opts.device_id.clone(),
+            opts.keystore_path.clone(),
+            opts.signal_url.clone(),
+            cb,
+        )
+    };
     let _ = approve_sender.set(runner_tx.clone());
 
     // --- input loop: stdin JSONL → runner / snapshot replies ---

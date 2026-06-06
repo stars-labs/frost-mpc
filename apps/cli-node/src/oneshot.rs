@@ -8,7 +8,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
-use tui_node::elm::headless::spawn_secp256k1;
+use tui_node::elm::headless::{spawn_ed25519, spawn_secp256k1};
 use tui_node::elm::model::{WalletConfig, WalletMode};
 use tui_node::elm::{Message, Model};
 
@@ -21,23 +21,37 @@ pub struct OneShotOpts {
     pub keystore_path: String,
     pub signal_url: String,
     pub timeout_secs: u64,
+    /// Ciphersuite: "secp256k1" (default) or "ed25519". ed25519 produces a
+    /// standard RFC-8032 signature that any off-the-shelf verifier (and Solana)
+    /// can check — the runner ciphersuite is fixed at spawn.
+    pub curve: String,
 }
 
 /// Spawn a runner whose events stream to the returned receiver.
 fn start(opts: &OneShotOpts) -> (UnboundedSender<Message>, UnboundedReceiver<CliEvent>) {
     let bridge = Arc::new(Mutex::new(Bridge::new()));
     let (ev_tx, ev_rx) = unbounded_channel::<CliEvent>();
-    let tx = spawn_secp256k1(
-        opts.device_id.clone(),
-        opts.keystore_path.clone(),
-        opts.signal_url.clone(),
-        move |model: &Model, msg: Option<&Message>| {
-            let events = bridge.lock().unwrap().on_sync(model, msg);
-            for e in events {
-                let _ = ev_tx.send(e);
-            }
-        },
-    );
+    let cb = move |model: &Model, msg: Option<&Message>| {
+        let events = bridge.lock().unwrap().on_sync(model, msg);
+        for e in events {
+            let _ = ev_tx.send(e);
+        }
+    };
+    let tx = if opts.curve == "ed25519" {
+        spawn_ed25519(
+            opts.device_id.clone(),
+            opts.keystore_path.clone(),
+            opts.signal_url.clone(),
+            cb,
+        )
+    } else {
+        spawn_secp256k1(
+            opts.device_id.clone(),
+            opts.keystore_path.clone(),
+            opts.signal_url.clone(),
+            cb,
+        )
+    };
     (tx, ev_rx)
 }
 

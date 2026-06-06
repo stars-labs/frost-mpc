@@ -73,6 +73,12 @@ struct OneShot {
     room: Option<String>,
     #[arg(long, default_value_t = 90)]
     timeout: u64,
+    /// Ciphersuite: secp256k1 (default; Ethereum/Bitcoin) or ed25519 (Solana).
+    /// ed25519 yields a standard RFC-8032 signature that ANY off-the-shelf
+    /// verifier (and Solana) can check — ideal for an independently-checkable
+    /// demo. All participants of one ceremony must use the same curve.
+    #[arg(long, default_value = "secp256k1")]
+    curve: String,
     #[arg(long, default_value = "")]
     log_level: String,
 }
@@ -150,6 +156,7 @@ impl OneShot {
             keystore_path: expand_tilde(&self.keystore),
             signal_url: with_room(&self.signal_server, self.room.as_deref()),
             timeout_secs: self.timeout,
+            curve: self.curve.clone(),
         }
     }
 }
@@ -212,7 +219,8 @@ struct ServeArgs {
     /// participants of a ceremony must use the same strong id (e.g. a UUID).
     #[arg(long)]
     room: Option<String>,
-    /// Ciphersuite (P1: secp256k1 only).
+    /// Ciphersuite: secp256k1 (default) or ed25519 (Solana; RFC-8032
+    /// signatures any standard verifier accepts). Same curve on all nodes.
     #[arg(long, default_value = "secp256k1")]
     curve: String,
     /// tracing filter (stderr).

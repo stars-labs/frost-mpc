@@ -1817,6 +1817,7 @@ dependencies = [
  "fiat-crypto",
  "rand_core 0.6.4",
  "rustc_version",
+ "serde",
  "subtle",
  "zeroize",
 ]
@@ -2850,6 +2851,20 @@ dependencies = [
  "frost-core",
  "hex",
  "rand_core 0.6.4",
+]
+
+[[package]]
+name = "frost-ristretto255"
+version = "2.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6dc30519460bac68ea55671f9096b3fdc2f938d054a96baf559c6322b6de146f"
+dependencies = [
+ "curve25519-dalek",
+ "document-features",
+ "frost-core",
+ "frost-rerandomized",
+ "rand_core 0.6.4",
+ "sha2 0.10.9",
 ]
 
 [[package]]
@@ -4608,6 +4623,7 @@ dependencies = [
  "clap",
  "frost-core",
  "frost-ed25519",
+ "frost-ristretto255",
  "frost-secp256k1",
  "getrandom 0.4.2",
  "hex",

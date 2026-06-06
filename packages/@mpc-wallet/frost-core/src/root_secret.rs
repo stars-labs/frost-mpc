@@ -122,6 +122,17 @@ impl RootSecret {
         self.derive_rng(&dkg_info(curve_tag, account))
     }
 
+    /// Derive the raw 32-byte HKDF seed for `(curve, account)` — the same
+    /// material [`derive_dkg_rng`] feeds into ChaCha20. Exposed for callers
+    /// (e.g. the curve registry) that need the seed bytes directly.
+    pub fn derive_seed(&self, curve_tag: &str, account: u32) -> Result<[u8; 32]> {
+        let hk = Hkdf::<Sha256>::new(None, &self.0);
+        let mut seed = [0u8; 32];
+        hk.expand(dkg_info(curve_tag, account).as_bytes(), &mut seed)
+            .map_err(|e| FrostError::DkgError(format!("HKDF expand failed: {}", e)))?;
+        Ok(seed)
+    }
+
     /// Derive a deterministic RNG for the ed25519 curve DKG (account 0).
     pub fn derive_ed25519_rng(&self) -> Result<ChaCha20Rng> {
         self.derive_dkg_rng(CURVE_ED25519, 0)

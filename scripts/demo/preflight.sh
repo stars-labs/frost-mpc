@@ -53,12 +53,31 @@ done
 
 hdr "3. Live signal server reachability ($SIGNAL)"
 host="$(printf '%s' "$SIGNAL" | sed -E 's#^wss?://##; s#[:/].*$##')"
+REACHABLE=0
 if command -v curl >/dev/null && curl -sS --max-time 8 -o /dev/null "https://${host}" 2>/dev/null; then
-  ok "reachable: $host (TLS responds)"
+  ok "reachable: $host (TLS responds)"; REACHABLE=1
 elif ping -c1 -W3 "$host" >/dev/null 2>&1; then
-  ok "reachable: $host (ping)"
+  ok "reachable: $host (ping)"; REACHABLE=1
 else
   bad "could NOT reach $host — use the LOCAL signal-server fallback (see runbook)"
+fi
+
+# A ping isn't a ceremony. This step runs the REAL demo path: a full DKG +
+# threshold signing THROUGH $SIGNAL with a strong room (the hosted worker
+# REQUIRES one — #31). If green, the exact thing you'll do on stage works end
+# to end; if red, you find out now, not in front of anyone.
+hdr "4. Live ceremony through the server (real DKG + sign, room-scoped)"
+if [ "$REACHABLE" = "1" ]; then
+  # Strong room (>=16 chars of [A-Za-z0-9_-]); throwaway, isolated per run.
+  ROOM="preflight-$(date +%s)-${RANDOM}${RANDOM}${RANDOM}"
+  if $CLI simulate --nodes 2 --threshold 2 --sign "preflight check" \
+        --signal-server "$SIGNAL" --room "$ROOM" --timeout 90 >/dev/null 2>&1; then
+    ok "real 2-of-2 DKG + signing through $SIGNAL verifies (room-scoped)"
+  else
+    bad "ceremony through $SIGNAL FAILED — the live demo path is broken; fall back to a local server (rung 1) or NUCLEAR simulate (rung 3)"
+  fi
+else
+  printf '  (skipped — server unreachable; the local stack above already passed)\n'
 fi
 
 hdr "Summary"

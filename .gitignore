@@ -93,3 +93,9 @@ public/index.d.ts
 # Usage tracking
 usage_tracking*.json
 uploads/
+# Python bytecode (demo scripts)
+__pycache__/
+*.pyc
+
+# Cloudflare wrangler local state
+.wrangler/

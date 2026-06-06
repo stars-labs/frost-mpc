@@ -40,6 +40,7 @@ fn ident<C: Ciphersuite>(i: u16) -> Result<Identifier<C>> {
     Identifier::<C>::try_from(i).map_err(|e| FrostError::InvalidIdentifier(format!("{i}: {e}")))
 }
 
+#[cfg(test)]
 fn group_key_hex<C: Ciphersuite>(p: &PublicKeyPackage<C>) -> Result<String> {
     p.verifying_key()
         .serialize()

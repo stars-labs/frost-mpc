@@ -4,7 +4,6 @@ use slint::Weak;
 use std::sync::Arc;
 use tokio::sync::mpsc::UnboundedSender;
 use tui_node::core::{
-    connection_manager::ConnectionManager,
     dkg_manager::DkgManager,
     offline_manager::OfflineManager,
     session_manager::SessionManager,
@@ -30,7 +29,6 @@ const DEFAULT_THRESHOLD: u16 = 2;
 /// Core adapter that manages all the shared business logic
 pub struct CoreAdapter {
     pub state: Arc<CoreState>,
-    pub connection_manager: Arc<ConnectionManager>,
     pub session_manager: Arc<SessionManager>,
     pub dkg_manager: Arc<DkgManager>,
     pub wallet_manager: Arc<WalletManager>,
@@ -126,7 +124,6 @@ impl CoreAdapter {
         };
 
         Self {
-            connection_manager: Arc::new(ConnectionManager::new(state.clone(), ui_callback.clone())),
             session_manager: Arc::new(SessionManager::new(state.clone(), ui_callback.clone())),
             dkg_manager: Arc::new(DkgManager::new(state.clone(), ui_callback.clone())),
             wallet_manager: Arc::new(WalletManager::new(state.clone(), ui_callback.clone())),

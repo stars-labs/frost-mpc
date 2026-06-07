@@ -222,6 +222,17 @@ pub enum WebRTCMessage<C: Ciphersuite> {
     DkgRound2Package {
         package: frost_core::keys::dkg::round2::Package<C>,
     },
+    /// Reshare (share refresh) round-1 package — broadcast to all retained
+    /// peers, exactly like `DkgRound1Package`. Refresh reuses frost's dkg
+    /// round-1 Package type (#45).
+    ReshareRound1Package {
+        package: frost_core::keys::dkg::round1::Package<C>,
+    },
+    /// Reshare round-2 package — sent point-to-point to one recipient (the
+    /// sender is the data-channel peer), mirroring `DkgRound2Package`.
+    ReshareRound2Package {
+        package: frost_core::keys::dkg::round2::Package<C>,
+    },
     /// Data channel opened notification
     ChannelOpen {
         device_id: String,

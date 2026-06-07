@@ -129,6 +129,44 @@ pub async fn dispatch_data_channel_msg<C>(
                 }
                 return;
             }
+            // Reshare-round frames (#45): same shape as DKG rounds, different
+            // prefix. Routed to the reshare driver via Message::ProcessReshareRound*.
+            if let Some(package_data) = msg_text.strip_prefix("RESHARE_ROUND1:") {
+                info!("🔄 Received RESHARE Round 1 package from {}", device_id_recv);
+                match BASE64.decode(package_data) {
+                    Ok(package_bytes) => {
+                        if let Some(tx) = &ui_msg_tx {
+                            let _ = tx.send(crate::elm::message::Message::ProcessReshareRound1 {
+                                from_device: device_id_recv.clone(),
+                                package_bytes,
+                            });
+                        }
+                    }
+                    Err(e) => error!(
+                        "Failed to base64-decode RESHARE Round 1 package from {}: {}",
+                        device_id_recv, e
+                    ),
+                }
+                return;
+            }
+            if let Some(package_data) = msg_text.strip_prefix("RESHARE_ROUND2:") {
+                info!("🔄 Received RESHARE Round 2 package from {}", device_id_recv);
+                match BASE64.decode(package_data) {
+                    Ok(package_bytes) => {
+                        if let Some(tx) = &ui_msg_tx {
+                            let _ = tx.send(crate::elm::message::Message::ProcessReshareRound2 {
+                                from_device: device_id_recv.clone(),
+                                package_bytes,
+                            });
+                        }
+                    }
+                    Err(e) => error!(
+                        "Failed to base64-decode RESHARE Round 2 package from {}: {}",
+                        device_id_recv, e
+                    ),
+                }
+                return;
+            }
             // Phase C: signing-round frames. Same shape as DKG rounds,
             // different prefix. Constants in `protocal::signing` keep the
             // string literals single-sourced.

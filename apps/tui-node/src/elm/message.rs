@@ -133,6 +133,8 @@ pub enum Message {
     StartDKGProtocol,  // Trigger the actual DKG protocol when mesh is ready
     ProcessDKGRound1 { from_device: String, package_bytes: Vec<u8> },  // Process received DKG Round 1 package
     ProcessDKGRound2 { from_device: String, package_bytes: Vec<u8> },  // Process received DKG Round 2 package
+    ProcessReshareRound1 { from_device: String, package_bytes: Vec<u8> }, // Reshare round 1 from a peer (#45)
+    ProcessReshareRound2 { from_device: String, package_bytes: Vec<u8> }, // Reshare round 2 from a peer (#45)
     DKGKeyGenerated { group_pubkey_hex: String },                      // Final FROST key ready
     /// Fires after `Command::UnlockWallet` successfully decrypted the
     /// wallet file and stashed `KeyPackage` + `PublicKeyPackage` on

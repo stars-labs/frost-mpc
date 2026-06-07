@@ -1,5 +1,7 @@
 # Dress-Rehearsal Checklist — Live MPC Demo
 
+> 中文 / Chinese: [DEMO_REHEARSAL_CHECKLIST.zh.md](./DEMO_REHEARSAL_CHECKLIST.zh.md)
+
 Run this **end to end at least twice** on the **actual demo devices and network** before
 investors. The goal isn't to learn the commands — it's to surface the boring failures
 (a typo'd room, a duplicate device id, a dead Wi‑Fi, a cold binary) **before** they happen

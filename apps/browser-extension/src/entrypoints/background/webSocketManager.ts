@@ -138,6 +138,26 @@ export class WebSocketManager {
     }
 
     /**
+     * Tear down the current connection (if any) and reconnect using a freshly
+     * resolved signal-server URL. This is how a room / signal-server override
+     * saved AFTER startup takes effect: the startup connect runs before any room
+     * is set, so it dials a roomless URL the multi-tenant server rejects (#31).
+     * Re-resolving here picks up the saved `?room=…` so the socket is accepted.
+     * Wired to the popup's "Save room" action (Settings) and used by the L3c
+     * interop harness so the extension joins the co-signers' room (#33).
+     */
+    async reconnect(): Promise<void> {
+        console.log("[WebSocketManager] reconnect requested — re-resolving URL with saved room");
+        try {
+            this.wsClient?.disconnect();
+        } catch (e) {
+            console.warn("[WebSocketManager] reconnect: error closing existing client:", e);
+        }
+        const url = await getSignalServerUrl();
+        await this.initialize(url, this.appState.deviceId || "mpc-2");
+    }
+
+    /**
      * Set up WebSocket event handlers
      */
     private setupEventHandlers(): void {

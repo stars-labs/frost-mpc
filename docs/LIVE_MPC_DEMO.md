@@ -1,5 +1,7 @@
 # Live MPC Demo — Raw CLI, Independently Verifiable
 
+> 中文 / Chinese: [LIVE_MPC_DEMO.zh.md](./LIVE_MPC_DEMO.zh.md)
+
 **Audience:** the person running the demo, and the (skeptical) investors watching.
 **Goal:** prove, in front of a sceptic, that this is **real threshold cryptography across
 real, separate machines** — not a script pretending. Every command is raw and visible;

@@ -1,5 +1,7 @@
 # Investor Demo Runbook — multi-device MPC wallet
 
+> 中文 / Chinese: [INVESTOR_DEMO.zh.md](./INVESTOR_DEMO.zh.md)
+
 Goal: in front of investors, several people on **their own devices** jointly
 create a wallet (no single person ever holds the private key), sign together,
 do it air-gapped, and show multi-chain addresses — **without anything blowing

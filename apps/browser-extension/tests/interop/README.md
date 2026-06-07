@@ -47,7 +47,29 @@ INTEROP_SIGNAL=wss://panda.qzz.io bun run test:interop
 INTEROP_SIGNAL=ws://127.0.0.1:8787 bun run test:interop   # local wrangler dev
 ```
 
-Env knobs: `INTEROP_SIGNAL`, `INTEROP_CURVE` (secp256k1|ed25519), `INTEROP_PW`.
+Env knobs: `INTEROP_SIGNAL`, `INTEROP_CURVE` (secp256k1|ed25519), `INTEROP_PW`,
+`PLAYWRIGHT_CHROME_PATH`.
+
+## Environment requirements (verified)
+
+This layer needs **headed Chrome with a real X display** — there is no
+display-less path:
+
+- **Headed is mandatory.** Chromium will not load an unpacked MV3 extension's
+  background **service worker** in `--headless=new` (verified empty service-worker
+  set after 45 s on Chrome 148, no error). So a display-less runner must wrap the
+  run in a virtual framebuffer: `xvfb-run -a bun run test:interop`.
+- **System Chrome on Nix.** Playwright's bundled Chromium fails to start under the
+  Nix dev shell (`error while loading shared libraries: libglib-2.0.so.0`). Point
+  the harness at the Nix-provided browser instead:
+  `PLAYWRIGHT_CHROME_PATH=$(which google-chrome-stable)` — `fixtures.ts` honours it.
+
+So a complete display-less invocation is:
+
+```bash
+PLAYWRIGHT_CHROME_PATH=$(which google-chrome-stable) \
+  xvfb-run -a bun run test:interop:smoke
+```
 
 ## First-run selector pass
 
@@ -58,7 +80,8 @@ room-config path (`room-input` / `room-status` data-testids) is already stable.
 
 ## Status
 
-This is the **scheduled / pre-release** layer (needs a browser + a running
+This is the **scheduled / pre-release** layer (needs headed Chrome + a running
 server), per the phased plan in `docs/cli-conformance-testing.md` §10 (Phase 5).
-The boundary smoke is CI-able on any headed runner; the full flow runs nightly /
-before release.
+The boundary smoke is CI-able on any runner with an X display (or `xvfb-run`);
+the full flow runs nightly / before release. It does **not** run in headless-only
+sandboxes — see "Environment requirements" above.

@@ -161,6 +161,219 @@ pub fn clear_reshare_state<C: Ciphersuite>(state: &mut AppState<C>) {
     state.reshare_in_progress = false;
 }
 
+// =====================================================================
+// Async mesh orchestration (#45 4b). Same-set reshare reusing the live
+// post-DKG WebRTC mesh: each node triggers round 1, the round packages flow
+// over the existing data channels (RESHARE_ROUND1/2: frames, routed in
+// network/webrtc.rs), and each node finalizes to the unchanged group key.
+//
+// Scope: same participant set (every original participant stays). Reshare with
+// a *reduced* set (device removal) needs a fresh announce/join to form a new
+// mesh — tracked in #56. Keystore persistence of the refreshed share also needs
+// password-stash plumbing (#56); finalize here swaps the in-memory share and
+// emits ReshareComplete (enough to keep signing with the new shares).
+// =====================================================================
+
+use crate::elm::message::Message;
+use crate::protocal::signal::WebRTCMessage;
+use std::sync::Arc;
+use tokio::sync::Mutex;
+use tokio::sync::mpsc::UnboundedSender;
+use tracing::{error, info};
+
+fn b64(bytes: &[u8]) -> String {
+    use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
+    BASE64.encode(bytes)
+}
+
+/// Begin a reshare on this node: refresh part 1 over the current session/mesh,
+/// then broadcast our round-1 package to the retained peers.
+pub async fn handle_trigger_reshare_round1<C>(state: Arc<Mutex<AppState<C>>>, self_device_id: String)
+where
+    C: Ciphersuite + Send + Sync + 'static,
+{
+    let (participants, pkg_bytes) = {
+        let mut guard = state.lock().await;
+        let session = match &guard.session {
+            Some(s) => s.clone(),
+            None => {
+                error!("reshare round1: no active session");
+                return;
+            }
+        };
+        if guard.reshare_original_participants.is_empty() {
+            guard.reshare_original_participants = session.participants.clone();
+        }
+        let original = guard.reshare_original_participants.clone();
+        let my_id = match reshare_identifier::<C>(&original, &self_device_id) {
+            Some(id) => id,
+            None => {
+                error!("reshare round1: {} not in original participants", self_device_id);
+                return;
+            }
+        };
+        let pkg = match reshare_part1(&mut guard, my_id, session.total, session.threshold) {
+            Ok(p) => p,
+            Err(e) => {
+                error!("reshare round1: {e}");
+                return;
+            }
+        };
+        let bytes = match pkg.serialize() {
+            Ok(b) => b,
+            Err(e) => {
+                error!("reshare round1 serialize: {e}");
+                return;
+            }
+        };
+        (session.participants.clone(), bytes)
+    };
+
+    let msg = WebRTCMessage::<C>::SimpleMessage { text: format!("RESHARE_ROUND1:{}", b64(&pkg_bytes)) };
+    for peer in participants.iter().filter(|p| **p != self_device_id) {
+        let _ = crate::utils::device::send_webrtc_message(peer, &msg, state.clone()).await;
+    }
+    info!("📡 reshare round-1 broadcast to {} peers", participants.len().saturating_sub(1));
+}
+
+/// Ingest a peer's round-1 package; when all peers' are in, advance to round 2.
+pub async fn process_reshare_round1<C>(
+    state: Arc<Mutex<AppState<C>>>,
+    from_device_id: String,
+    package_bytes: Vec<u8>,
+) where
+    C: Ciphersuite + Send + Sync + 'static,
+{
+    let advance = {
+        let mut guard = state.lock().await;
+        let session = match &guard.session {
+            Some(s) => s.clone(),
+            None => return,
+        };
+        // A peer's round-1 may arrive before our own trigger ran; seed the
+        // original participant set from the session so the id map works either way.
+        if guard.reshare_original_participants.is_empty() {
+            guard.reshare_original_participants = session.participants.clone();
+        }
+        let original = guard.reshare_original_participants.clone();
+        let sender = match reshare_identifier::<C>(&original, &from_device_id) {
+            Some(id) => id,
+            None => {
+                error!("reshare round1 from unknown device {from_device_id}");
+                return;
+            }
+        };
+        let pkg = match frost_core::keys::dkg::round1::Package::<C>::deserialize(&package_bytes) {
+            Ok(p) => p,
+            Err(e) => {
+                error!("reshare round1 deserialize: {e}");
+                return;
+            }
+        };
+        add_reshare_round1(&mut guard, sender, pkg);
+        let need = (session.total as usize).saturating_sub(1);
+        guard.reshare_round1_packages.len() >= need && need > 0
+    };
+    if advance {
+        let self_id = state.lock().await.device_id.clone();
+        handle_trigger_reshare_round2(state, self_id).await;
+    }
+}
+
+/// Produce round-2 packages and send each retained peer its own.
+pub async fn handle_trigger_reshare_round2<C>(state: Arc<Mutex<AppState<C>>>, self_device_id: String)
+where
+    C: Ciphersuite + Send + Sync + 'static,
+{
+    let (participants, original, per_recipient) = {
+        let mut guard = state.lock().await;
+        let session = match &guard.session {
+            Some(s) => s.clone(),
+            None => return,
+        };
+        let original = guard.reshare_original_participants.clone();
+        let out = match reshare_part2(&mut guard) {
+            Ok(o) => o,
+            Err(e) => {
+                error!("reshare round2: {e}");
+                return;
+            }
+        };
+        (session.participants.clone(), original, out)
+    };
+
+    for peer in participants.iter().filter(|p| **p != self_device_id) {
+        let pid = match reshare_identifier::<C>(&original, peer) {
+            Some(id) => id,
+            None => continue,
+        };
+        if let Some(pkg) = per_recipient.get(&pid) {
+            if let Ok(bytes) = pkg.serialize() {
+                let msg = WebRTCMessage::<C>::SimpleMessage {
+                    text: format!("RESHARE_ROUND2:{}", b64(&bytes)),
+                };
+                let _ = crate::utils::device::send_webrtc_message(peer, &msg, state.clone()).await;
+            }
+        }
+    }
+}
+
+/// Ingest a peer's round-2 package; when all are in, finalize + emit.
+pub async fn process_reshare_round2<C>(
+    state: Arc<Mutex<AppState<C>>>,
+    from_device_id: String,
+    package_bytes: Vec<u8>,
+    tx: UnboundedSender<Message>,
+) where
+    C: Ciphersuite + Send + Sync + 'static,
+{
+    let ready = {
+        let mut guard = state.lock().await;
+        let session = match &guard.session {
+            Some(s) => s.clone(),
+            None => return,
+        };
+        let original = guard.reshare_original_participants.clone();
+        let sender = match reshare_identifier::<C>(&original, &from_device_id) {
+            Some(id) => id,
+            None => {
+                error!("reshare round2 from unknown device {from_device_id}");
+                return;
+            }
+        };
+        let pkg = match frost_core::keys::dkg::round2::Package::<C>::deserialize(&package_bytes) {
+            Ok(p) => p,
+            Err(e) => {
+                error!("reshare round2 deserialize: {e}");
+                return;
+            }
+        };
+        add_reshare_round2(&mut guard, sender, pkg);
+        let need = (session.total as usize).saturating_sub(1);
+        guard.reshare_round2_packages.len() >= need && need > 0
+    };
+    if ready {
+        let mut guard = state.lock().await;
+        match finalize_reshare(&mut guard) {
+            Ok((_new_key, new_pub)) => {
+                let group_hex = new_pub
+                    .verifying_key()
+                    .serialize()
+                    .map(|b| hex::encode(b))
+                    .unwrap_or_default();
+                let wallet_id = guard.reshare_wallet_id.clone().unwrap_or_default();
+                info!("✅ reshare complete; group key preserved = {}", group_hex);
+                // NOTE (#56): persist the refreshed share via
+                // Keystore::update_wallet_share once the reshare password is
+                // stashed on AppState. Until then the new share lives in-memory
+                // (AppState.key_package) — signing keeps working this session.
+                let _ = tx.send(Message::ReshareComplete { wallet_id, group_public_key: group_hex });
+            }
+            Err(e) => error!("reshare finalize: {e}"),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

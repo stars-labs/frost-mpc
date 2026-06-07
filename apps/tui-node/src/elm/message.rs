@@ -45,6 +45,18 @@ pub enum Message {
         encoding: String,
         password: String,
     },
+    /// Headless trigger: begin a same-set reshare on this node, reusing the
+    /// current session's live mesh (#45). Every retained node receives this to
+    /// start its round 1.
+    HeadlessReshare {
+        password: String,
+    },
+    /// A reshare ceremony finished on this node (group key preserved). Tapped by
+    /// the CLI bridge / simulate harness.
+    ReshareComplete {
+        wallet_id: String,
+        group_public_key: String,
+    },
     /// Request the active-session replay (`RequestActiveSessions`) over the
     /// primary WebSocket. The interactive TUI fires this implicitly on
     /// entering the Join-Session screen; headless front-ends (native, CLI)

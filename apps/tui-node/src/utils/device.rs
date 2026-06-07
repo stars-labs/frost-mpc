@@ -451,6 +451,18 @@ pub async fn setup_data_channel_callbacks<C>(
                                         package,
                                     });
                             }
+                            WebRTCMessage::ReshareRound1Package { .. }
+                            | WebRTCMessage::ReshareRound2Package { .. } => {
+                                // The reshare ceremony (#45) runs on the elm headless
+                                // path (network/webrtc.rs → Message::ProcessReshareRound*).
+                                // This legacy ratatui InternalCommand path doesn't drive
+                                // reshare yet (phase 5), so ignore here.
+                                tracing::debug!(
+                                    "reshare round package from {} on legacy device.rs path — ignored \
+                                     (reshare runs via the elm path)",
+                                    device_id
+                                );
+                            }
                             WebRTCMessage::SimpleMessage { text } => {
                                 // Parse DKG messages from SimpleMessage format
                                 if text.starts_with("DKG_ROUND1:") {

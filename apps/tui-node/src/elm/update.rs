@@ -1478,6 +1478,27 @@ pub fn update(model: &mut Model, msg: Message) -> Option<Command> {
             })
         }
 
+        Message::ProcessReshareRound1 { from_device, package_bytes } => {
+            // Transport wired (#45 phase 4b-1). The command handlers that drive
+            // `protocal::reshare` over the mesh land in 4b-2 (#56); until then a
+            // received reshare round-1 package is logged and dropped. Nothing
+            // initiates a reshare yet (StartReshare is 4b-2), so none arrive.
+            info!(
+                "reshare round-1 from {} ({} bytes) — driver not yet wired (#56)",
+                from_device,
+                package_bytes.len()
+            );
+            None
+        }
+        Message::ProcessReshareRound2 { from_device, package_bytes } => {
+            info!(
+                "reshare round-2 from {} ({} bytes) — driver not yet wired (#56)",
+                from_device,
+                package_bytes.len()
+            );
+            None
+        }
+
         Message::ProcessDKGRound2 { from_device, package_bytes } => {
             // First peer Round 2 package → we've clearly advanced past Round 1.
             // Update the UI label. Idempotent: we only transition on the first

@@ -87,3 +87,32 @@ async fn dkg_then_sign_2_of_2_verifies() {
         &result.signature[..16.min(result.signature.len())]
     );
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 6)]
+#[ignore = "real WebRTC reshare over loopback; run with --ignored"]
+async fn reshare_then_sign_2_of_3_preserves_group_key() {
+    // #45 4b: networked same-set reshare over the live mesh. After DKG, every
+    // node refreshes its share; the group key (address) must be unchanged and a
+    // threshold signature with the REFRESHED shares must verify.
+    init_logs();
+    let r = mpc_wallet_cli::simulate::run_reshare_e2e(
+        mpc_wallet_cli::simulate::SimulateOpts {
+            nodes: 3,
+            threshold: 2,
+            curve: "secp256k1".into(),
+            signal_url: None,
+            timeout_secs: 120,
+        },
+        "reshared then signed",
+    )
+    .await
+    .expect("reshare e2e ran");
+
+    assert!(r.key_preserved, "group key changed across reshare: {r:?}");
+    assert_eq!(r.dkg_group_public_key, r.reshare_group_public_key);
+    assert!(r.signed_after_reshare, "refreshed shares failed to sign: {r:?}");
+    eprintln!(
+        "✅ reshare e2e ok in {}ms, group preserved = {}",
+        r.elapsed_ms, r.dkg_group_public_key
+    );
+}

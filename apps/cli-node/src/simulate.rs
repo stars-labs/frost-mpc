@@ -81,6 +81,7 @@ enum Evt {
     SessionDiscovered { id: String, signing: bool },
     DkgDone { wallet_id: String, group_key: String },
     SignDone { signature: String, message: String },
+    ReshareDone { group_key: String },
 }
 
 fn watcher() -> (
@@ -109,6 +110,11 @@ fn watcher() -> (
                     let _ = tx.send(Evt::DkgDone {
                         wallet_id: wallet_id.clone(),
                         group_key: group_pubkey_hex.clone(),
+                    });
+                }
+                Message::ReshareComplete { group_public_key, .. } => {
+                    let _ = tx.send(Evt::ReshareDone {
+                        group_key: group_public_key.clone(),
                     });
                 }
                 Message::SigningComplete {
@@ -372,6 +378,87 @@ pub async fn run_signing_simulation_enc(
         signature,
         signed_message,
         verified,
+        elapsed_ms: started.elapsed().as_millis(),
+    })
+}
+
+/// Outcome of a networked reshare end-to-end run (#45 4b).
+#[derive(Debug, Serialize)]
+pub struct ReshareE2eResult {
+    pub nodes: usize,
+    pub threshold: u16,
+    pub curve: String,
+    pub dkg_group_public_key: String,
+    /// Group key reported by every node after the reshare.
+    pub reshare_group_public_key: String,
+    /// True iff every node's post-reshare group key == the DKG group key.
+    pub key_preserved: bool,
+    /// True iff a threshold signature with the REFRESHED shares verifies.
+    pub signed_after_reshare: bool,
+    pub elapsed_ms: u128,
+}
+
+impl ReshareE2eResult {
+    pub fn to_json(&self) -> String {
+        serde_json::to_string_pretty(self).unwrap_or_default()
+    }
+    pub fn ok(&self) -> bool {
+        self.key_preserved && self.signed_after_reshare
+    }
+}
+
+/// Networked reshare end to end over the real WebRTC mesh: run DKG, then trigger
+/// a same-set reshare on every node (reusing the live mesh), confirm all nodes
+/// preserve the group key, and finally sign with the REFRESHED shares + verify.
+pub async fn run_reshare_e2e(opts: SimulateOpts, message: &str) -> anyhow::Result<ReshareE2eResult> {
+    let nodes = opts.nodes;
+    let threshold = opts.threshold;
+    let started = Instant::now();
+    let mut c = dkg_cluster(&opts).await?;
+    if !c.agreed {
+        anyhow::bail!("DKG did not agree; aborting reshare");
+    }
+    let dkg_group_key = c.group_key.clone();
+    let wallet_id = c.outcomes[0].wallet_id.clone();
+
+    // Trigger a reshare on every node — each refreshes its share over the mesh.
+    for s in c.senders.iter() {
+        s.send(Message::HeadlessReshare { password: "sim-password-0".into() })?;
+    }
+    // Every node must report reshare completion with the unchanged group key.
+    let mut reshare_keys = Vec::new();
+    for rx in c.receivers.iter_mut() {
+        let done = wait_for(rx, opts.timeout_secs, |e| matches!(e, Evt::ReshareDone { .. })).await?;
+        if let Evt::ReshareDone { group_key } = done {
+            reshare_keys.push(group_key);
+        }
+    }
+    let key_preserved = reshare_keys.len() == nodes
+        && reshare_keys.iter().all(|k| *k == dkg_group_key);
+    let reshare_group_key = reshare_keys.first().cloned().unwrap_or_default();
+
+    // Sign with the REFRESHED shares and verify against the (unchanged) group key.
+    let (signature, signed_message) = drive_signing(
+        &c.senders,
+        &mut c.receivers,
+        wallet_id,
+        message,
+        "utf8",
+        threshold,
+        opts.timeout_secs,
+    )
+    .await?;
+    let signed_after_reshare =
+        verify_signature(&opts.curve, &dkg_group_key, &signed_message, &signature).unwrap_or(false);
+
+    Ok(ReshareE2eResult {
+        nodes,
+        threshold,
+        curve: opts.curve.clone(),
+        dkg_group_public_key: dkg_group_key,
+        reshare_group_public_key: reshare_group_key,
+        key_preserved,
+        signed_after_reshare,
         elapsed_ms: started.elapsed().as_millis(),
     })
 }

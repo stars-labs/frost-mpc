@@ -59,6 +59,13 @@ pub enum Command {
     /// Calls `protocal::dkg::process_dkg_round2` which finalises the key with
     /// `part3` once all Round 2 packages for us have arrived.
     ProcessDKGRound2 { from_device: String, package_bytes: Vec<u8> },
+    /// Begin a same-set reshare on this node (#45): refresh part 1 over the
+    /// current session's live mesh, then broadcast. Triggered by HeadlessReshare.
+    StartReshare { password: String },
+    /// Process a peer's reshare round-1 / round-2 package received over a data
+    /// channel — drives `protocal::reshare`.
+    ProcessReshareRound1 { from_device: String, package_bytes: Vec<u8> },
+    ProcessReshareRound2 { from_device: String, package_bytes: Vec<u8> },
     JoinDKG {
         session_id: String,
         /// Session shape known to the joiner from the discovered announcement.
@@ -852,6 +859,55 @@ impl Command {
                         group_pubkey_hex: hex,
                     });
                 }
+            }
+
+            Command::StartReshare { password } => {
+                // Same-set reshare reusing the current session's live mesh (#45).
+                // Seed the reshare context from the active session + loaded
+                // wallet, then trigger round 1 on this node.
+                let self_id = {
+                    let mut state = app_state.lock().await;
+                    if let Some(session) = state.session.clone() {
+                        if state.reshare_original_participants.is_empty() {
+                            state.reshare_original_participants = session.participants.clone();
+                        }
+                        if state.reshare_wallet_id.is_none() {
+                            state.reshare_wallet_id = state
+                                .current_wallet_id
+                                .clone()
+                                .or(Some(session.session_id.clone()));
+                        }
+                    }
+                    let _ = password; // share re-encryption on persist — #56
+                    state.device_id.clone()
+                };
+                crate::protocal::reshare::handle_trigger_reshare_round1(app_state.clone(), self_id)
+                    .await;
+            }
+
+            Command::ProcessReshareRound1 {
+                from_device,
+                package_bytes,
+            } => {
+                crate::protocal::reshare::process_reshare_round1(
+                    app_state.clone(),
+                    from_device,
+                    package_bytes,
+                )
+                .await;
+            }
+
+            Command::ProcessReshareRound2 {
+                from_device,
+                package_bytes,
+            } => {
+                crate::protocal::reshare::process_reshare_round2(
+                    app_state.clone(),
+                    from_device,
+                    package_bytes,
+                    tx.clone(),
+                )
+                .await;
             }
 
             Command::ProcessDKGRound2 {

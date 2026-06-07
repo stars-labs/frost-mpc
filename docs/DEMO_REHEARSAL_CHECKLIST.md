@@ -53,6 +53,9 @@ on stage. Pair this with the manual: [`LIVE_MPC_DEMO.md`](LIVE_MPC_DEMO.md).
        and/or `finalize` → explorer link opens and shows the confirmed tx.
 8. [ ] **Threshold drama** (manual §6): alice tries to sign alone → it times out → repeat
        with bob → it completes.
+9. [ ] **Recovery beat** (manual §6b, optional): `mpc-wallet-cli reshare-simulate --nodes 3
+       --threshold 2 --curve ed25519 --keep 1,2` → `"ok": true`, same `group_public_key`,
+       `old_share_rejected: true`. The "lose/rotate a device, same address" story.
 
 ## Failure drills (rehearse the recovery, not just the happy path)
 

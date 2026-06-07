@@ -290,6 +290,48 @@ This is the most visceral proof that the key is genuinely split.
 
 ---
 
+## 6b. Recovery & rotation: "a lost device doesn't lose the wallet"
+
+The question every investor asks about a multi-device wallet. The cryptographic engine
+for **share refresh / resharing** is shipped and exercisable from one command — it proves
+the recovery story without any network setup:
+
+```bash
+# Rotate all shares (proactive security) — same wallet, fresh shares:
+mpc-wallet-cli reshare-simulate --nodes 3 --threshold 2 --curve ed25519
+
+# Remove a lost/stolen device (2-of-3 → keep only devices 1 & 2):
+mpc-wallet-cli reshare-simulate --nodes 3 --threshold 2 --curve ed25519 --keep 1,2
+```
+
+Both print the same shape:
+```json
+{ "kept": [1,2], "group_public_key": "06833fdf…badb6ac8",
+  "key_preserved": true, "refreshed_quorum_signs": true, "old_share_rejected": true, "ok": true }
+```
+
+What to point at:
+- **`group_public_key` is identical** before/after, and identical whether you rotate or drop
+  a device → **the address never changes**; no funds move, no re-funding.
+- **`refreshed_quorum_signs: true`** → the wallet keeps working with the new shares.
+- **`old_share_rejected: true`** → every pre-refresh share is now **dead** — a stolen
+  device's fragment can no longer combine to sign.
+
+> 🎤 "Lose a laptop? Refresh down to the survivors — same address, the wallet keeps
+> working, and the lost device's share is now worthless. We can also rotate on a schedule,
+> so an attacker collecting fragments over months never assembles a key. A single-key
+> custodial wallet can't do any of that."
+
+> **Honest scope:** `reshare-simulate` runs the real refresh **in one process** (like the
+> NUCLEAR fallback in §7) — it proves the cryptography. The **networked** multi-device
+> reshare ceremony (over the WebRTC mesh, like DKG) is in progress; engine, driver,
+> identifier rule and the atomic keystore swap are built + tested, with the async mesh
+> wiring + multi-node test tracked in issue #56. For a live demo, present this as "the
+> recovery math, working" — same standing as the nuclear `simulate` proof. See
+> `docs/RECOVERY_AND_RESHARING.md` for the full threat model + talking points.
+
+---
+
 ## 7. Fallback ladder (if the network misbehaves)
 
 Have these ready; you should never be stuck.
@@ -351,4 +393,7 @@ JOIN    (bob,carol) {"cmd":"join_session","session_id":"dkg_…","password":"dem
 SIGN    (alice) {"cmd":"sign","wallet_id":"…","message":"<investor's words>","encoding":"utf8","password":"demo"}
 APPROVE (bob)   {"cmd":"approve_signing","session_id":"sign_…","password":"demo"}
 VERIFY  node -e '…'   # §5 — investor runs it; → VERIFIED: true
+RECOVER mpc-wallet-cli reshare-simulate --nodes 3 --threshold 2 --curve ed25519 [--keep 1,2]
+        # §6b — same address, refreshed shares, old share dead → "ok": true
+NUKE    mpc-wallet-cli simulate --nodes 3 --threshold 2 --curve ed25519 --sign "…"   # §7 rung 2
 ```

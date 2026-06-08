@@ -208,12 +208,39 @@ pub async fn wallet_create(
         password,
         label: name,
     })?;
+    // Surface the announced session id + the exact command the OTHER devices run
+    // to join. DKG only completes once all `total` participants join, so a lone
+    // `wallet create` sits and waits — this tells the operator precisely what to
+    // do next instead of leaving them guessing (the reported "how to start").
+    if let Ok(CliEvent::SessionAnnounced { session_id, .. }) = wait_outcome(
+        &mut rx,
+        20,
+        "the session announcement",
+        "",
+        |e| matches!(e, CliEvent::SessionAnnounced { .. }),
+    )
+    .await
+    {
+        let room = opts.signal_url.split("room=").nth(1).unwrap_or("");
+        let room_flag = if room.is_empty() {
+            String::new()
+        } else {
+            format!(" --room {room}")
+        };
+        eprintln!(
+            "note: session id = {session_id}\n  → on each of the other {} device(s), run (unique \
+             --device-id, SAME password):\n      mpc-wallet-cli session join --session-id \
+             {session_id}{room_flag} --device-id <unique>",
+            total - 1
+        );
+    }
     let ev = wait_outcome(
         &mut rx,
         opts.timeout_secs,
         "the DKG to complete",
-        "\n  → DKG needs ALL participants online together. Did the other devices run \
-         `mpc-wallet-cli session join` with the SAME --room and a unique --device-id each?",
+        "\n  → DKG needs ALL participants online together. On each OTHER device run \
+         `mpc-wallet-cli session join --session-id <id shown above>` with the SAME --room and a \
+         unique --device-id.",
         |e| matches!(e, CliEvent::DkgComplete { .. }),
     )
     .await?;

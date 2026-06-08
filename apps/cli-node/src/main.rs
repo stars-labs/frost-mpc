@@ -173,6 +173,28 @@ enum SessionCmd {
 }
 
 impl OneShot {
+    /// Fail fast on a too-weak `--room` for the hosted server, instead of
+    /// dialing and waiting 15s for the server to reject it (the common footgun:
+    /// `--room test-1`). The hosted multi-tenant server requires a strong room
+    /// (≥16 chars of `[A-Za-z0-9_-]`); a local `ws://` server needs none, so we
+    /// only enforce this for `wss://`.
+    fn validate_room(&self) -> anyhow::Result<()> {
+        if let Some(r) = self.room.as_deref() {
+            let hosted = self.signal_server.starts_with("wss://");
+            if hosted && !is_strong_room(r) {
+                anyhow::bail!(
+                    "--room \"{r}\" is too weak for the hosted server ({}). It needs ≥16 chars of \
+                     [A-Za-z0-9_-] (got {} char(s)). Generate a strong one and share the SAME value \
+                     with every device:\n      --room \"$(uuidgen | tr -d -)\"\n    (a local \
+                     --signal-server ws://<host-ip>:9000 needs no room.)",
+                    self.signal_server,
+                    r.chars().count()
+                );
+            }
+        }
+        Ok(())
+    }
+
     fn init_and_opts(&self) -> OneShotOpts {
         if !self.log_level.is_empty() {
             let _ = tracing_subscriber::fmt()
@@ -320,6 +342,7 @@ async fn run() -> anyhow::Result<()> {
                 pw,
                 common,
             } => {
+                common.validate_room()?;
                 let password = pw.resolve()?;
                 finish(
                     oneshot::wallet_create(
@@ -339,6 +362,7 @@ async fn run() -> anyhow::Result<()> {
                 pw,
                 common,
             } => {
+                common.validate_room()?;
                 let password = pw.resolve()?;
                 finish(oneshot::session_join(common.init_and_opts(), session_id, password).await)
             }
@@ -350,6 +374,7 @@ async fn run() -> anyhow::Result<()> {
             pw,
             common,
         } => {
+            common.validate_room()?;
             let password = pw.resolve()?;
             finish(oneshot::sign(common.init_and_opts(), wallet_id, message, encoding, password).await)
         }
@@ -358,6 +383,7 @@ async fn run() -> anyhow::Result<()> {
             pw,
             common,
         } => {
+            common.validate_room()?;
             let password = pw.resolve()?;
             finish(oneshot::reshare(common.init_and_opts(), wallet_id, password).await)
         }
@@ -437,6 +463,12 @@ async fn run() -> anyhow::Result<()> {
     }
 }
 
+/// A "strong" room the hosted multi-tenant server will accept: ≥16 chars of
+/// `[A-Za-z0-9_-]` (mirrors the server's `MIN_ROOM_LEN` / `isValidRoom`).
+fn is_strong_room(r: &str) -> bool {
+    r.chars().count() >= 16 && r.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+}
+
 /// Merge a tenant `room` into a signal-server URL as a `room` query param.
 /// No-op when `room` is None/empty (the server then rejects the connection,
 /// which surfaces a clear "a strong ?room is required" error). Appends with
@@ -460,7 +492,18 @@ fn with_room(url: &str, room: Option<&str>) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::with_room;
+    use super::{is_strong_room, with_room};
+
+    #[test]
+    fn strong_room_requires_16_safe_chars() {
+        assert!(!is_strong_room("test-1")); // the reported footgun (6 chars)
+        assert!(!is_strong_room("short"));
+        assert!(!is_strong_room("0123456789abcde")); // 15 chars
+        assert!(is_strong_room("0123456789abcdef")); // 16 chars
+        assert!(is_strong_room("7f3a9c2e4b1d4e8a9c2f001122334455")); // uuid, dashes stripped
+        assert!(!is_strong_room("has space chars!!")); // invalid chars
+    }
+
     #[test]
     fn with_room_inserts_path_and_query() {
         assert_eq!(with_room("wss://h", Some("r")), "wss://h/?room=r");

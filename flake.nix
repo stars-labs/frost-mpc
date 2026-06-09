@@ -120,13 +120,12 @@
               elif [[ "${system}" == *"darwin"* ]]; then
                 echo "✅ macOS environment configured"
                 echo "Note: Wayland dependencies are not available on macOS"
-                echo "The native GUI app may require adjustments to run on macOS"
               fi
               echo ""
               echo "Available commands:"
               echo "  cargo build                                  - Build the workspace"
               echo "  cargo run --bin frost-mpc-tui -p tui-node   - Run the TUI"
-              echo "  cargo run --bin frost-mpc-native -p frost-mpc-native  - Run the desktop GUI"
+              echo "  cargo run --bin frost-mpc-cli -p frost-mpc-cli -- --help  - Headless CLI"
               echo "  bun install                                  - Install JS dependencies"
               echo "  bun run build:wasm                           - Build WebAssembly modules"
               echo ""

@@ -1,5 +1,6 @@
 //! SigningManager — thin facade over the FROST threshold-signing
-//! flow for the native-node GUI. Mirrors the shape of
+//! flow for non-Elm GUI front-ends (e.g. the desktop app in
+//! stars-labs/starlab-desktop). Mirrors the shape of
 //! DkgManager / SessionManager.
 //!
 //! Status: STRUCTURAL STUB. The methods below update CoreState and
@@ -96,7 +97,7 @@ impl SigningManager {
             .update_signing_state(SigningState::Commitment)
             .await;
 
-        // TODO(native-node): route `req` into protocal::signing's
+        // TODO(starlab-desktop): route `req` into protocal::signing's
         // handle_start_signing / process_signing_round1 /
         // process_signing_round2. Needs either:
         //   (a) a ciphersuite-generic backend shared between the

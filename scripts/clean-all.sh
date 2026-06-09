@@ -19,7 +19,7 @@ echo "📱 Cleaning apps..."
 rm -rf apps/*/node_modules
 rm -rf apps/*/dist
 rm -rf apps/*/.wxt
-# Catches apps/{tui-node,native-node,browser-extension}/target
+# Catches apps/{tui-node,browser-extension}/target
 # when those crates were built in isolation. The workspace
 # shares a top-level `target/` already wiped above.
 rm -rf apps/*/target

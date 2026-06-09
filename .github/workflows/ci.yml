@@ -26,9 +26,10 @@ jobs:
       - name: System deps
         run: sudo apt-get update && sudo apt-get install -y pkg-config libssl-dev
 
-      # native-node is intentionally excluded here — it needs Iced/graphics
-      # system libraries that aren't worth provisioning for CI. The headless
-      # stack (cli, tui-node, signal-server) covers the real DKG/signing path.
+      # This repo is the headless engine + terminal clients. The GUI products
+      # (browser extension, Iced desktop in stars-labs/starlab-desktop) live
+      # elsewhere. The headless stack (cli, tui-node, signal-server) covers the
+      # real DKG/signing path.
       - name: Unit tests
         run: cargo test -p frost-mpc-cli -p webrtc-signal-server --locked
              && cargo test -p tui-node --lib --locked

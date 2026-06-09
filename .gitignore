@@ -81,6 +81,7 @@ apps/tui-node/audit_offline_dkg_*/
 # transient per-session artefacts are ignored.
 .claude/scheduled_tasks.lock
 .claude/*.log
+.claude/worktrees/
 
 # Extension build artifacts
 public/index.js

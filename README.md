@@ -70,12 +70,7 @@ line-mode REPL.)
 
 #### Desktop Application
 
-```bash
-# Run the native desktop app (package name is frost-mpc-native,
-# NOT native-node — the directory is native-node/ but the
-# Cargo package is frost-mpc-native)
-cargo run -p frost-mpc-native
-```
+The Iced desktop app lives in its own repo: **[stars-labs/starlab-desktop](https://github.com/stars-labs/starlab-desktop)**. It consumes this repo's `tui-node` library (engine + `core::*Manager`) as a dependency.
 
 ## Documentation
 
@@ -101,8 +96,7 @@ cargo run -p frost-mpc-native
 - [Offline Mode](apps/tui-node/docs/guides/offline-mode.md) - Air-gapped operation guide
 
 #### Native Desktop Application
-- [Native App README](apps/native-node/README.md) - Architecture diagram, feature-parity matrix, build + run instructions
-- [Docs subtree](apps/native-node/docs/README.md) - Additional native-node documentation
+- Moved to its own repo: **[stars-labs/starlab-desktop](https://github.com/stars-labs/starlab-desktop)** (Iced GUI consuming this repo's `tui-node`).
 
 #### Signal Server
 - [Signal Server Guide](apps/signal-server/docs/README.md) - WebRTC signaling server
@@ -132,10 +126,11 @@ cargo run -p frost-mpc-native
 ```
 frost-mpc/
 ├── apps/                         # Applications
-│   ├── browser-extension/        # Chrome/Firefox extension
-│   ├── native-node/              # Desktop GUI application (Iced)
+│   ├── browser-extension/        # Chrome/Firefox extension (→ stars-labs/starlab-wallet)
+│   ├── cli-node/                 # Headless CLI (frost-mpc-cli) — conformance oracle
 │   ├── tui-node/                 # Terminal UI application (Ratatui)
 │   └── signal-server/            # WebRTC signaling (server + Cloudflare Worker)
+│   # Desktop GUI moved to stars-labs/starlab-desktop (Iced)
 │
 ├── packages/@frost-mpc/         # Shared packages
 │   ├── frost-core/               # FROST protocol implementation (Rust)
@@ -247,11 +242,9 @@ We welcome contributions! Please see our [Contributing Guide](docs/CONTRIBUTING.
   signing + EIP-1193 / EIP-6963 dApp integration
 - [x] Terminal UI (`apps/tui-node/`) — keyboard-driven FROST
   frontend with online (WebRTC mesh) + offline (SD-card) modes
-- [x] Desktop application (`apps/native-node/`) — Iced GUI reusing
-  `tui-node::core::*Manager` types; feature-parity with TUI except
-  for the `SigningManager::approve` stub (see
-  [`apps/native-node/README.md`](apps/native-node/README.md) for
-  the precise ⚠-marked matrix)
+- [x] Desktop application — Iced GUI reusing this repo's
+  `tui-node::core::*Manager` types; now in its own repo
+  **[stars-labs/starlab-desktop](https://github.com/stars-labs/starlab-desktop)**
 - [x] Cloudflare Worker signal server (Rust-over-WASM) and
   standalone `cargo`-built signal server
 
@@ -262,9 +255,8 @@ scheduled delivery date; contributions welcome via PR. See
 [`CLAUDE.md`](CLAUDE.md) for deeper context where noted.
 
 - [ ] Extract `SigningManager::approve` onto a ciphersuite-generic
-  backend so native-node shares the real signing path with the TUI
-  (last remaining feature-parity gap — see the native-node README
-  + `CLAUDE.md § Native desktop node`).
+  backend so the desktop app (starlab-desktop) shares the real
+  signing path with the TUI (its last feature-parity gap).
 - [ ] `criterion` benches for DKG / signing / keystore so future
   perf-optimization claims have reproducible numbers.
 - [ ] FROST share refresh (proactive share rotation preserving the
@@ -272,7 +264,7 @@ scheduled delivery date; contributions welcome via PR. See
   doesn't wire it up yet.
 - [ ] Third-party security audit of the full stack. The upstream
   ZCash Foundation `frost-*` crates are audited; this workspace's
-  integration layer + extension + TUI + native frontends are not.
+  integration layer + TUI + the GUI frontends are not.
 - [ ] Hardware-wallet co-signer integration (Ledger / Trezor).
 - [ ] Additional blockchains beyond Ethereum (secp256k1) + Solana
   (ed25519) — each new chain needs per-curve address derivation

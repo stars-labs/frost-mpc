@@ -27,9 +27,9 @@ cd apps/browser-extension
 bun run build
 cd ../..
 
-# Build Rust workspace members (excluding native-node — optional
-# GUI target that's OK to skip in CI-style "build everything" runs).
-echo "🦀 Building Rust workspace (tui-node + frost-core + signal-server)..."
-cargo build --workspace --exclude frost-mpc-native
+# Build the Rust workspace (engine + cli + tui + signal-server; the GUI
+# products live in their own repos).
+echo "🦀 Building Rust workspace (cli + tui-node + frost-core + signal-server)..."
+cargo build --workspace
 
 echo "✅ Build complete!"

@@ -81,10 +81,11 @@ struct OneShot {
     room: Option<String>,
     #[arg(long, default_value_t = 90)]
     timeout: u64,
-    /// Ciphersuite: secp256k1 (default; Ethereum/Bitcoin) or ed25519 (Solana).
+    /// Ciphersuite: secp256k1 (default; Ethereum/Bitcoin), ed25519 (Solana), or
+    /// "unified" (BOTH curves from one DKG → Ethereum + Solana in one wallet).
     /// ed25519 yields a standard RFC-8032 signature that ANY off-the-shelf
-    /// verifier (and Solana) can check — ideal for an independently-checkable
-    /// demo. All participants of one ceremony must use the same curve.
+    /// verifier (and Solana) can check. All participants of one ceremony must
+    /// use the same curve.
     #[arg(long, default_value = "secp256k1")]
     curve: String,
     #[arg(long, default_value = "")]

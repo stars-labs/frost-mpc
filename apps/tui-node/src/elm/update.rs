@@ -29,6 +29,30 @@ fn enter_round1(model: &mut Model) {
     }
 }
 
+/// Build the mesh-ready FROST-trigger batch. For a unified ceremony, prepend a
+/// `PrepareUnifiedFinalize` that captures the password/keystore/label so the
+/// round-2 completion can persist both curves. The password is taken (cleared)
+/// from the model — it lives only on the in-flight command afterwards.
+fn frost_trigger_batch(model: &mut Model) -> Command {
+    let mut cmds = Vec::new();
+    if model.wallet_state.unified {
+        if let Some(password) = model.wallet_state.pending_password.take() {
+            let label = {
+                let s = model.wallet_state.wallet_name_draft.trim().to_string();
+                if s.is_empty() { None } else { Some(s) }
+            };
+            cmds.push(Command::PrepareUnifiedFinalize {
+                password,
+                keystore_path: model.wallet_state.keystore_path.clone(),
+                label,
+            });
+        }
+    }
+    cmds.push(Command::StartFrostProtocol);
+    cmds.push(Command::SendMessage(Message::ForceRemount));
+    Command::Batch(cmds)
+}
+
 /// The main update function that handles all state transitions
 pub fn update(model: &mut Model, msg: Message) -> Option<Command> {
     debug!("Processing message: {:?}", msg);
@@ -341,6 +365,12 @@ pub fn update(model: &mut Model, msg: Message) -> Option<Command> {
         // Headless creator entry: seed the same state ThresholdConfig +
         // PasswordPrompt would have set, then hand off to SubmitPassword's
         // creator branch (which builds the config + announces the session).
+        Message::SetUnifiedMode { unified } => {
+            info!("Unified DKG mode set to {}", unified);
+            model.wallet_state.unified = unified;
+            None
+        }
+
         Message::HeadlessCreateWallet { config, password, label } => {
             model.wallet_state.creating_wallet =
                 Some(crate::elm::model::CreateWalletState {
@@ -691,8 +721,14 @@ pub fn update(model: &mut Model, msg: Message) -> Option<Command> {
             info!("Added current device as participant: {}", model.device_id);
             
             // Create active session with placeholder session ID.
-            // `curve_type` comes from the Model's boot-time snapshot of
-            // `C::curve_type()` — no more "unified" placeholder.
+            // `curve_type` is the Model's boot-time snapshot of `C::curve_type()`,
+            // UNLESS this is a unified ceremony — then it's the "unified" marker
+            // that every node branches on (creator + joiners).
+            let creator_curve = if model.wallet_state.unified {
+                "unified".to_string()
+            } else {
+                model.wallet_state.curve_type.to_string()
+            };
             model.active_session = Some(SessionInfo {
                 session_id: temp_session_id.clone(),
                 proposer_id: model.device_id.clone(),
@@ -700,7 +736,7 @@ pub fn update(model: &mut Model, msg: Message) -> Option<Command> {
                 threshold: config.threshold,
                 participants,
                 session_type: SessionType::DKG,
-                curve_type: model.wallet_state.curve_type.to_string(),
+                curve_type: creator_curve,
                 coordination_type: "online".to_string(),
                 signing_message_hex: None,
             });
@@ -716,7 +752,7 @@ pub fn update(model: &mut Model, msg: Message) -> Option<Command> {
             model.pending_operations.push(Operation::CreateWallet(config.clone()));
             
             // Start DKG process - this will generate the real session ID
-            Some(Command::StartDKG { config })
+            Some(Command::StartDKG { config, unified: model.wallet_state.unified })
         }
         
         Message::SelectWallet { wallet_id } => {
@@ -1489,10 +1525,7 @@ pub fn update(model: &mut Model, msg: Message) -> Option<Command> {
             // via the DkgState::Idle → Round1InProgress guard.
             info!("🚀 StartDKGProtocol — mesh ready, dispatching FROST Round 1 trigger");
             enter_round1(model);
-            Some(Command::Batch(vec![
-                Command::StartFrostProtocol,
-                Command::SendMessage(Message::ForceRemount),
-            ]))
+            Some(frost_trigger_batch(model))
         }
 
         Message::InitiateDKG { params } => {
@@ -1505,10 +1538,7 @@ pub fn update(model: &mut Model, msg: Message) -> Option<Command> {
             // server-side. We only want the FROST trigger here.
             info!("Mesh is ready — dispatching FROST Round 1 trigger. params={:?}", params);
             enter_round1(model);
-            Some(Command::Batch(vec![
-                Command::StartFrostProtocol,
-                Command::SendMessage(Message::ForceRemount),
-            ]))
+            Some(frost_trigger_batch(model))
         }
         
         Message::ProcessDKGRound1 { from_device, package_bytes } => {
@@ -1528,6 +1558,12 @@ pub fn update(model: &mut Model, msg: Message) -> Option<Command> {
         }
         Message::ProcessReshareRound2 { from_device, package_bytes } => {
             Some(Command::ProcessReshareRound2 { from_device, package_bytes })
+        }
+        Message::ProcessUnifiedDKGRound1 { from_device, package_json } => {
+            Some(Command::ProcessUnifiedDKGRound1 { from_device, package_json })
+        }
+        Message::ProcessUnifiedDKGRound2 { from_device, message_json } => {
+            Some(Command::ProcessUnifiedDKGRound2 { from_device, message_json })
         }
         Message::HeadlessReshare { wallet_id, password, keystore_path } => {
             Some(Command::StartReshare { wallet_id, password, keystore_path })

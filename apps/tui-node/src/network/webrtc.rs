@@ -83,6 +83,33 @@ pub async fn dispatch_data_channel_msg<C>(
     if webrtc_tag == Some("SimpleMessage")
         && let Some(msg_text) = json_msg.get("text").and_then(|v| v.as_str()) {
             use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
+            // Unified-DKG frames (ed25519 + secp256k1 in one ceremony). Same
+            // SimpleMessage transport as the single-curve DKG rounds, but the
+            // payload is JSON (not base64) and routes to the unified driver.
+            if let Some(package_json) =
+                msg_text.strip_prefix(crate::elm::command::UNIFIED_DKG_ROUND1_PREFIX)
+            {
+                info!("🔑 Received UNIFIED DKG Round 1 from {}", device_id_recv);
+                if let Some(tx) = &ui_msg_tx {
+                    let _ = tx.send(crate::elm::message::Message::ProcessUnifiedDKGRound1 {
+                        from_device: device_id_recv.clone(),
+                        package_json: package_json.to_string(),
+                    });
+                }
+                return;
+            }
+            if let Some(message_json) =
+                msg_text.strip_prefix(crate::elm::command::UNIFIED_DKG_ROUND2_PREFIX)
+            {
+                info!("🔐 Received UNIFIED DKG Round 2 from {}", device_id_recv);
+                if let Some(tx) = &ui_msg_tx {
+                    let _ = tx.send(crate::elm::message::Message::ProcessUnifiedDKGRound2 {
+                        from_device: device_id_recv.clone(),
+                        message_json: message_json.to_string(),
+                    });
+                }
+                return;
+            }
             if let Some(package_data) = msg_text.strip_prefix("DKG_ROUND1:") {
                 info!("🔑 Received DKG Round 1 package from {}", device_id_recv);
                 match BASE64.decode(package_data) {

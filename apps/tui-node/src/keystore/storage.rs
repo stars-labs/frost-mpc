@@ -179,6 +179,57 @@ impl Keystore {
         Ok(wallet_id)
     }
 
+    /// Persist a UNIFIED wallet: the SAME `wallet_id` under BOTH `ed25519/` and
+    /// `secp256k1/` curve dirs, from one dual-curve DKG ceremony. Unlike
+    /// `create_wallet_multi_chain` (which rejects a duplicate wallet_id), this
+    /// deliberately writes two curve-scoped files sharing the id — they live in
+    /// different curve directories and never collide on disk. The wallet thus
+    /// yields Ethereum/Bitcoin (secp256k1) AND Solana/Sui (ed25519) addresses.
+    #[allow(clippy::too_many_arguments)]
+    pub fn create_wallet_unified(
+        &mut self,
+        wallet_id: &str,
+        threshold: u16,
+        total_participants: u16,
+        participant_index: u16,
+        participants: Vec<String>,
+        label: Option<String>,
+        password: &str,
+        // (curve, group_public_key_hex, key_share_blob) for each curve.
+        ed25519_group_public_key: &str,
+        ed25519_key_share: &[u8],
+        secp256k1_group_public_key: &str,
+        secp256k1_key_share: &[u8],
+    ) -> Result<String> {
+        let wallet_id = wallet_id.replace(['/', '\\', ':'], "-");
+
+        for (curve, group_pk, share) in [
+            ("ed25519", ed25519_group_public_key, ed25519_key_share),
+            ("secp256k1", secp256k1_group_public_key, secp256k1_key_share),
+        ] {
+            let mut metadata = WalletMetadata::with_participants(
+                wallet_id.clone(),
+                self.device_id.clone(),
+                curve.to_string(),
+                threshold,
+                total_participants,
+                participant_index,
+                group_pk.to_string(),
+                participants.clone(),
+            );
+            metadata.label = label
+                .clone()
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty());
+
+            // Atomic write — never leaves a curve dir with a half-written share.
+            self.save_wallet_file_atomic(&wallet_id, share, password, &metadata)?;
+            self.wallet_cache.push(metadata);
+        }
+
+        Ok(wallet_id)
+    }
+
     /// Overwrite an existing wallet's key share + the refresh-affected metadata
     /// (threshold / total / participants / participant_index) **in place** for a
     /// reshare (#45): same `wallet_id`, same `curve_type`, same

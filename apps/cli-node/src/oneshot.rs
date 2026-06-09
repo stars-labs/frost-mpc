@@ -82,6 +82,9 @@ fn start(
             let _ = ev_tx.send(e);
         }
     };
+    // "unified" runs the dual-curve ceremony — spawn on secp256k1 (the generic
+    // `C` DKG fields are unused on the unified path; the UnifiedDkg lives in
+    // app_state.unified_dkg) and flip the model into unified mode below.
     let tx = if opts.curve == "ed25519" {
         spawn_ed25519(
             opts.device_id.clone(),
@@ -97,6 +100,9 @@ fn start(
             cb,
         )
     };
+    if opts.curve == "unified" {
+        let _ = tx.send(Message::SetUnifiedMode { unified: true });
+    }
     (tx, ev_rx, roster)
 }
 

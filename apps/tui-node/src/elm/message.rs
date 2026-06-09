@@ -68,6 +68,11 @@ pub enum Message {
     /// extension does automatically. Replies stream back as
     /// `SessionDiscovered`.
     HeadlessRefreshSessions,
+    /// Mark this node as a UNIFIED-DKG creator (CLI `--curve unified`). Sets
+    /// `model.wallet_state.unified` so the subsequent `HeadlessCreateWallet`
+    /// announces `curve_type: "unified"` and runs the unified ceremony. Joiners
+    /// don't need this — they learn "unified" from the announce.
+    SetUnifiedMode { unified: bool },
 
     // Wallet management messages
     CreateWallet { config: WalletConfig },
@@ -150,6 +155,10 @@ pub enum Message {
     ProcessDKGRound2 { from_device: String, package_bytes: Vec<u8> },  // Process received DKG Round 2 package
     ProcessReshareRound1 { from_device: String, package_bytes: Vec<u8> }, // Reshare round 1 from a peer (#45)
     ProcessReshareRound2 { from_device: String, package_bytes: Vec<u8> }, // Reshare round 2 from a peer (#45)
+    /// Unified-DKG round 1 from a peer (JSON `UnifiedRound1Package`).
+    ProcessUnifiedDKGRound1 { from_device: String, package_json: String },
+    /// Unified-DKG round 2 from a peer (JSON `UnifiedRound2Message`).
+    ProcessUnifiedDKGRound2 { from_device: String, message_json: String },
     DKGKeyGenerated { group_pubkey_hex: String },                      // Final FROST key ready
     /// Fires after `Command::UnlockWallet` successfully decrypted the
     /// wallet file and stashed `KeyPackage` + `PublicKeyPackage` on

@@ -335,6 +335,10 @@ cargo run --release --bin mpc-wallet-tui -p tui-node -- \
 mpc-wallet-cli reshare --wallet-id <W> --room "$ROOM"
 #   → 保留下来的签名方在被广播的 reshare 会话上执行 `session join`
 #     （或 `serve --auto-approve`）来批准，就像一笔多方共签的交易。
+
+# …或者用一条命令、自包含、真实独立进程地证明整个过程：
+scripts/demo/ceremony.sh --nodes 3 --threshold 2 --reshare
+#   → "reshared": true, "group_key_preserved": true（地址从未移动）
 ```
 
 刷新保持了你要指给投资人看的那些不变量：
@@ -346,8 +350,8 @@ mpc-wallet-cli reshare --wallet-id <W> --room "$ROOM"
 > 我们还能按计划定期轮换，这样一个用几个月时间收集碎片的攻击者永远拼不出一把密钥。
 > 单密钥的托管钱包做不到这其中任何一点。"
 
-> **无需现场搭建的证明：** 重新分享引擎（地址不变的刷新、刷新后法定门限签名、旧分片作废）
-> 在测试套件里被端到端验证 —— `cargo test -p mpc-wallet-cli` —— 与 DKG 和签名的一致性用例一起。
+> **无需现场搭建的证明：** `scripts/demo/ceremony.sh … --reshare` 在真实的独立进程上跑完
+> 整个刷新，并断言地址保持不变；该引擎同时也在测试套件里被验证（`cargo test -p mpc-wallet-cli`）。
 > 完整的威胁模型 + 话术见 `docs/RECOVERY_AND_RESHARING.md`。
 
 ---

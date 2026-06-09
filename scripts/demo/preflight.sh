@@ -55,6 +55,13 @@ for spec in "2 2" "2 3"; do
   fi
 done
 
+hdr "2b. Share refresh / recovery (real multi-process reshare)"
+if "$CEREMONY" --nodes 3 --threshold 2 --reshare --timeout 90 >/dev/null 2>&1; then
+  ok "Reshare 2-of-3 — shares refreshed, group key (address) preserved"
+else
+  bad "Reshare 2-of-3 FAILED"
+fi
+
 hdr "3. Live signal server reachability ($SIGNAL)"
 host="$(printf '%s' "$SIGNAL" | sed -E 's#^wss?://##; s#[:/].*$##')"
 REACHABLE=0

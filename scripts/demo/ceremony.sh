@@ -2,13 +2,15 @@
 # ceremony.sh — run a REAL multi-process MPC ceremony end to end.
 #
 # This drives the ACTUAL `mpc-wallet-cli` as separate OS processes: a creator
-# (`wallet create`) plus N-1 joiners (`session join`) for DKG, then — with
-# --sign — an initiator (`sign`) plus a quorum of co-signers (`serve
-# --auto-approve`) for threshold signing. Every node is its own process with
-# its own on-disk keystore, talking over real WebRTC through a real signal
-# server. Nothing is simulated in one address space, so there is nothing
-# hard-coded to fake — which is exactly what makes it convincing on stage (and
-# a faithful smoke test of the same path a live demo uses).
+# (`wallet create`) plus N-1 joiners (`session join`) for DKG, then —
+#   --sign     an initiator (`sign`) + a quorum of co-signers (`serve
+#              --auto-approve`) produce a threshold signature;
+#   --reshare  the wallet holder (`reshare`) + the retained signers refresh
+#              every share — same address, fresh shares, old shares dead.
+# Every node is its own process with its own on-disk keystore, talking over real
+# WebRTC through a real signal server. Nothing is simulated in one address space,
+# so there is nothing hard-coded to fake — which is exactly what makes it
+# convincing on stage (and a faithful smoke test of the live demo path).
 #
 # By default it spins up a LOCAL signal server on loopback, so the whole thing
 # is self-contained and needs no network — the "cannot fail" fallback. Point it
@@ -18,21 +20,23 @@
 # Usage:
 #   scripts/demo/ceremony.sh [--nodes N] [--threshold T]
 #                            [--curve secp256k1|ed25519]
-#                            [--sign "message to sign"]
+#                            [--sign "message to sign"] [--reshare]
 #                            [--signal ws[s]://host[:port]] [--room ID]
 #                            [--timeout SECONDS] [--keep]
 #
 # Exit 0 iff every node agreed on ONE group key (and, with --sign, the quorum
-# produced a signature). Prints a JSON summary on success.
+# produced a signature; with --reshare, the refresh preserved the address).
+# Prints a JSON summary on success.
 set -euo pipefail
 
-NODES=3 THRESH=2 CURVE=secp256k1 SIGN_MSG="" SIGNAL="" ROOM="" TIMEOUT=90 KEEP=0
+NODES=3 THRESH=2 CURVE=secp256k1 SIGN_MSG="" RESHARE=0 SIGNAL="" ROOM="" TIMEOUT=90 KEEP=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --nodes)     NODES="$2"; shift 2 ;;
     --threshold) THRESH="$2"; shift 2 ;;
     --curve)     CURVE="$2"; shift 2 ;;
     --sign)      SIGN_MSG="$2"; shift 2 ;;
+    --reshare)   RESHARE=1; shift ;;
     --signal)    SIGNAL="$2"; shift 2 ;;
     --room)      ROOM="$2"; shift 2 ;;
     --timeout)   TIMEOUT="$2"; shift 2 ;;
@@ -95,6 +99,31 @@ fi
 # field <file> <json-key> — pull a string value out of an event line
 field() { grep -oE "\"$2\": *\"[^\"]+\"" "$1" 2>/dev/null | head -1 | sed -E 's/.*: *"([^"]+)"/\1/'; }
 
+# Co-signer daemons (`serve --auto-approve`) approve BOTH signing and reshare
+# requests. `serve` is a JSONL daemon: it connects only when told, then exits on
+# stdin EOF — so we feed it one `connect` command and HOLD stdin open with a
+# trailing sleep. start_cosigners <indices…> launches one per node index;
+# stop_cosigners tears them down so the next phase can reuse those device-ids
+# (the signal server rejects a duplicate id, so phases must not overlap).
+COSIGNER_PIDS=()
+start_cosigners() {
+  COSIGNER_PIDS=()
+  for ci in "$@"; do
+    "$CLI" serve --auto-approve --approve-password-file "$PW" --curve "$CURVE" \
+      --device-id "$ci" --keystore "$WORK/ks-$ci" \
+      --signal-server "$SIGNAL" "${ROOM_FLAG[@]}" \
+      >"$WORK/serve-$ci.out" 2>"$WORK/serve-$ci.log" \
+      < <(printf '{"cmd":"connect"}\n'; sleep "$((TIMEOUT + 15))") &
+    COSIGNER_PIDS+=("$!"); PIDS+=("$!")
+  done
+  sleep 2  # let the daemons connect + replay the active session list
+}
+stop_cosigners() {
+  for cp in "${COSIGNER_PIDS[@]:-}"; do kill "$cp" 2>/dev/null || true; done
+  COSIGNER_PIDS=()
+  sleep 1  # let the server register the disconnects before ids are reused
+}
+
 echo
 c_dim "▸ DKG ${THRESH}-of-${NODES} (${CURVE}) over ${SIGNAL} — ${NODES} separate processes"
 
@@ -136,39 +165,50 @@ done
 c_ok "  ✅ DKG complete — all ${NODES} nodes agree on one group key"
 
 SIG_HEX=""; MSG_HASH=""
-# --- Phase 2: threshold signing (optional) ---
+# --- Phase 2: threshold signing (optional) — initiator + (T-1) co-signers ---
 if [ -n "$SIGN_MSG" ]; then
   echo
   c_dim "▸ signing \"${SIGN_MSG}\" — initiator + $((THRESH - 1)) co-signer(s) (serve --auto-approve)"
-  # `serve` is a JSONL daemon: it reads commands on stdin, connects only when
-  # told to, auto-approves the signing request on its own, and exits on EOF. So
-  # we feed it a single `connect` command and then HOLD stdin open (the trailing
-  # sleep) so it neither sits disconnected nor quits before the ceremony ends.
-  for i in $(seq 2 "$THRESH"); do
-    "$CLI" serve --auto-approve --approve-password-file "$PW" --curve "$CURVE" \
-      --device-id "$i" --keystore "$WORK/ks-$i" \
-      --signal-server "$SIGNAL" "${ROOM_FLAG[@]}" \
-      >"$WORK/serve-$i.out" 2>"$WORK/serve-$i.log" \
-      < <(printf '{"cmd":"connect"}\n'; sleep "$((TIMEOUT + 15))") &
-    PIDS+=("$!")
-  done
-  sleep 2  # let the co-signer daemons connect + replay sessions
+  start_cosigners $(seq 2 "$THRESH")
   "$CLI" sign --wallet-id "$WID" --message "$SIGN_MSG" --curve "$CURVE" \
     --device-id 1 --keystore "$WORK/ks-1" --password-file "$PW" \
     --signal-server "$SIGNAL" "${ROOM_FLAG[@]}" --timeout "$TIMEOUT" \
     >"$WORK/sign.out" 2>"$WORK/sign.log" || true
+  stop_cosigners
   SIG_HEX="$(field "$WORK/sign.out" signature)"
   MSG_HASH="$(field "$WORK/sign.out" message_hash)"
   [ -z "$SIG_HEX" ] && { c_bad "✗ signing FAILED"; tail -5 "$WORK/sign.log" >&2; exit 1; }
   c_ok "  ✅ signature produced by a ${THRESH}-of-${NODES} quorum"
 fi
 
+RESHARE_GROUP=""
+# --- Phase 3: share refresh / resharing (optional) — holder + retained signers ---
+# Same-set refresh: the wallet holder (node 1) initiates, every other node
+# approves via `serve --auto-approve` (which auto-joins the reshare request).
+# The group key — and therefore the address — must be UNCHANGED afterwards.
+if [ "$RESHARE" = "1" ]; then
+  echo
+  c_dim "▸ resharing — holder + $((NODES - 1)) retained signer(s) refresh every share (address preserved)"
+  start_cosigners $(seq 2 "$NODES")
+  "$CLI" reshare --wallet-id "$WID" --curve "$CURVE" \
+    --device-id 1 --keystore "$WORK/ks-1" --password-file "$PW" \
+    --signal-server "$SIGNAL" "${ROOM_FLAG[@]}" --timeout "$TIMEOUT" \
+    >"$WORK/reshare.out" 2>"$WORK/reshare.log" || true
+  stop_cosigners
+  RESHARE_GROUP="$(field "$WORK/reshare.out" group_public_key)"
+  [ -z "$RESHARE_GROUP" ] && { c_bad "✗ reshare FAILED"; tail -5 "$WORK/reshare.log" >&2; exit 1; }
+  if [ "$RESHARE_GROUP" != "$GROUP" ]; then
+    c_bad "✗ reshare CHANGED the group key ($GROUP → $RESHARE_GROUP) — the address would move!"; exit 1
+  fi
+  c_ok "  ✅ shares refreshed — same group key, address unchanged"
+fi
+
 # --- summary ---
 echo
-if [ -n "$SIG_HEX" ]; then
-  printf '{\n  "ok": true,\n  "nodes": %s,\n  "threshold": %s,\n  "curve": "%s",\n  "wallet_id": "%s",\n  "address": "%s",\n  "group_public_key": "%s",\n  "message_hash": "%s",\n  "signature": "%s"\n}\n' \
-    "$NODES" "$THRESH" "$CURVE" "$WID" "$ADDR" "$GROUP" "$MSG_HASH" "$SIG_HEX"
-else
-  printf '{\n  "ok": true,\n  "nodes": %s,\n  "threshold": %s,\n  "curve": "%s",\n  "wallet_id": "%s",\n  "address": "%s",\n  "group_public_key": "%s"\n}\n' \
-    "$NODES" "$THRESH" "$CURVE" "$WID" "$ADDR" "$GROUP"
-fi
+{
+  printf '{\n  "ok": true,\n  "nodes": %s,\n  "threshold": %s,\n  "curve": "%s",\n' "$NODES" "$THRESH" "$CURVE"
+  printf '  "wallet_id": "%s",\n  "address": "%s",\n  "group_public_key": "%s"' "$WID" "$ADDR" "$GROUP"
+  [ -n "$SIG_HEX" ] && printf ',\n  "message_hash": "%s",\n  "signature": "%s"' "$MSG_HASH" "$SIG_HEX"
+  [ -n "$RESHARE_GROUP" ] && printf ',\n  "reshared": true,\n  "group_key_preserved": true'
+  printf '\n}\n'
+}

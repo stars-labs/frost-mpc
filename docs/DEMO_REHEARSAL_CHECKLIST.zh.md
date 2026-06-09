@@ -53,7 +53,8 @@ Wi‑Fi 掉线、二进制冷启动）。请配合指南一起使用：[`INVESTO
        `mpc-wallet-cli reshare --wallet-id <W> --room "$ROOM"`，让保留下来的签名方
        `session join` 它 → 相同的 `group_public_key`、钱包继续可签、被移除设备的分片作废。
        即"丢失/轮换一台设备，地址不变"的故事。*（没有现场环境？重新分享引擎已在
-       `cargo test -p mpc-wallet-cli` 中验证。）*
+       `scripts/demo/ceremony.sh --nodes 3 --threshold 2 --reshare` 一条命令即可自包含证明
+       → `"group_key_preserved": true`。）*
 
 ## 故障演练（要彩排恢复流程，而不只是顺利路径）
 

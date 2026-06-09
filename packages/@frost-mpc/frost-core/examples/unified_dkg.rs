@@ -8,11 +8,11 @@
 //!
 //! Run with: cargo run --example unified_dkg
 
-use frost_mpc_frost_core::hd_derivation::{ChainCode, derive_child_key};
-use frost_mpc_frost_core::unified_dkg::{UnifiedDkg, UnifiedRound1Package};
-use frost_mpc_frost_core::ed25519::Ed25519Curve;
-use frost_mpc_frost_core::secp256k1::Secp256k1Curve;
-use frost_mpc_frost_core::traits::FrostCurve;
+use frost_mpc_core::hd_derivation::{ChainCode, derive_child_key};
+use frost_mpc_core::unified_dkg::{UnifiedDkg, UnifiedRound1Package};
+use frost_mpc_core::ed25519::Ed25519Curve;
+use frost_mpc_core::secp256k1::Secp256k1Curve;
+use frost_mpc_core::traits::FrostCurve;
 use std::collections::BTreeMap;
 
 fn main() {

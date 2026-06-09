@@ -24,7 +24,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: System deps
-        run: sudo apt-get update && sudo apt-get install -y pkg-config libssl-dev
+        run: sudo apt-get update && sudo apt-get install -y pkg-config
 
       # This repo is the headless engine + terminal clients. The GUI products
       # (browser extension, Iced desktop in stars-labs/starlab-desktop) live

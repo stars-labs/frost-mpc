@@ -47,24 +47,11 @@
             freetype
           ];
 
-          # Linux-specific dependencies (includes Wayland)
-          linuxBuildInputs = with pkgs; [
-            # Wayland dependencies for native node GUI
-            wayland
-            libxkbcommon
-            wayland-protocols
-
-            # Graphics libraries
-            libGL
-            vulkan-loader
-            mesa
-
-            # X11 fallback dependencies
-            xorg.libX11
-            xorg.libXcursor
-            xorg.libXrandr
-            xorg.libXi
-          ];
+          # Linux-specific dependencies. The desktop GUI moved out to
+          # stars-labs/starlab-desktop, so the graphics/windowing libs that
+          # used to live here are gone. Nothing Linux-only remains for the
+          # headless engine + browser-extension/wasm build.
+          linuxBuildInputs = [ ];
 
           # macOS-specific dependencies
           darwinBuildInputs = with pkgs; [
@@ -74,18 +61,7 @@
           ];
 
           # Platform-specific library paths
-          linuxLibraryPath = lib.makeLibraryPath (with pkgs; [
-            wayland
-            libxkbcommon
-            vulkan-loader
-            libGL
-            xorg.libX11
-            xorg.libXcursor
-            xorg.libXrandr
-            xorg.libXi
-            fontconfig
-            freetype
-          ]);
+          linuxLibraryPath = lib.makeLibraryPath (with pkgs; [ ]);
 
           # Determine platform-specific inputs
           platformBuildInputs =
@@ -116,10 +92,9 @@
               echo "Platform: ${system}"
               echo ""
               if [[ "${system}" == *"linux"* ]]; then
-                echo "✅ Linux environment configured with Wayland support"
+                echo "✅ Linux environment configured"
               elif [[ "${system}" == *"darwin"* ]]; then
                 echo "✅ macOS environment configured"
-                echo "Note: Wayland dependencies are not available on macOS"
               fi
               echo ""
               echo "Available commands:"

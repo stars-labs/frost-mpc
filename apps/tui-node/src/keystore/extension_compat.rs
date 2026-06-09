@@ -85,7 +85,7 @@ pub struct ExtensionWalletMetadata {
 }
 
 // Use shared frost-core library for keystore functionality
-use frost_mpc_frost_core::{
+use frost_mpc_core::{
     keystore::KeystoreData as FrostKeystoreData,
 };
 use frost_secp256k1::keys::{KeyPackage as Secp256k1KeyPackage, PublicKeyPackage as Secp256k1PublicKeyPackage};

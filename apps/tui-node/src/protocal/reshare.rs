@@ -482,7 +482,7 @@ where
 mod tests {
     use super::*;
     use frost_secp256k1::Secp256K1Sha256 as Secp;
-    use frost_mpc_frost_core::resharing;
+    use frost_mpc_core::resharing;
     use std::collections::BTreeMap;
 
     fn id(i: u16) -> Identifier<Secp> {

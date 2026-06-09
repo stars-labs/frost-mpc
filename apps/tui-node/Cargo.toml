@@ -9,7 +9,7 @@ path = "src/lib.rs"
 
 [dependencies]
 # Shared FROST library (DKG state machine, keystore encryption, curve helpers).
-frost-mpc-frost-core = { path = "../../packages/@frost-mpc/frost-core" }
+frost-mpc-core = { path = "../../packages/@frost-mpc/frost-core" }
 
 # FROST 2.2 — secp256k1 for Ethereum, ed25519 for Solana, `frost-core`
 # for ciphersuite-generic bounds.

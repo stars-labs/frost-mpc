@@ -8,10 +8,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 # Rust (all workspace crates)
 cargo build                              # Build all workspace members
 cargo test                               # Run all Rust tests
-cargo test -p frost-mpc-frost-core      # Test specific package
+cargo test -p frost-mpc-core            # Test specific package
 cargo test -p tui-node                   # Test TUI node
 cargo test test_name                     # Run single test by name
-cargo run --example unified_dkg -p frost-mpc-frost-core  # Run example
+cargo run --example unified_dkg -p frost-mpc-core  # Run example
 cargo run --bin frost-mpc-tui -p tui-node                # Run TUI app
 cargo check                              # Fast type check without codegen
 

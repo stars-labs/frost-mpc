@@ -1624,7 +1624,7 @@ dependencies = [
  "clap",
  "frost-core",
  "frost-ed25519",
- "frost-mpc-frost-core",
+ "frost-mpc-core",
  "frost-secp256k1",
  "futures-util",
  "hex",
@@ -1640,23 +1640,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "frost-mpc-core-wasm"
-version = "0.1.0"
-dependencies = [
- "console_error_panic_hook",
- "frost-ed25519",
- "frost-mpc-frost-core",
- "frost-secp256k1",
- "getrandom 0.2.17",
- "getrandom 0.4.2",
- "hex",
- "rand_core 0.6.4",
- "serde_json",
- "wasm-bindgen",
-]
-
-[[package]]
-name = "frost-mpc-frost-core"
+name = "frost-mpc-core"
 version = "0.1.0"
 dependencies = [
  "aes-gcm",
@@ -1682,6 +1666,22 @@ dependencies = [
  "sha2 0.11.0",
  "sha3 0.11.0",
  "thiserror 2.0.18",
+]
+
+[[package]]
+name = "frost-mpc-core-wasm"
+version = "0.1.0"
+dependencies = [
+ "console_error_panic_hook",
+ "frost-ed25519",
+ "frost-mpc-core",
+ "frost-secp256k1",
+ "getrandom 0.2.17",
+ "getrandom 0.4.2",
+ "hex",
+ "rand_core 0.6.4",
+ "serde_json",
+ "wasm-bindgen",
 ]
 
 [[package]]
@@ -5658,7 +5658,7 @@ dependencies = [
  "ethers-core",
  "frost-core",
  "frost-ed25519",
- "frost-mpc-frost-core",
+ "frost-mpc-core",
  "frost-secp256k1",
  "futures-util",
  "gethostname",

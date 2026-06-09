@@ -37,7 +37,7 @@ getrandom_02 = { package = "getrandom", version = "0.2", features = ["js"] }
 hex = "0.4.3"
 
 # Use our shared frost-core library
-frost-mpc-frost-core = { path = "../frost-core" }
+frost-mpc-core = { path = "../frost-core" }
 
 # Still need these for specific types
 frost-secp256k1 = { version = "2.2.0", features = ["serde"] }

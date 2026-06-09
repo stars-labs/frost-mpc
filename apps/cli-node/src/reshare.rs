@@ -2,7 +2,7 @@
 //! library function `run_reshare_simulation` and exercised by the cli-node
 //! integration tests (it is no longer a user-facing CLI subcommand). Runs a
 //! DKG, then refreshes the shares for a (possibly reduced) participant set
-//! in-process via `frost_mpc_frost_core::resharing`, and asserts the recovery
+//! in-process via `frost_mpc_core::resharing`, and asserts the recovery
 //! guarantees:
 //!
 //! - the group public key (your address) is **unchanged** by the refresh,
@@ -16,7 +16,7 @@
 //! command in the meantime.
 
 use frost_core::Ciphersuite;
-use frost_mpc_frost_core::resharing;
+use frost_mpc_core::resharing;
 use std::collections::BTreeMap;
 
 #[derive(serde::Serialize)]

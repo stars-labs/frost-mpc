@@ -43,7 +43,7 @@ pub enum Command {
     /// AnnounceSession over the signaling WebSocket. Does NOT trigger the
     /// FROST cryptographic protocol — that waits for `StartFrostProtocol`
     /// once the WebRTC mesh is actually established.
-    StartDKG { config: WalletConfig },
+    StartDKG { config: WalletConfig, unified: bool },
     /// Everyone (creator + joiners): the WebRTC mesh is up and data channels
     /// are reachable; run FROST Round 1 against the participants captured in
     /// `AppState::session`. No session announcement happens here, which is
@@ -51,6 +51,19 @@ pub enum Command {
     /// caused joiners to re-announce the session under their own `proposer_id`,
     /// clobbering the creator's record server-side.
     StartFrostProtocol,
+    /// Stash the unified-DKG finalize context (password / keystore path / label)
+    /// onto AppState before the unified ceremony runs, so the round-2 completion
+    /// can persist both curves without re-threading these through every message.
+    /// Batched ahead of `StartFrostProtocol` on the mesh-ready edge.
+    PrepareUnifiedFinalize {
+        password: String,
+        keystore_path: String,
+        label: Option<String>,
+    },
+    /// Process a peer's UNIFIED round-1 package received over a data channel.
+    ProcessUnifiedDKGRound1 { from_device: String, package_json: String },
+    /// Process a peer's UNIFIED round-2 message received over a data channel.
+    ProcessUnifiedDKGRound2 { from_device: String, message_json: String },
     /// Process a peer's Round 1 package received over a data channel.
     /// Calls `protocal::dkg::process_dkg_round1` which stores the package and
     /// auto-triggers Round 2 once all `session.total` packages have arrived.
@@ -261,6 +274,154 @@ pub(crate) fn decode_keystore_blob<C: frost_core::Ciphersuite>(
     // field would still decode up to this point. For today, there should
     // be no trailing bytes.
     Ok((kp, pkp))
+}
+
+/// Wire prefix for a unified round-1 package (mirrors `DKG_ROUND1:`). The
+/// payload after the colon is the `UnifiedRound1Package` JSON.
+pub(crate) const UNIFIED_DKG_ROUND1_PREFIX: &str = "UNIFIED_DKG_ROUND1:";
+/// Wire prefix for a unified round-2 message (`UnifiedRound2Message` JSON).
+pub(crate) const UNIFIED_DKG_ROUND2_PREFIX: &str = "UNIFIED_DKG_ROUND2:";
+
+/// Broadcast our unified round-1 package to every other session participant.
+/// Same transport as the single-curve `DKG_ROUND1:` broadcast (a
+/// `WebRTCMessage::SimpleMessage` with a prefix), just a different prefix and a
+/// JSON (not base64) payload.
+async fn broadcast_unified_round1<C>(
+    app_state: std::sync::Arc<tokio::sync::Mutex<crate::utils::appstate_compat::AppState<C>>>,
+    self_device_id: &str,
+    pkg: &crate::protocal::unified_dkg::UnifiedRound1Package,
+) where
+    C: frost_core::Ciphersuite + Send + Sync + 'static,
+{
+    let participants = {
+        let state = app_state.lock().await;
+        state
+            .session
+            .as_ref()
+            .map(|s| s.participants.clone())
+            .unwrap_or_default()
+    };
+    let json = match serde_json::to_string(pkg) {
+        Ok(j) => j,
+        Err(e) => {
+            error!("unified round1 serialize failed: {}", e);
+            return;
+        }
+    };
+    let message = crate::protocal::signal::WebRTCMessage::<C>::SimpleMessage {
+        text: format!("{}{}", UNIFIED_DKG_ROUND1_PREFIX, json),
+    };
+    // Give data channels a moment to settle (mirrors the single-curve path).
+    tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
+    for device_id in participants {
+        if device_id == self_device_id {
+            continue;
+        }
+        for attempt in 0..10u32 {
+            match crate::utils::device::send_webrtc_message(&device_id, &message, app_state.clone())
+                .await
+            {
+                Ok(()) => {
+                    info!("✅ sent unified round1 to {}", device_id);
+                    break;
+                }
+                Err(e) if attempt < 9 => {
+                    info!("⏳ unified round1 to {} not ready ({}); retrying", device_id, e);
+                    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+                }
+                Err(e) => warn!("❌ unified round1 to {} failed: {}", device_id, e),
+            }
+        }
+    }
+}
+
+/// Send our unified round-2 message (per-recipient packages) to every peer. The
+/// message carries the full recipient map; each peer picks out its own entry
+/// (matches `UnifiedDkg::add_round2_package`'s 1-based index contract).
+async fn send_unified_round2<C>(
+    app_state: std::sync::Arc<tokio::sync::Mutex<crate::utils::appstate_compat::AppState<C>>>,
+    self_device_id: &str,
+    msg: &crate::protocal::unified_dkg::UnifiedRound2Message,
+) where
+    C: frost_core::Ciphersuite + Send + Sync + 'static,
+{
+    let participants = {
+        let state = app_state.lock().await;
+        state
+            .session
+            .as_ref()
+            .map(|s| s.participants.clone())
+            .unwrap_or_default()
+    };
+    let json = match serde_json::to_string(msg) {
+        Ok(j) => j,
+        Err(e) => {
+            error!("unified round2 serialize failed: {}", e);
+            return;
+        }
+    };
+    let message = crate::protocal::signal::WebRTCMessage::<C>::SimpleMessage {
+        text: format!("{}{}", UNIFIED_DKG_ROUND2_PREFIX, json),
+    };
+    for device_id in participants {
+        if device_id == self_device_id {
+            continue;
+        }
+        match crate::utils::device::send_webrtc_message(&device_id, &message, app_state.clone())
+            .await
+        {
+            Ok(()) => info!("✅ sent unified round2 to {}", device_id),
+            Err(e) => warn!("❌ unified round2 to {} failed: {}", device_id, e),
+        }
+    }
+}
+
+/// Finalize the unified ceremony: persist both curves and emit `DKGFinalized`
+/// (which the CLI bridge surfaces as `dkg_complete`). Idempotent — `finalize`
+/// returns `None` once the wallet is already written, so calling this from
+/// multiple completion edges is safe.
+async fn try_finalize_unified<C>(
+    app_state: &std::sync::Arc<tokio::sync::Mutex<crate::utils::appstate_compat::AppState<C>>>,
+    tx: &tokio::sync::mpsc::UnboundedSender<Message>,
+) where
+    C: frost_core::Ciphersuite + Send + Sync + 'static,
+{
+    let (password, keystore_path, label) = {
+        let state = app_state.lock().await;
+        state.unified_finalize.clone().unwrap_or_default()
+    };
+    let wallet_id = {
+        let state = app_state.lock().await;
+        state
+            .session
+            .as_ref()
+            .map(|s| crate::protocal::dkg::wallet_id_from_session(&s.session_id))
+            .unwrap_or_else(|| "wallet".to_string())
+    };
+    if let Some(outcome) = crate::protocal::unified_dkg::finalize(
+        app_state.clone(),
+        wallet_id,
+        password,
+        keystore_path,
+        label,
+    )
+    .await
+    {
+        // Both curves' canonical addresses, surfaced to the UI/CLI.
+        let addresses = vec![
+            ("ethereum".to_string(), outcome.eth_address.clone()),
+            ("solana".to_string(), outcome.solana_address.clone()),
+        ];
+        let _ = tx.send(Message::DKGFinalized {
+            wallet_id: outcome.wallet_id,
+            // The bridge derives the primary address from this + curve_type;
+            // here we pass the secp256k1 group key (Ethereum). The unified
+            // wallet's Solana address rides in `addresses`.
+            group_pubkey_hex: outcome.secp256k1_group_public_key,
+            curve_type: "secp256k1".to_string(),
+            addresses,
+        });
+    }
 }
 
 /// Load an existing wallet's OLD share + metadata from the keystore and seed the
@@ -555,7 +716,7 @@ impl Command {
                 }
             }
             
-            Command::StartDKG { config } => {
+            Command::StartDKG { config, unified } => {
                 // Creator-only path. Responsibility: mint a session_id, store
                 // it in AppState, broadcast AnnounceSession so joiners can
                 // discover us. FROST Round 1 is NOT triggered here — it needs
@@ -668,10 +829,18 @@ impl Command {
                     // Announce the session through the shared channel.
                     // `curve_type` comes from the ciphersuite type witness
                     // via `CurveIdentifier`, so joiners learn the real curve
-                    // from the announce rather than the legacy "unified"
-                    // placeholder.
-                    let announced_curve =
-                        <C as crate::utils::curve_traits::CurveIdentifier>::curve_type();
+                    // from the announce. UNIFIED ceremonies announce the
+                    // "unified" marker instead, so every node runs the dual-curve
+                    // path (creator + joiners agree off this one string).
+                    let announced_curve: &str = if unified {
+                        "unified"
+                    } else {
+                        <C as crate::utils::curve_traits::CurveIdentifier>::curve_type()
+                    };
+                    if unified {
+                        let mut state = app_state.lock().await;
+                        state.unified_mode = true;
+                    }
                     let session_info = serde_json::json!({
                         "session_id": session_id.clone(),
                         "total": config_clone.total_participants,
@@ -870,7 +1039,7 @@ impl Command {
                 // twice would regenerate the secret/package and break the
                 // protocol mid-flight. We atomically transition dkg_state to
                 // `Round1InProgress` only from `Idle` — subsequent calls bail.
-                let (device_id, internal_cmd_tx, have_session, already_running, is_reshare, dkg_in_progress) = {
+                let (device_id, internal_cmd_tx, have_session, already_running, is_reshare, dkg_in_progress, is_unified) = {
                     let mut state_guard = app_state.lock().await;
                     let already = !matches!(state_guard.dkg_state, crate::utils::state::DkgState::Idle);
                     if !already {
@@ -883,6 +1052,7 @@ impl Command {
                         already,
                         state_guard.reshare_in_progress,
                         state_guard.dkg_in_progress,
+                        state_guard.unified_mode,
                     )
                 };
                 if already_running {
@@ -943,13 +1113,35 @@ impl Command {
                     return Ok(());
                 }
 
+                // UNIFIED fork: run the dual-curve ceremony (ed25519 + secp256k1)
+                // instead of the single-curve path. Generates one round-1 package
+                // for both curves and broadcasts it to every peer.
+                if is_unified {
+                    info!(
+                        "🌐 Triggering UNIFIED FROST DKG Round 1 for device_id={}",
+                        device_id
+                    );
+                    if let Some(pkg) = crate::protocal::unified_dkg::start_round1(
+                        app_state.clone(),
+                        device_id.clone(),
+                    )
+                    .await
+                    {
+                        broadcast_unified_round1(app_state.clone(), &device_id, &pkg).await;
+                        let _ = tx.send(Message::Info {
+                            message: "✅ Unified DKG Round 1 initiated (ed25519 + secp256k1)".into(),
+                        });
+                    }
+                    return Ok(());
+                }
+
                 let internal_tx = internal_cmd_tx.unwrap_or_else(|| {
                     let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
                     tx
                 });
 
                 info!(
-                    "🌐 Triggering unified FROST DKG Round 1 for device_id={}",
+                    "🌐 Triggering single-curve FROST DKG Round 1 for device_id={}",
                     device_id
                 );
                 crate::protocal::dkg::handle_trigger_dkg_round1(
@@ -963,6 +1155,60 @@ impl Command {
                 let _ = tx.send(Message::Info {
                     message: "✅ DKG Round 1 initiated - exchanging commitments...".to_string(),
                 });
+            }
+
+            Command::PrepareUnifiedFinalize { password, keystore_path, label } => {
+                let mut state = app_state.lock().await;
+                state.unified_finalize = Some((password, keystore_path, label));
+            }
+
+            Command::ProcessUnifiedDKGRound1 { from_device, package_json } => {
+                let pkg: crate::protocal::unified_dkg::UnifiedRound1Package =
+                    match serde_json::from_str(&package_json) {
+                        Ok(p) => p,
+                        Err(e) => {
+                            error!("Bad unified round1 JSON from {}: {}", from_device, e);
+                            return Ok(());
+                        }
+                    };
+                let ready = crate::protocal::unified_dkg::ingest_round1(
+                    app_state.clone(),
+                    from_device,
+                    pkg,
+                )
+                .await;
+                if ready {
+                    // Run part2 + send targeted round-2 packages to every peer.
+                    if let Some(round2) =
+                        crate::protocal::unified_dkg::start_round2(app_state.clone()).await
+                    {
+                        let device_id = app_state.lock().await.device_id.clone();
+                        send_unified_round2(app_state.clone(), &device_id, &round2).await;
+                    }
+                    // Race fix (mirrors single-curve re-feed): a peer's round-2
+                    // package can arrive BEFORE our part2 ran, so it was ingested
+                    // (can_finalize=false then). Now that our part2 is done,
+                    // re-check and finalize if everything's present.
+                    if crate::protocal::unified_dkg::can_finalize(app_state.clone()).await {
+                        try_finalize_unified(app_state, &tx).await;
+                    }
+                }
+            }
+
+            Command::ProcessUnifiedDKGRound2 { from_device, message_json } => {
+                let msg: crate::protocal::unified_dkg::UnifiedRound2Message =
+                    match serde_json::from_str(&message_json) {
+                        Ok(m) => m,
+                        Err(e) => {
+                            error!("Bad unified round2 JSON from {}: {}", from_device, e);
+                            return Ok(());
+                        }
+                    };
+                let ready =
+                    crate::protocal::unified_dkg::ingest_round2(app_state.clone(), msg).await;
+                if ready {
+                    try_finalize_unified(app_state, &tx).await;
+                }
             }
 
             Command::ProcessDKGRound1 {
@@ -1321,6 +1567,11 @@ impl Command {
                             .unwrap_or_else(|| "Ed25519".to_string())
                     };
                     info!("📊 Joining session with curve type: {}, total {}", curve_type, known_total);
+                    // A "unified" announce means the dual-curve ceremony — flip
+                    // the joiner into unified mode so mesh-ready runs that path.
+                    if curve_type == "unified" {
+                        state.unified_mode = true;
+                    }
                     state.session = Some(crate::protocal::signal::SessionInfo {
                         session_id: session_id.clone(),
                         proposer_id: if known_proposer.is_empty() {
@@ -2678,7 +2929,8 @@ mod tests {
                 total_participants: 3,
                 threshold: 2,
                 mode: crate::elm::model::WalletMode::Online,
-            }
+            },
+            unified: false,
         };
         assert!(matches!(cmd, Command::StartDKG { .. }));
     }

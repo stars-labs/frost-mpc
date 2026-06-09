@@ -176,6 +176,12 @@ pub struct WalletState {
     /// from here instead — keeps session announcements honest about
     /// what curve is actually running.
     pub curve_type: &'static str,
+    /// `true` when this node runs a UNIFIED ceremony (ed25519 + secp256k1 from
+    /// one DKG). Set on the creator from `Message::SetUnifiedMode` (CLI
+    /// `--curve unified`); the announce then carries `curve_type: "unified"`
+    /// and joiners learn it from the announce. Independent of `curve_type`
+    /// (which stays the runner's concrete curve).
+    pub unified: bool,
     /// Live draft of the message the user is typing on the
     /// `SignTransaction` screen. Cleared on submit and on every exit
     /// from the screen (same discipline as `password_draft`).

@@ -124,6 +124,20 @@ pub struct AppState<C: Ciphersuite> {
         Option<tokio::sync::broadcast::Sender<Arc<webrtc_signal_server::ServerMsg>>>,
     // ICE candidate queue for handling race conditions
     pub ice_candidate_queue: Arc<tokio::sync::Mutex<std::collections::HashMap<String, Vec<webrtc::ice_transport::ice_candidate::RTCIceCandidateInit>>>>,
+
+    // --- Unified DKG (ed25519 + secp256k1 from one ceremony) ---
+    /// True when this node is running a UNIFIED ceremony (curve_type == "unified").
+    /// Set by the creator (from the model flag) or the joiner (from the announce).
+    /// When set, the mesh-ready trigger runs `protocal::unified_dkg` instead of
+    /// the single-curve `protocal::dkg`, and the generic `C` DKG fields are unused.
+    pub unified_mode: bool,
+    /// The concrete unified-DKG driver state (both curves). Lives here because
+    /// it is NOT generic over `C`; the unified path ignores `C` entirely.
+    pub unified_dkg: Option<frost_mpc_core::unified_dkg::UnifiedDkg>,
+    /// Finalize context (password, keystore_path, optional label) captured when
+    /// the unified ceremony is triggered, so the round-2 completion can persist
+    /// without re-threading these through every message.
+    pub unified_finalize: Option<(String, String, Option<String>)>,
 }
 
 impl<C: Ciphersuite + Send + Sync + 'static> Default for AppState<C>
@@ -215,6 +229,9 @@ where
             websocket_msg_tx: None,
             server_msg_broadcast_tx: None,
             ice_candidate_queue: Arc::new(tokio::sync::Mutex::new(std::collections::HashMap::new())),
+            unified_mode: false,
+            unified_dkg: None,
+            unified_finalize: None,
         }
     }
     
@@ -296,6 +313,9 @@ where
             websocket_msg_tx: None,
             server_msg_broadcast_tx: None,
             ice_candidate_queue: Arc::new(tokio::sync::Mutex::new(std::collections::HashMap::new())),
+            unified_mode: false,
+            unified_dkg: None,
+            unified_finalize: None,
         }
     }
     

@@ -1,5 +1,5 @@
 [package]
-name = "frost-mpc-frost-core"
+name = "frost-mpc-core"
 version = "0.1.0"
 edition = "2024"
 description = "Core FROST implementation for MPC Wallet"

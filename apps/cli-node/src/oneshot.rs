@@ -32,11 +32,51 @@ pub struct OneShotOpts {
     pub curve: String,
 }
 
-/// Spawn a runner whose events stream to the returned receiver.
-fn start(opts: &OneShotOpts) -> (UnboundedSender<Message>, UnboundedReceiver<CliEvent>) {
+/// Latest participant roster the runner has observed (from the live session),
+/// captured on every model sync. Lets a timeout report "joined so far: [...]" —
+/// the killer diagnostic when a device is missing or two used the same
+/// `--device-id` (the roster then never reaches `total`).
+#[derive(Default, Clone)]
+struct RosterPeek {
+    participants: Vec<String>,
+    total: u16,
+}
+
+/// Actionable suffix built from the roster we saw, for timeout messages.
+fn roster_hint(roster: &Arc<Mutex<RosterPeek>>) -> String {
+    let r = roster.lock().unwrap().clone();
+    let seen = if r.participants.is_empty() {
+        "none".to_string()
+    } else {
+        r.participants.join(", ")
+    };
+    let total = if r.total > 0 { r.total.to_string() } else { "?".to_string() };
+    format!(
+        "\n  → joined so far: [{seen}] ({}/{total}) — if that's short, a device isn't connected \
+         or two used the SAME --device-id (each needs a unique one).",
+        r.participants.len()
+    )
+}
+
+/// Spawn a runner whose events stream to the returned receiver; also returns a
+/// live view of the participant roster for timeout diagnostics.
+fn start(
+    opts: &OneShotOpts,
+) -> (
+    UnboundedSender<Message>,
+    UnboundedReceiver<CliEvent>,
+    Arc<Mutex<RosterPeek>>,
+) {
     let bridge = Arc::new(Mutex::new(Bridge::new()));
     let (ev_tx, ev_rx) = unbounded_channel::<CliEvent>();
+    let roster = Arc::new(Mutex::new(RosterPeek::default()));
+    let roster_cb = roster.clone();
     let cb = move |model: &Model, msg: Option<&Message>| {
+        if let Some(s) = model.active_session.as_ref() {
+            let mut r = roster_cb.lock().unwrap();
+            r.participants = s.participants.clone();
+            r.total = s.total;
+        }
         let events = bridge.lock().unwrap().on_sync(model, msg);
         for e in events {
             let _ = ev_tx.send(e);
@@ -57,7 +97,7 @@ fn start(opts: &OneShotOpts) -> (UnboundedSender<Message>, UnboundedReceiver<Cli
             cb,
         )
     };
-    (tx, ev_rx)
+    (tx, ev_rx, roster)
 }
 
 /// Actionable message when the signal-server connection never establishes —
@@ -123,6 +163,7 @@ async fn wait_outcome<P>(
     secs: u64,
     waiting_for: &str,
     hint: &str,
+    roster: Option<&Arc<Mutex<RosterPeek>>>,
     pred: P,
 ) -> anyhow::Result<CliEvent>
 where
@@ -141,7 +182,12 @@ where
     .await;
     match res {
         Ok(inner) => inner,
-        Err(_) => Err(anyhow::anyhow!("timed out after {secs}s waiting for {waiting_for}.{hint}")),
+        Err(_) => {
+            let extra = roster.map(roster_hint).unwrap_or_default();
+            Err(anyhow::anyhow!(
+                "timed out after {secs}s waiting for {waiting_for}.{hint}{extra}"
+            ))
+        }
     }
 }
 
@@ -154,13 +200,14 @@ fn print(ev: &CliEvent) {
 
 /// `wallet list` — read the keystore (no network).
 pub async fn wallet_list(opts: OneShotOpts) -> anyhow::Result<bool> {
-    let (tx, mut rx) = start(&opts);
+    let (tx, mut rx, _roster) = start(&opts);
     tx.send(Message::ListWallets)?;
     let ev = wait_outcome(
         &mut rx,
         5,
         "the wallet list",
         &format!("\n  → Check the --keystore path is readable ({}).", opts.keystore_path),
+        None,
         |e| matches!(e, CliEvent::Wallets { .. }),
     )
     .await?;
@@ -188,7 +235,7 @@ pub async fn wallet_create(
              Tip: 2-of-3 = --threshold 2 --total 3."
         );
     }
-    let (tx, mut rx) = start(&opts);
+    let (tx, mut rx, roster) = start(&opts);
     tx.send(Message::TriggerReconnect)?;
     wait_connected(&mut rx, &opts).await?;
     eprintln!(
@@ -217,6 +264,7 @@ pub async fn wallet_create(
         20,
         "the session announcement",
         "",
+        None,
         |e| matches!(e, CliEvent::SessionAnnounced { .. }),
     )
     .await
@@ -241,6 +289,7 @@ pub async fn wallet_create(
         "\n  → DKG needs ALL participants online together. On each OTHER device run \
          `mpc-wallet-cli session join --session-id <id shown above>` with the SAME --room and a \
          unique --device-id.",
+        Some(&roster),
         |e| matches!(e, CliEvent::DkgComplete { .. }),
     )
     .await?;
@@ -254,7 +303,7 @@ pub async fn session_join(
     session_id: String,
     password: String,
 ) -> anyhow::Result<bool> {
-    let (tx, mut rx) = start(&opts);
+    let (tx, mut rx, roster) = start(&opts);
     tx.send(Message::TriggerReconnect)?;
     wait_connected(&mut rx, &opts).await?;
     // Give the server a moment to replay the session, then join.
@@ -270,6 +319,7 @@ pub async fn session_join(
         "the session to complete",
         "\n  → Is the session id correct and the creator still online in the SAME --room? \
          Everyone must share --room and --signal-server; the password must match this wallet.",
+        Some(&roster),
         |e| {
             matches!(
                 e,
@@ -293,7 +343,7 @@ pub async fn reshare(
     wallet_id: String,
     password: String,
 ) -> anyhow::Result<bool> {
-    let (tx, mut rx) = start(&opts);
+    let (tx, mut rx, roster) = start(&opts);
     tx.send(Message::TriggerReconnect)?;
     wait_connected(&mut rx, &opts).await?;
     tx.send(Message::HeadlessReshare {
@@ -308,6 +358,7 @@ pub async fn reshare(
         "\n  → Reshare needs the retained signers to join the announced session in the SAME \
          --room (via `session join`, or `serve --auto-approve`). Check --wallet-id exists \
          (`wallet list`) and the password matches.",
+        Some(&roster),
         |e| matches!(e, CliEvent::ReshareComplete { .. }),
     )
     .await?;
@@ -323,7 +374,7 @@ pub async fn sign(
     encoding: String,
     password: String,
 ) -> anyhow::Result<bool> {
-    let (tx, mut rx) = start(&opts);
+    let (tx, mut rx, roster) = start(&opts);
     tx.send(Message::TriggerReconnect)?;
     wait_connected(&mut rx, &opts).await?;
     tx.send(Message::HeadlessSign {
@@ -339,6 +390,7 @@ pub async fn sign(
         "\n  → Signing needs a quorum to approve. Did a co-signer run `session join` (or \
          `serve --auto-approve`) on the announced session in the SAME --room? Check --wallet-id \
          exists (`wallet list`) and the password matches.",
+        Some(&roster),
         |e| matches!(e, CliEvent::SignatureComplete { .. }),
     )
     .await?;

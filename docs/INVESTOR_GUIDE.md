@@ -378,6 +378,10 @@ quorum keeps signing, and every pre-refresh share becomes dead.
 mpc-wallet-cli reshare --wallet-id <W> --room "$ROOM"
 #   → retained signers approve by running `session join` (or `serve --auto-approve`)
 #     on the announced reshare session, exactly like a co-signed transaction.
+
+# …or prove the whole thing self-contained, real separate processes, in one paste:
+scripts/demo/ceremony.sh --nodes 3 --threshold 2 --reshare
+#   → "reshared": true, "group_key_preserved": true  (the address never moved)
 ```
 
 The refresh preserves the invariants you point at:
@@ -392,9 +396,9 @@ The refresh preserves the invariants you point at:
 > attacker collecting fragments over months never assembles a key. A single-key custodial
 > wallet can't do any of that."
 
-> **Proof without a live setup:** the resharing engine (key-preserved refresh, refreshed
-> quorum signs, old share rejected) is verified end to end in the test suite —
-> `cargo test -p mpc-wallet-cli` — alongside the DKG and signing conformance cases. See
+> **Proof without a live setup:** `scripts/demo/ceremony.sh … --reshare` runs the whole
+> refresh across real separate processes and asserts the address is preserved; the engine is
+> also verified in the test suite (`cargo test -p mpc-wallet-cli`). See
 > `docs/RECOVERY_AND_RESHARING.md` for the full threat model + talking points.
 
 ---

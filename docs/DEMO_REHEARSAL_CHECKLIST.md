@@ -61,7 +61,8 @@ point into it).
        `mpc-wallet-cli reshare --wallet-id <W> --room "$ROOM"` and have the retained signers
        `session join` it → same `group_public_key`, the wallet keeps signing, the dropped
        device's share is dead. The "lose/rotate a device, same address" story. *(No live
-       setup? The resharing engine is verified in `cargo test -p mpc-wallet-cli`.)*
+       setup? `scripts/demo/ceremony.sh --nodes 3 --threshold 2 --reshare` proves it
+       self-contained in one paste → `"group_key_preserved": true`.)*
 
 ## Failure drills (rehearse the recovery, not just the happy path)
 

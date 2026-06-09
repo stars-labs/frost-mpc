@@ -8,11 +8,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 # Rust (all workspace crates)
 cargo build                              # Build all workspace members
 cargo test                               # Run all Rust tests
-cargo test -p mpc-wallet-frost-core      # Test specific package
+cargo test -p frost-mpc-frost-core      # Test specific package
 cargo test -p tui-node                   # Test TUI node
 cargo test test_name                     # Run single test by name
-cargo run --example unified_dkg -p mpc-wallet-frost-core  # Run example
-cargo run --bin mpc-wallet-tui -p tui-node                # Run TUI app
+cargo run --example unified_dkg -p frost-mpc-frost-core  # Run example
+cargo run --bin frost-mpc-tui -p tui-node                # Run TUI app
 cargo check                              # Fast type check without codegen
 
 # Browser extension (Bun + WASM)
@@ -31,7 +31,7 @@ bun test path/to/test.ts                 # Run single test file
 
 Rust monorepo (edition 2024) with a Bun-managed browser extension. Seven Cargo workspace members:
 
-### Core Library: `packages/@mpc-wallet/frost-core/`
+### Core Library: `packages/@frost-mpc/frost-core/`
 Shared FROST cryptographic implementation used by all Rust targets. Key modules:
 - `unified_dkg.rs` — Runs FROST DKG for ed25519 + secp256k1 simultaneously from a single root secret
 - `hd_derivation.rs` — BIP-44 style HD key derivation using additive scalar offsets (no extra DKG rounds)
@@ -47,8 +47,8 @@ Shared FROST cryptographic implementation used by all Rust targets. Key modules:
 - **`apps/signal-server/`** — WebRTC signaling: standard WebSocket server + Cloudflare Worker variant
 
 ### WASM & Blockchain
-- **`packages/@mpc-wallet/core-wasm/`** — Thin `wasm-bindgen` wrapper around frost-core
-- **`packages/@mpc-wallet/blockchain/`** — Multi-chain support. Only `solana-sdk` is pulled in directly; `bitcoin.rs` and `ethereum.rs` are hand-rolled over `sha2` / `sha3` / `bs58` primitives (ethers/bitcoin crate deps were removed when their dependent examples were disabled — see the Cargo.toml comment at line 27)
+- **`packages/@frost-mpc/core-wasm/`** — Thin `wasm-bindgen` wrapper around frost-core
+- **`packages/@frost-mpc/blockchain/`** — Multi-chain support. Only `solana-sdk` is pulled in directly; `bitcoin.rs` and `ethereum.rs` are hand-rolled over `sha2` / `sha3` / `bs58` primitives (ethers/bitcoin crate deps were removed when their dependent examples were disabled — see the Cargo.toml comment at line 27)
 
 ## Key Patterns
 
@@ -68,7 +68,7 @@ The extension is a standalone MPC client with TUI wire-protocol parity — any c
 
 1. **Popup** (`src/entrypoints/popup/App.svelte`) — Svelte 5 legacy reactivity (NOT runes). Lives only while the browser-action panel is open. Talks to background via `chrome.runtime.connect({name: "popup"})`.
 2. **Background SW** (`src/entrypoints/background/`) — Orchestrates. Owns `StateManager`, `SessionManager`, `WebSocketManager` (signal server), `OffscreenManager`. MV3 service workers terminate after ~30s idle; `KeepaliveController` pings during active DKG/signing states to prevent death.
-3. **Offscreen** (`src/entrypoints/offscreen/`) — Long-lived WebRTC + WASM host. Loads `@mpc-wallet/core-wasm` (FROST); holds `WebRTCManager` with all FROST state (`frostDkg`, `signingInfo`, `signingCommitments` Map, `signingShares` Map). Background↔offscreen communicate via `chrome.runtime.sendMessage` wrapped in `{type: "fromBackground"|"fromOffscreen", payload}`.
+3. **Offscreen** (`src/entrypoints/offscreen/`) — Long-lived WebRTC + WASM host. Loads `@frost-mpc/core-wasm` (FROST); holds `WebRTCManager` with all FROST state (`frostDkg`, `signingInfo`, `signingCommitments` Map, `signingShares` Map). Background↔offscreen communicate via `chrome.runtime.sendMessage` wrapped in `{type: "fromBackground"|"fromOffscreen", payload}`.
 4. **Content + injected** — Injects an EIP-1193 provider into page context. The provider is scoped to `window.starlabEthereum` only (never `window.ethereum`, to coexist with other wallet extensions); dApps discover it via EIP-6963 `eip6963:announceProvider` events. `window.starlabEthereum.request({method: 'personal_sign', ...})` → content script → `background.rpcHandler.handleSignMessageRequest`.
 
 ### Signing pipeline (end-to-end)
@@ -107,7 +107,7 @@ dApp .personal_sign OR popup "Sign Message"
 
 Shape-compatible with TUI (see TUI's `command.rs`). Top-level serde tag `type`, `snake_case`.
 
-- `announce_session` / `session_available` — session-discovery broadcasts. Flat `session_type: "dkg" | "signing"` string; signing sessions carry top-level `wallet_name`, `group_public_key`, `blockchain`, `signing_message_hex` siblings. See `packages/@mpc-wallet/types/src/session.ts`. Parser in `src/utils/session-parse.ts` synthesizes `accepted_devices: []` (TUI omits it) so downstream can always index.
+- `announce_session` / `session_available` — session-discovery broadcasts. Flat `session_type: "dkg" | "signing"` string; signing sessions carry top-level `wallet_name`, `group_public_key`, `blockchain`, `signing_message_hex` siblings. See `packages/@frost-mpc/types/src/session.ts`. Parser in `src/utils/session-parse.ts` synthesizes `accepted_devices: []` (TUI omits it) so downstream can always index.
 - `request_active_sessions` / `sessions_for_device` — cold-start replay. Extension fires `requestActiveSessions()` 2s after WS open so sessions announced before our connect aren't missed.
 - `session_status_update` — outbound only; emitted on join.
 - `relay` (generic peer-to-peer, wraps `websocket_msg_type`) — used for WebRTCSignal, SessionProposal, SessionResponse, and `SigningDecline` (Ext-3c, explicit rejection without joining the mesh).
@@ -185,7 +185,7 @@ apps/
   native-node/          # Rust binary (Slint GUI)
   signal-server/        # server/ + cloudflare-worker/
   browser-extension/    # WXT + Svelte + TailwindCSS
-packages/@mpc-wallet/
+packages/@frost-mpc/
   frost-core/           # Core crypto library
   core-wasm/            # WASM bindings
   blockchain/           # Chain integrations

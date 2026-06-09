@@ -33,7 +33,7 @@ desktop app over the same wire protocol and keystore format.
 When you start the wallet for the first time:
 
 ```bash
-mpc-wallet-tui --device-id <your-unique-id>
+frost-mpc-tui --device-id <your-unique-id>
 ```
 
 You'll see the main interface:
@@ -299,7 +299,7 @@ Offline mode is a **startup-time** decision, not a runtime toggle:
 launch with the `--offline` CLI flag.
 
 ```bash
-mpc-wallet-tui --device-id alice --offline
+frost-mpc-tui --device-id alice --offline
 ```
 
 Earlier drafts of this guide showed an in-app "Switch to Offline"
@@ -617,7 +617,7 @@ per-domain typed error enums: `KeystoreError`
 (`src/keystore/mod.rs:24`), `FrostKeystoreError`
 (`src/keystore/frost_keystore.rs:19`), `OfflineError`
 (`src/offline/mod.rs:24`), `CoreError` (`src/core/mod.rs:21`),
-plus upstream `FrostError` from `packages/@mpc-wallet/frost-core`.
+plus upstream `FrostError` from `packages/@frost-mpc/frost-core`.
 Grep the source by error message or enum name when debugging.
 There is no top-level `src/errors.rs` umbrella file despite what
 earlier drafts of this section claimed.

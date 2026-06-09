@@ -23,7 +23,7 @@
  *    the timer — the next interval still fires.
  */
 import { describe, it, expect, jest, beforeEach } from "bun:test";
-import { DkgState } from "@mpc-wallet/types/dkg";
+import { DkgState } from "@frost-mpc/types/dkg";
 import {
     KeepaliveController,
     KEEPALIVE_INTERVAL_MS,

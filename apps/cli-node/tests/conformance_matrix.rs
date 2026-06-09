@@ -10,9 +10,9 @@
 //! regression shows which shapes broke, not just the first.
 //!
 //! `#[ignore]` by default (real UDP/ICE on loopback, ~seconds per case). Run:
-//!   cargo test -p mpc-wallet-cli --test conformance_matrix -- --ignored --nocapture
+//!   cargo test -p frost-mpc-cli --test conformance_matrix -- --ignored --nocapture
 
-use mpc_wallet_cli::simulate::{
+use frost_mpc_cli::simulate::{
     run_late_join_discovery_simulation, run_reload_list_simulation, run_reload_unlock_simulation,
     run_signing_simulation, run_signing_simulation_enc, run_simulation, SimulateOpts,
     SIM_WALLET_LABEL,

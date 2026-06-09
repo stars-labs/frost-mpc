@@ -18,9 +18,9 @@ This document does two things:
 
 ## 1. What the three clients share
 
-| | Browser extension | CLI (`mpc-wallet-cli`) | TUI / native |
+| | Browser extension | CLI (`frost-mpc-cli`) | TUI / native |
 |---|---|---|---|
-| FROST crypto | `@mpc-wallet/core-wasm` (Rust→WASM) | `tui_node` core (Rust) | `tui_node` core |
+| FROST crypto | `@frost-mpc/core-wasm` (Rust→WASM) | `tui_node` core (Rust) | `tui_node` core |
 | Same FROST crates? | **yes** (`frost_secp256k1`/`frost_ed25519` via frost-core) | yes | yes |
 | Wire protocol | hand-written TS, modeled on TUI | Rust core | Rust core |
 | Transport | WebSocket (signal) + WebRTC (mesh) | same | same |
@@ -131,9 +131,9 @@ Target: a **2-of-3** wallet shared by `cli-a`, `cli-b`, and the extension
 ```bash
 ROOM=$(uuidgen)   # the ONE shared room for all three; the extension uses the same
 # terminal 1
-mpc-wallet-cli serve --device-id cli-a --keystore /tmp/ks-a --signal-server wss://panda.qzz.io --room "$ROOM"
+frost-mpc-cli serve --device-id cli-a --keystore /tmp/ks-a --signal-server wss://panda.qzz.io --room "$ROOM"
 # terminal 2
-mpc-wallet-cli serve --device-id cli-b --keystore /tmp/ks-b --signal-server wss://panda.qzz.io --room "$ROOM"
+frost-mpc-cli serve --device-id cli-b --keystore /tmp/ks-b --signal-server wss://panda.qzz.io --room "$ROOM"
 ```
 For the extension, set its signal server to `wss://panda.qzz.io/?room=<the same ROOM>`
 (or set the room in its settings).
@@ -215,7 +215,7 @@ Same as §3, but the three nodes are on three machines.
 ### 4.2 Local signal server (no internet / most reliable)
 On one machine:
 ```bash
-MPC_SIGNAL_BIND=0.0.0.0:9000 mpc-wallet-cli ...   # or: cargo run -p webrtc-signal-server
+MPC_SIGNAL_BIND=0.0.0.0:9000 frost-mpc-cli ...   # or: cargo run -p webrtc-signal-server
 ```
 Point every node at `ws://<that-machine-LAN-ip>:9000`. Removes the internet
 dependency; ideal for a controlled demo room. (See the fallback ladder in

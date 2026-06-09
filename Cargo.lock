@@ -2816,6 +2816,87 @@ dependencies = [
 ]
 
 [[package]]
+name = "frost-mpc-blockchain"
+version = "0.1.0"
+dependencies = [
+ "bs58",
+ "hex",
+ "serde_json",
+ "sha2 0.11.0",
+ "sha3 0.11.0",
+ "solana-sdk",
+ "thiserror 2.0.18",
+]
+
+[[package]]
+name = "frost-mpc-cli"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "frost-core",
+ "frost-ed25519",
+ "frost-mpc-frost-core",
+ "frost-secp256k1",
+ "futures-util",
+ "hex",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "tokio-tungstenite",
+ "tracing",
+ "tracing-subscriber",
+ "tui-node",
+ "webrtc-signal-server",
+]
+
+[[package]]
+name = "frost-mpc-core-wasm"
+version = "0.1.0"
+dependencies = [
+ "console_error_panic_hook",
+ "frost-ed25519",
+ "frost-mpc-frost-core",
+ "frost-secp256k1",
+ "getrandom 0.2.17",
+ "getrandom 0.4.2",
+ "hex",
+ "rand_core 0.6.4",
+ "serde_json",
+ "wasm-bindgen",
+]
+
+[[package]]
+name = "frost-mpc-frost-core"
+version = "0.1.0"
+dependencies = [
+ "aes-gcm",
+ "argon2",
+ "base64",
+ "bs58",
+ "clap",
+ "frost-core",
+ "frost-ed25519",
+ "frost-ristretto255",
+ "frost-secp256k1",
+ "getrandom 0.4.2",
+ "hex",
+ "hkdf 0.13.0",
+ "hmac 0.13.0",
+ "k256",
+ "password-hash 0.6.1",
+ "pbkdf2 0.12.2",
+ "rand_chacha 0.3.1",
+ "rand_core 0.6.4",
+ "serde",
+ "serde_json",
+ "sha2 0.11.0",
+ "sha3 0.11.0",
+ "thiserror 2.0.18",
+]
+
+[[package]]
 name = "frost-rerandomized"
 version = "2.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4533,87 +4614,6 @@ checksum = "bb85c154ba489f01b25c0d36ae69a87e4a1c73a72631fc6c0eb6dde34a73e44b"
 dependencies = [
  "num-traits",
  "pxfm",
-]
-
-[[package]]
-name = "mpc-wallet-blockchain"
-version = "0.1.0"
-dependencies = [
- "bs58",
- "hex",
- "serde_json",
- "sha2 0.11.0",
- "sha3 0.11.0",
- "solana-sdk",
- "thiserror 2.0.18",
-]
-
-[[package]]
-name = "mpc-wallet-cli"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "clap",
- "frost-core",
- "frost-ed25519",
- "frost-secp256k1",
- "futures-util",
- "hex",
- "mpc-wallet-frost-core",
- "serde",
- "serde_json",
- "tempfile",
- "tokio",
- "tokio-tungstenite",
- "tracing",
- "tracing-subscriber",
- "tui-node",
- "webrtc-signal-server",
-]
-
-[[package]]
-name = "mpc-wallet-core-wasm"
-version = "0.1.0"
-dependencies = [
- "console_error_panic_hook",
- "frost-ed25519",
- "frost-secp256k1",
- "getrandom 0.2.17",
- "getrandom 0.4.2",
- "hex",
- "mpc-wallet-frost-core",
- "rand_core 0.6.4",
- "serde_json",
- "wasm-bindgen",
-]
-
-[[package]]
-name = "mpc-wallet-frost-core"
-version = "0.1.0"
-dependencies = [
- "aes-gcm",
- "argon2",
- "base64",
- "bs58",
- "clap",
- "frost-core",
- "frost-ed25519",
- "frost-ristretto255",
- "frost-secp256k1",
- "getrandom 0.4.2",
- "hex",
- "hkdf 0.13.0",
- "hmac 0.13.0",
- "k256",
- "password-hash 0.6.1",
- "pbkdf2 0.12.2",
- "rand_chacha 0.3.1",
- "rand_core 0.6.4",
- "serde",
- "serde_json",
- "sha2 0.11.0",
- "sha3 0.11.0",
- "thiserror 2.0.18",
 ]
 
 [[package]]
@@ -8921,13 +8921,13 @@ dependencies = [
  "ethers-core",
  "frost-core",
  "frost-ed25519",
+ "frost-mpc-frost-core",
  "frost-secp256k1",
  "futures-util",
  "gethostname",
  "getrandom 0.4.2",
  "hex",
  "k256",
- "mpc-wallet-frost-core",
  "pbkdf2 0.12.2",
  "rand 0.10.1",
  "ratatui",

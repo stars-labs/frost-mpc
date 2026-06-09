@@ -2,13 +2,13 @@
     import { onMount } from "svelte";
     import NetworkService from "../services/networkService";
     import { mainnet } from "viem/chains";
-    import type { Chain } from "@mpc-wallet/types/network";
-    import type { SupportedChain } from "@mpc-wallet/types/appstate";
+    import type { Chain } from "@frost-mpc/types/network";
+    import type { SupportedChain } from "@frost-mpc/types/appstate";
     import {
         CURVE_COMPATIBLE_CHAINS,
         getCompatibleChains,
         getRequiredCurve,
-    } from "@mpc-wallet/types/appstate";
+    } from "@frost-mpc/types/appstate";
     import { createPublicClient, http } from "viem";
     import { createEventDispatcher } from "svelte";
     import { themeMode, setTheme, type ThemeMode } from "../lib/theme";

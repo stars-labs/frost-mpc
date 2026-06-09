@@ -12,8 +12,8 @@ the production signaling path runs on a Cloudflare Worker.
 | Signal server (edge) | Cloudflare Worker | `wrangler deploy` from `apps/signal-server/cloudflare-worker/` — see [CLOUDFLARE_DEPLOYMENT.md](CLOUDFLARE_DEPLOYMENT.md) |
 | Signal server (self-host) | Native Rust binary from `apps/signal-server/server/` | systemd service behind an HTTPS terminator (nginx/caddy/Cloudflare Tunnel). Binds `0.0.0.0:9000`. Stateless, no DB, no Redis. |
 | Browser extension | `bun run build` (Chrome MV3) / `bun run build:firefox` | Chrome Web Store / AMO distribution, or sideload via `.output/<browser>-mv3` |
-| TUI wallet | `cargo build --release --bin mpc-wallet-tui` | End-user distribution — not a server deployment; single static binary. |
-| Native desktop | `cargo build --release -p mpc-wallet-native` | End-user Slint desktop binary. |
+| TUI wallet | `cargo build --release --bin frost-mpc-tui` | End-user distribution — not a server deployment; single static binary. |
+| Native desktop | `cargo build --release -p frost-mpc-native` | End-user Slint desktop binary. |
 
 ## Cloudflare Worker signal server
 
@@ -53,7 +53,7 @@ After=network.target
 [Service]
 Type=simple
 User=signal-server
-ExecStart=/opt/mpc-wallet/webrtc-signal-server
+ExecStart=/opt/frost-mpc/webrtc-signal-server
 Restart=on-failure
 RestartSec=5s
 LimitNOFILE=65536
@@ -75,7 +75,7 @@ bun run build             # -> .output/chrome-mv3/ (default target)
 bun run build:firefox     # -> .output/firefox-mv2/
 
 # Package for web-store upload
-cd .output/chrome-mv3 && zip -r ../../mpc-wallet-chrome.zip .
+cd .output/chrome-mv3 && zip -r ../../frost-mpc-chrome.zip .
 ```
 
 Install unpacked during development via `chrome://extensions` →

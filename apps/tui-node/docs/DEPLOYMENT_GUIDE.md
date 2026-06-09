@@ -54,15 +54,15 @@ Start TUI nodes in separate terminals:
 
 ```bash
 # Terminal 1
-cargo run -p tui-node --bin mpc-wallet-tui -- \
+cargo run -p tui-node --bin frost-mpc-tui -- \
   --signal-server ws://localhost:9000 --device-id mpc-1
 
 # Terminal 2
-cargo run -p tui-node --bin mpc-wallet-tui -- \
+cargo run -p tui-node --bin frost-mpc-tui -- \
   --signal-server ws://localhost:9000 --device-id mpc-2
 
 # Terminal 3
-cargo run -p tui-node --bin mpc-wallet-tui -- \
+cargo run -p tui-node --bin frost-mpc-tui -- \
   --signal-server ws://localhost:9000 --device-id mpc-3
 ```
 
@@ -74,14 +74,14 @@ bound to that domain).
 
 The repo does NOT ship pre-built systemd unit files — earlier
 drafts of this guide referenced `systemd/mpc-signal-server.service`
-+ `mpc-wallet-cluster.target` + `mpc-wallet-node@.service` that
++ `frost-mpc-cluster.target` + `frost-mpc-node@.service` that
 don't exist (verified: no `systemd/` dir, no `.service` files in
 the tree).
 
 For a self-hosted production deployment, write your own unit files
 adapted from the template in `docs/deployment/README.md` § "systemd
 unit template". The binary paths are whatever you place under
-`/opt/mpc-wallet/` or similar after `cargo build --release`.
+`/opt/frost-mpc/` or similar after `cargo build --release`.
 
 ## Configuration
 
@@ -94,14 +94,14 @@ address, edit that line (or add a CLI flag + wire it through).
 ### TUI node
 
 Accepts these CLI flags (authoritative:
-`apps/tui-node/src/bin/mpc-wallet-tui.rs`):
+`apps/tui-node/src/bin/frost-mpc-tui.rs`):
 
 | Flag                      | Default                           |
 |---------------------------|-----------------------------------|
 | `--device-id <ID>`        | hostname                          |
 | `--signal-server <URL>`   | `wss://xiongchenyu.dpdns.org`     |
 | `--offline`               | (off)                             |
-| `--log-location <PATH>`   | `~/.frost_keystore/logs/mpc-wallet.log` |
+| `--log-location <PATH>`   | `~/.frost_keystore/logs/frost-mpc.log` |
 | `--log-level <LEVEL>`     | `info`                            |
 
 Environment: only `HOME` (to compute the keystore path), `RUST_LOG`
@@ -158,13 +158,13 @@ wscat -c ws://localhost:9000/
 
 ```bash
 # Single node against a running signal server
-cargo run -p tui-node --bin mpc-wallet-tui -- \
+cargo run -p tui-node --bin frost-mpc-tui -- \
   --signal-server ws://localhost:9000 --device-id test-node
 
 # Smoke DKG test (runs the whole workspace test suite)
 ./scripts/smoke-dkg.sh
 
-# 3-node cluster launcher — spins up three mpc-wallet-tui processes
+# 3-node cluster launcher — spins up three frost-mpc-tui processes
 # with distinct --device-id values against a running signal server
 ./apps/tui-node/scripts/launch-3node-cluster.sh
 ```

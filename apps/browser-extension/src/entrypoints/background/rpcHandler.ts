@@ -14,7 +14,7 @@ import WalletClientService from '../../services/walletClient';
 import WalletController from "../../services/walletController";
 import { getPermissionService } from '../../services/permissionService';
 import { toHex } from 'viem';
-import type { JsonRpcRequest } from "@mpc-wallet/types/messages";
+import type { JsonRpcRequest } from "@frost-mpc/types/messages";
 import type { SessionManager } from './sessionManager';
 
 /**

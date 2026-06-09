@@ -1,17 +1,17 @@
 [package]
-name = "mpc-wallet-cli"
+name = "frost-mpc-cli"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 authors.workspace = true
 
 [[bin]]
-name = "mpc-wallet-cli"
+name = "frost-mpc-cli"
 path = "src/main.rs"
 
 [dependencies]
 tui-node = { path = "../tui-node" }
-mpc-wallet-frost-core = { path = "../../packages/@mpc-wallet/frost-core" }
+frost-mpc-frost-core = { path = "../../packages/@frost-mpc/frost-core" }
 webrtc-signal-server = { path = "../signal-server/server" }
 tokio = { workspace = true }
 serde = { workspace = true }

@@ -13,8 +13,8 @@
 import type {
     PopupToBackgroundMessage,
     OffscreenToBackgroundMessage
-} from "@mpc-wallet/types/messages";
-import { MESSAGE_TYPES, isRpcMessage, isAccountManagement, isNetworkManagement, isUIRequest } from "@mpc-wallet/types/messages";
+} from "@frost-mpc/types/messages";
+import { MESSAGE_TYPES, isRpcMessage, isAccountManagement, isNetworkManagement, isUIRequest } from "@frost-mpc/types/messages";
 import { StateManager } from "./stateManager";
 import { OffscreenManager } from "./offscreenManager";
 import { WebSocketManager } from "./webSocketManager";
@@ -23,7 +23,7 @@ import { checkAndRestoreKeystores } from "./index";
 import { RpcHandler, UIRequestHandler } from "./rpcHandler";
 import AccountService from "../../services/accountService";
 import { KeystoreManager } from "../../services/keystoreManager";
-import { DkgState } from "@mpc-wallet/types/dkg";
+import { DkgState } from "@frost-mpc/types/dkg";
 
 /**
  * Handles messages from popup interface

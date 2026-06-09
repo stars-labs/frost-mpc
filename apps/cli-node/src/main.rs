@@ -1,4 +1,4 @@
-//! `mpc-wallet-cli` — headless, scriptable front-end for the MPC wallet.
+//! `frost-mpc-cli` — headless, scriptable front-end for the MPC wallet.
 //!
 //! Drives the same Elm core as the TUI/native via
 //! `tui_node::elm::HeadlessRunner`, exposing a newline-delimited JSON
@@ -8,14 +8,14 @@
 //! IMPORTANT: stdout carries ONLY protocol JSON. All logs go to stderr.
 
 use clap::{Parser, Subcommand};
-use mpc_wallet_cli::oneshot::{self, OneShotOpts};
-use mpc_wallet_cli::policy::{self, AutoApprovePolicy};
-use mpc_wallet_cli::protocol;
-use mpc_wallet_cli::serve::{self, ServeOpts};
+use frost_mpc_cli::oneshot::{self, OneShotOpts};
+use frost_mpc_cli::policy::{self, AutoApprovePolicy};
+use frost_mpc_cli::protocol;
+use frost_mpc_cli::serve::{self, ServeOpts};
 use std::sync::Arc;
 
 #[derive(Parser)]
-#[command(name = "mpc-wallet-cli", version, about = "Headless MPC wallet CLI")]
+#[command(name = "frost-mpc-cli", version, about = "Headless MPC wallet CLI")]
 struct Cli {
     #[command(subcommand)]
     command: Command,
@@ -272,13 +272,13 @@ fn parse_cli() -> Cli {
                     let tip = match bad.as_str() {
                         "join" => Some(
                             "to join a wallet another device created, run:\n  \
-                             mpc-wallet-cli session join --session-id <id> --room <room> \
+                             frost-mpc-cli session join --session-id <id> --room <room> \
                              --device-id <unique> --password <pw>\n\
                              (the <id> is the dkg_… that `wallet create` prints.)",
                         ),
                         "create" => Some(
                             "to create a shared wallet, run:\n  \
-                             mpc-wallet-cli wallet create --room <room> --device-id <unique> \
+                             frost-mpc-cli wallet create --room <room> --device-id <unique> \
                              --password <pw>",
                         ),
                         _ => None,

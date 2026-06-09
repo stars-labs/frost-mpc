@@ -12,7 +12,7 @@
 //!
 //! `#[ignore]` by default (real WebRTC/DKG over loopback).
 //! Regenerate the golden after a reviewed protocol change:
-//!   BLESS=1 cargo test -p mpc-wallet-cli --test wire_trace -- --ignored
+//!   BLESS=1 cargo test -p frost-mpc-cli --test wire_trace -- --ignored
 
 use std::collections::BTreeSet;
 use std::sync::{Arc, Mutex};
@@ -21,7 +21,7 @@ use futures_util::{SinkExt, StreamExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio_tungstenite::tungstenite::Message;
 
-use mpc_wallet_cli::simulate::{run_simulation, SimulateOpts};
+use frost_mpc_cli::simulate::{run_simulation, SimulateOpts};
 
 /// A captured frame: direction (`C>` client→server, `S>` server→client) + the
 /// raw JSON text.
@@ -201,7 +201,7 @@ async fn capture_signing_frames(nodes: usize, threshold: u16) -> Vec<String> {
     tokio::spawn(webrtc_signal_server::run(server));
     let (proxy_url, log) = spawn_record_proxy(format!("ws://127.0.0.1:{s_port}")).await;
 
-    let r = mpc_wallet_cli::simulate::run_signing_simulation(
+    let r = frost_mpc_cli::simulate::run_signing_simulation(
         SimulateOpts {
             nodes,
             threshold,
@@ -247,7 +247,7 @@ async fn signing_wire_protocol_matches_golden() {
     }
     let expected = std::fs::read_to_string(&path).unwrap_or_else(|_| {
         panic!(
-            "missing signing wire golden {} — generate with BLESS=1 cargo test -p mpc-wallet-cli --test wire_trace -- --ignored",
+            "missing signing wire golden {} — generate with BLESS=1 cargo test -p frost-mpc-cli --test wire_trace -- --ignored",
             path.display()
         )
     });
@@ -300,7 +300,7 @@ async fn dkg_wire_protocol_matches_golden() {
     }
     let expected = std::fs::read_to_string(&path).unwrap_or_else(|_| {
         panic!(
-            "missing wire golden {} — generate with BLESS=1 cargo test -p mpc-wallet-cli --test wire_trace -- --ignored",
+            "missing wire golden {} — generate with BLESS=1 cargo test -p frost-mpc-cli --test wire_trace -- --ignored",
             path.display()
         )
     });

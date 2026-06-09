@@ -1,6 +1,6 @@
 <script lang="ts">
     import { createEventDispatcher } from 'svelte';
-    import type { ExtensionWalletMetadata } from "@mpc-wallet/types/keystore";
+    import type { ExtensionWalletMetadata } from "@frost-mpc/types/keystore";
     
     export let wallets: ExtensionWalletMetadata[] = [];
     export let activeWallet: ExtensionWalletMetadata | null = null;

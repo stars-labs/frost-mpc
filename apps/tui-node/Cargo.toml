@@ -9,7 +9,7 @@ path = "src/lib.rs"
 
 [dependencies]
 # Shared FROST library (DKG state machine, keystore encryption, curve helpers).
-mpc-wallet-frost-core = { path = "../../packages/@mpc-wallet/frost-core" }
+frost-mpc-frost-core = { path = "../../packages/@frost-mpc/frost-core" }
 
 # FROST 2.2 — secp256k1 for Ethereum, ed25519 for Solana, `frost-core`
 # for ciphersuite-generic bounds.
@@ -91,5 +91,5 @@ gethostname = "1.1.0"
 tempfile = "3.14.0"
 
 [[bin]]
-name = "mpc-wallet-tui"
-path = "src/bin/mpc-wallet-tui.rs"
+name = "frost-mpc-tui"
+path = "src/bin/frost-mpc-tui.rs"

@@ -1,4 +1,4 @@
-//! L3 (process isolation): drive the REAL `mpc-wallet-cli serve` binary as
+//! L3 (process isolation): drive the REAL `frost-mpc-cli serve` binary as
 //! separate OS processes and run a full DKG between them over the JSONL
 //! protocol. This is the first cross-process layer from
 //! docs/cli-conformance-testing.md — nothing else exercises the actual
@@ -12,7 +12,7 @@
 //! (LIFE-2) will eventually live.
 //!
 //! `#[ignore]` by default (spawns processes + real WebRTC over loopback):
-//!   cargo test -p mpc-wallet-cli --test l3_serve_process -- --ignored --nocapture
+//!   cargo test -p frost-mpc-cli --test l3_serve_process -- --ignored --nocapture
 
 use std::process::Stdio;
 use std::time::Duration;
@@ -41,7 +41,7 @@ impl ServeProc {
         ws_url: &str,
         extra: &[&str],
     ) -> anyhow::Result<Self> {
-        let mut child = Command::new(env!("CARGO_BIN_EXE_mpc-wallet-cli"))
+        let mut child = Command::new(env!("CARGO_BIN_EXE_frost-mpc-cli"))
             .arg("serve")
             .args(["--device-id", device_id])
             .args(["--keystore", keystore])

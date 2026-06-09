@@ -5,9 +5,9 @@ members = [
     "apps/cli-node",
     "apps/signal-server/server",
     "apps/signal-server/cloudflare-worker",
-    "packages/@mpc-wallet/frost-core",
-    "packages/@mpc-wallet/core-wasm",
-    "packages/@mpc-wallet/blockchain",
+    "packages/@frost-mpc/frost-core",
+    "packages/@frost-mpc/core-wasm",
+    "packages/@frost-mpc/blockchain",
 ]
 resolver = "2"
 
@@ -16,7 +16,7 @@ version = "0.1.0"
 authors = ["MPC Wallet Team"]
 edition = "2024"
 license = "Apache-2.0"
-repository = "https://github.com/hecoinfo/mpc-wallet"
+repository = "https://github.com/hecoinfo/frost-mpc"
 
 [workspace.dependencies]
 # Common dependencies shared across workspace members

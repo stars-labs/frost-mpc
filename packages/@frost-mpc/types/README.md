@@ -1,4 +1,4 @@
-# @mpc-wallet/types
+# @frost-mpc/types
 
 Shared TypeScript type definitions for the MPC Wallet ecosystem.
 
@@ -9,15 +9,15 @@ npm. The monorepo's root `package.json` is marked `"private":
 true` and workspace members consume it via
 
 ```json
-"@mpc-wallet/types": "workspace:*"
+"@frost-mpc/types": "workspace:*"
 ```
 
 in their own `package.json`, resolved by Bun's workspace
 linker (see `apps/browser-extension/package.json:42` for the
 reference pattern).
 
-Earlier drafts of this README showed `bun add @mpc-wallet/types`
-/ `npm install @mpc-wallet/types` as install commands; both
+Earlier drafts of this README showed `bun add @frost-mpc/types`
+/ `npm install @frost-mpc/types` as install commands; both
 would fail for external consumers because the package isn't
 on any registry. To use these types outside the monorepo
 you would need to copy the source or publish a fork yourself.
@@ -27,7 +27,7 @@ you would need to copy the source or publish a fork yourself.
 ### Import specific types
 
 ```typescript
-import { AppState, SessionInfo, DkgState } from '@mpc-wallet/types';
+import { AppState, SessionInfo, DkgState } from '@frost-mpc/types';
 ```
 
 ### Import message types
@@ -37,7 +37,7 @@ import {
     PopupToBackgroundMessage,
     BackgroundToOffscreenMessage,
     MESSAGE_TYPES 
-} from '@mpc-wallet/types';
+} from '@frost-mpc/types';
 ```
 
 ### Import constants and utilities
@@ -47,7 +47,7 @@ import {
     INITIAL_APP_STATE,
     MeshStatusType,
     validateSessionProposal 
-} from '@mpc-wallet/types';
+} from '@frost-mpc/types';
 ```
 
 ## Available Types
@@ -91,7 +91,7 @@ as the re-export aggregator):
 - `webrtc.ts` - WebRTC communication types
   (`WebRTCAppMessage` with `webrtc_msg_type` tag)
 - `websocket.ts` - WebSocket signaling types
-- `index.ts` - re-exports everything for the `@mpc-wallet/types`
+- `index.ts` - re-exports everything for the `@frost-mpc/types`
   root import (earlier drafts of this list omitted `index.ts`)
 
 ## Development

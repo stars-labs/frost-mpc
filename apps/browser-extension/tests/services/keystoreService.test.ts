@@ -1,5 +1,5 @@
 import { KeystoreService } from '../../src/services/keystoreService';
-import type { KeyShareData, ExtensionWalletMetadata, KeystoreBackup } from "@mpc-wallet/types/keystore";
+import type { KeyShareData, ExtensionWalletMetadata, KeystoreBackup } from "@frost-mpc/types/keystore";
 import { resetStorageData } from '../__mocks__/imports';
 import { resetWxtStorageData } from '../wxt-imports-mock';
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';

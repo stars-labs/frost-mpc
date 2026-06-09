@@ -199,7 +199,7 @@ Emergency notification and alert management.
 │   │  │ - Action Taken: All wallets locked                      │   │     │
 │   │  │                                                           │   │     │
 │   │  │ Required Response: Acknowledge within 15 minutes         │   │     │
-│   │  │ Dashboard: https://mpc-wallet.company.com/emergency      │   │     │
+│   │  │ Dashboard: https://frost-mpc.company.com/emergency      │   │     │
 │   │  └─────────────────────────────────────────────────────────┘   │     │
 │   │                                                                   │     │
 │   │  Recipient Groups:                                               │     │

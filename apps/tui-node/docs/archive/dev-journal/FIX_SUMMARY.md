@@ -53,7 +53,7 @@ if std::env::var("FORCE_TTY").unwrap_or_default() != "1" {
 ### 4. Enhanced Panic Handling
 **Problem**: Crashes were silent and difficult to diagnose.
 
-**Fix Applied** (`src/bin/mpc-wallet-tui.rs`):
+**Fix Applied** (`src/bin/frost-mpc-tui.rs`):
 Added comprehensive panic handler to capture and log panic details including message, location, thread, and backtrace.
 
 ## Testing Verification
@@ -70,13 +70,13 @@ All fixes have been tested and verified:
 1. `/apps/tui-node/src/elm/components/dkg_progress.rs` - Fixed gauge percentage calculation
 2. `/apps/tui-node/src/elm/update.rs` - Added JoinSession arrow key handling
 3. `/apps/tui-node/src/elm/app.rs` - Fixed TTY mode handling for testing
-4. `/apps/tui-node/src/bin/mpc-wallet-tui.rs` - Added panic handler
+4. `/apps/tui-node/src/bin/frost-mpc-tui.rs` - Added panic handler
 
 ## How to Test
 
 1. Run mpc-2 to join a DKG session:
    ```bash
-   cargo run --bin mpc-wallet-tui -- --device-id mpc-2
+   cargo run --bin frost-mpc-tui -- --device-id mpc-2
    ```
 
 2. Navigate to Join Session screen and use arrow keys to select sessions
@@ -85,5 +85,5 @@ All fixes have been tested and verified:
 
 4. For automated testing:
    ```bash
-   FORCE_TTY=1 cargo run --bin mpc-wallet-tui -- --device-id mpc-2
+   FORCE_TTY=1 cargo run --bin frost-mpc-tui -- --device-id mpc-2
    ```

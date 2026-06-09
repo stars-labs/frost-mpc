@@ -82,7 +82,7 @@ grep -r "expect(" src/ --include="*.rs" | grep -v test
 
 # Security audit
 echo "PBKDF2_ITERATIONS=300000" >> .env
-cargo run --bin mpc-wallet-tui -- --security-info
+cargo run --bin frost-mpc-tui -- --security-info
 ```
 
 ## Impact Assessment

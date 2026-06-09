@@ -519,7 +519,7 @@ Maintain a database of all error codes with:
 The TUI binary does not currently expose `--debug-report`,
 `--analyze-errors`, or `--inject-error` flags — the support-tooling
 story is "run with `--log-level debug` and send the log file". See
-`apps/tui-node/src/bin/mpc-wallet-tui.rs` for the real flag list. A
+`apps/tui-node/src/bin/frost-mpc-tui.rs` for the real flag list. A
 dedicated debug-report bundler is tracked as future work.
 
 ## Monitoring & Analytics

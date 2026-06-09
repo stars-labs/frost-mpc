@@ -9,10 +9,10 @@ rm -rf node_modules dist target .wxt coverage
 
 # Clean packages
 echo "📦 Cleaning packages..."
-rm -rf packages/@mpc-wallet/*/node_modules
-rm -rf packages/@mpc-wallet/*/dist
-rm -rf packages/@mpc-wallet/*/pkg
-rm -rf packages/@mpc-wallet/*/target
+rm -rf packages/@frost-mpc/*/node_modules
+rm -rf packages/@frost-mpc/*/dist
+rm -rf packages/@frost-mpc/*/pkg
+rm -rf packages/@frost-mpc/*/target
 
 # Clean apps
 echo "📱 Cleaning apps..."

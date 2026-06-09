@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, mock } from 'bun:test';
 // ExtensionMessage / ExtensionResponse were removed from
-// @mpc-wallet/types; the test file uses local `any` types for
+// @frost-mpc/types; the test file uses local `any` types for
 // the mock handler signatures (messages are constructed inline
 // and only checked structurally).
 type ExtensionMessage = any;

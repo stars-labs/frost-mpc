@@ -12,8 +12,8 @@
 import type {
     BackgroundToOffscreenWrapper,
     OffscreenMessage
-} from "@mpc-wallet/types/messages";
-import { AppState } from "@mpc-wallet/types/appstate";
+} from "@frost-mpc/types/messages";
+import { AppState } from "@frost-mpc/types/appstate";
 import { getSignalServerUrl } from "../../config/signal-server";
 
 /**

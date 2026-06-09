@@ -113,7 +113,7 @@ impl OfflineManager {
         }
         
         // Create export directory
-        let export_dir = self.sd_card_path.join("mpc_wallet_export");
+        let export_dir = self.sd_card_path.join("frost_mpc_export");
         fs::create_dir_all(&export_dir).await
             .map_err(|e| CoreError::Offline(format!("Failed to create export directory: {}", e)))?;
         
@@ -169,7 +169,7 @@ impl OfflineManager {
         }
         
         // Look for import directory
-        let import_dir = self.sd_card_path.join("mpc_wallet_import");
+        let import_dir = self.sd_card_path.join("frost_mpc_import");
         if !import_dir.exists() {
             self.ui_callback.show_message(
                 "No import directory found on SD card".to_string(),
@@ -254,8 +254,8 @@ impl OfflineManager {
         }
         
         // Remove export and import directories
-        let export_dir = self.sd_card_path.join("mpc_wallet_export");
-        let import_dir = self.sd_card_path.join("mpc_wallet_import");
+        let export_dir = self.sd_card_path.join("frost_mpc_export");
+        let import_dir = self.sd_card_path.join("frost_mpc_import");
         
         if export_dir.exists() {
             fs::remove_dir_all(&export_dir).await

@@ -8,12 +8,12 @@
 //! Deterministic + offline → runs in the fast CI lane (not `#[ignore]`).
 //!
 //! Regenerate intentionally after a *reviewed* protocol change:
-//!   BLESS=1 cargo test -p mpc-wallet-cli --test event_contract
+//!   BLESS=1 cargo test -p frost-mpc-cli --test event_contract
 
-use mpc_wallet_cli::protocol::{
+use frost_mpc_cli::protocol::{
     CliEvent, SessionEntry, WalletEntry, PROTOCOL_VERSION,
 };
-use mpc_wallet_cli::trace::normalize_event_line;
+use frost_mpc_cli::trace::normalize_event_line;
 
 /// One representative instance of every `CliEvent` variant, in declaration
 /// order. Volatile values are arbitrary — normalization redacts them — so this
@@ -117,7 +117,7 @@ fn event_contract_matches_golden() {
 
     let expected = std::fs::read_to_string(&path).unwrap_or_else(|_| {
         panic!(
-            "missing golden {} — generate it with BLESS=1 cargo test -p mpc-wallet-cli --test event_contract",
+            "missing golden {} — generate it with BLESS=1 cargo test -p frost-mpc-cli --test event_contract",
             path.display()
         )
     });
@@ -125,6 +125,6 @@ fn event_contract_matches_golden() {
     assert_eq!(
         actual, expected,
         "event contract drifted from golden. If this change is intended, regenerate with \
-         BLESS=1 cargo test -p mpc-wallet-cli --test event_contract and review the diff."
+         BLESS=1 cargo test -p frost-mpc-cli --test event_contract and review the diff."
     );
 }

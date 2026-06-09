@@ -202,7 +202,7 @@ This document contains wireframes for wallet import/export operations and data m
 │   │  [••••••••••••••••_______________________]                      │     │
 │   │                                                                   │     │
 │   │  Output Path:                                                    │     │
-│   │  [~/backups/mpc-wallets-2024-01-25.zip_____________]           │     │
+│   │  [~/backups/frost-mpcs-2024-01-25.zip_____________]           │     │
 │   │                                                                   │     │
 │   │  Options:                                                        │     │
 │   │  [✓] Include wallet metadata                                    │     │

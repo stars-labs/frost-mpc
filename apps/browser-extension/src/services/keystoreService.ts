@@ -20,7 +20,7 @@ import type {
     WalletFile,
     BlockchainInfo,
     NewAccountSession
-} from "@mpc-wallet/types/keystore";
+} from "@frost-mpc/types/keystore";
 
 export class KeystoreService {
     private static instance: KeystoreService;

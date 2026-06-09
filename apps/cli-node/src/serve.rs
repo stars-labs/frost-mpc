@@ -188,7 +188,7 @@ pub async fn serve(opts: ServeOpts) -> anyhow::Result<()> {
                     message: format!(
                         "invalid JSONL command: {e}. Expected one JSON object per line, e.g. \
                          {{\"cmd\":\"create_wallet\",\"threshold\":2,\"total\":3,\"password\":\"…\"}}. \
-                         Run `mpc-wallet-cli schema` for the full command list."
+                         Run `frost-mpc-cli schema` for the full command list."
                     ),
                 });
                 continue;

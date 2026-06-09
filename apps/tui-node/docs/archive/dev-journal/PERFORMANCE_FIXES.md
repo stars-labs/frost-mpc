@@ -50,7 +50,7 @@
 
 **Files Changed**:
 - `/apps/tui-node/src/ui/tui.rs` (draw_wallet_complete function)
-- `/apps/tui-node/src/bin/mpc-wallet-tui.rs` (event loop)
+- `/apps/tui-node/src/bin/frost-mpc-tui.rs` (event loop)
 
 ### 4. Performance Monitoring ✅ ADDED
 
@@ -67,7 +67,7 @@
 
 **Files Modified**:
 - `/apps/tui-node/src/utils/mod.rs`
-- `/apps/tui-node/src/bin/mpc-wallet-tui.rs`
+- `/apps/tui-node/src/bin/frost-mpc-tui.rs`
 
 ## Performance Improvements
 
@@ -105,7 +105,7 @@
 2. **Test Key Responsiveness**:
    ```bash
    # Start TUI
-   cargo run --bin mpc-wallet-tui
+   cargo run --bin frost-mpc-tui
    
    # Create a wallet and immediately press Enter/V after completion
    # Keys should respond immediately
@@ -114,7 +114,7 @@
 3. **Test UI Performance**:
    ```bash
    # Enable performance monitoring
-   PERF_MONITORING=1 RUST_LOG=info cargo run --bin mpc-wallet-tui
+   PERF_MONITORING=1 RUST_LOG=info cargo run --bin frost-mpc-tui
    
    # Check logs for performance warnings
    ```

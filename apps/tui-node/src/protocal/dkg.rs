@@ -83,7 +83,7 @@ pub fn wallet_id_from_session(session_id: &str) -> String {
 // `handle_trigger_dkg_round1<C>`. Stage 5 of the wallet-persistence plan
 // removed it: now that session announcements carry the real curve name,
 // the creator/joiner type witness `C` is resolved at the binary boundary
-// (in `mpc-wallet-tui.rs`) rather than at each DKG entry point, and the
+// (in `frost-mpc-tui.rs`) rather than at each DKG entry point, and the
 // dynamic helper had no remaining callers.
 
 /// Start DKG Round 1 - Real FROST implementation

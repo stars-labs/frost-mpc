@@ -68,7 +68,7 @@ Once all 3 participants have joined, the DKG will automatically start and execut
 ## Implementation Components
 
 ### Already Exists:
-- ✅ FROST cryptographic library (`packages/@mpc-wallet/frost-core`)
+- ✅ FROST cryptographic library (`packages/@frost-mpc/frost-core`)
 - ✅ Real DKG protocol code (`src/protocal/dkg.rs`)
 - ✅ WebSocket/WebRTC infrastructure (`src/webrtc/`, `src/session/`)
 - ✅ Session management types (`src/protocal/session_types.rs`)
@@ -137,4 +137,4 @@ cargo run
 
 - FROST Paper: https://eprint.iacr.org/2020/852
 - frost-core documentation: https://docs.rs/frost-core/
-- Example implementation: packages/@mpc-wallet/frost-core/examples/dkg.rs
+- Example implementation: packages/@frost-mpc/frost-core/examples/dkg.rs

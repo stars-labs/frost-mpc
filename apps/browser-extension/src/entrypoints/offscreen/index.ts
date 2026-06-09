@@ -1,10 +1,10 @@
 import { WebRTCManager } from './webrtc'; // Adjust path as necessary
-import type { SessionInfo, MeshStatus, DkgState } from "@mpc-wallet/types/appstate"; // Fixed import
-import type { WebRTCAppMessage } from "@mpc-wallet/types/webrtc";
-import { ServerMsg, ClientMsg, WebSocketMessagePayload, WebRTCSignal } from "@mpc-wallet/types/websocket";
+import type { SessionInfo, MeshStatus, DkgState } from "@frost-mpc/types/appstate"; // Fixed import
+import type { WebRTCAppMessage } from "@frost-mpc/types/webrtc";
+import { ServerMsg, ClientMsg, WebSocketMessagePayload, WebRTCSignal } from "@frost-mpc/types/websocket";
 
 // Import WASM modules for FROST DKG
-import wasmInit, { FrostDkgEd25519, FrostDkgSecp256k1 } from '@mpc-wallet/core-wasm';
+import wasmInit, { FrostDkgEd25519, FrostDkgSecp256k1 } from '@frost-mpc/core-wasm';
 
 console.log("Offscreen script loaded.");
 
@@ -352,7 +352,7 @@ chrome.runtime.onMessage.addListener((message: { type?: string; payload?: any },
                         console.log("Offscreen: Found active keystore to load");
                         
                         try {
-                            const { FrostDkgSecp256k1, FrostDkgEd25519 } = await import("@mpc-wallet/core-wasm");
+                            const { FrostDkgSecp256k1, FrostDkgEd25519 } = await import("@frost-mpc/core-wasm");
                             
                             // Determine curve type
                             const curveType = response.keyShare.curve || 'secp256k1';

@@ -20,9 +20,9 @@
  */
 import { describe, it, expect, beforeEach, jest } from "bun:test";
 import { WebSocketManager } from "../../../src/entrypoints/background/webSocketManager";
-import { DkgState } from "@mpc-wallet/types/dkg";
-import { MeshStatusType } from "@mpc-wallet/types/mesh";
-import type { AppState } from "@mpc-wallet/types/appstate";
+import { DkgState } from "@frost-mpc/types/dkg";
+import { MeshStatusType } from "@frost-mpc/types/mesh";
+import type { AppState } from "@frost-mpc/types/appstate";
 
 function makeAppState(): AppState {
     return {

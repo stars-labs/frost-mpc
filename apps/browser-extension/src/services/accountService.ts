@@ -1,6 +1,6 @@
-import { Account } from "@mpc-wallet/types/account";
+import { Account } from "@frost-mpc/types/account";
 import { KeystoreManager } from './keystoreManager';
-import type { NewAccountSession } from "@mpc-wallet/types/keystore";
+import type { NewAccountSession } from "@frost-mpc/types/keystore";
 
 type AccountChangeCallback = (account: Account | null) => void;
 

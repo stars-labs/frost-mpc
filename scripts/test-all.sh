@@ -22,6 +22,6 @@ cd ../..
 # update_transitions.rs: 88 tests). Without `--tests` those 101
 # tests get silently skipped.
 echo "🦀 Testing Rust workspace..."
-cargo test --workspace --lib --tests --exclude mpc-wallet-native
+cargo test --workspace --lib --tests --exclude frost-mpc-native
 
 echo "✅ All tests complete!"

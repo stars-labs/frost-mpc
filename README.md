@@ -27,8 +27,8 @@ MPC Wallet enables threshold signatures where private keys are split across mult
 
 ```bash
 # Clone the repository
-git clone https://github.com/hecoinfo/mpc-wallet.git
-cd mpc-wallet
+git clone https://github.com/hecoinfo/frost-mpc.git
+cd frost-mpc
 
 # Install dependencies
 bun install
@@ -57,9 +57,9 @@ bun run dev
 #### Terminal UI
 
 ```bash
-# Run the TUI application (binary name is mpc-wallet-tui,
+# Run the TUI application (binary name is frost-mpc-tui,
 # lives in the tui-node package)
-cargo run -p tui-node --bin mpc-wallet-tui -- --device-id Device-001
+cargo run -p tui-node --bin frost-mpc-tui -- --device-id Device-001
 ```
 
 Inside the TUI, navigate with arrow keys → `Create New Wallet`
@@ -71,10 +71,10 @@ line-mode REPL.)
 #### Desktop Application
 
 ```bash
-# Run the native desktop app (package name is mpc-wallet-native,
+# Run the native desktop app (package name is frost-mpc-native,
 # NOT native-node — the directory is native-node/ but the
-# Cargo package is mpc-wallet-native)
-cargo run -p mpc-wallet-native
+# Cargo package is frost-mpc-native)
+cargo run -p frost-mpc-native
 ```
 
 ## Documentation
@@ -130,14 +130,14 @@ cargo run -p mpc-wallet-native
 ## Project Structure
 
 ```
-mpc-wallet/
+frost-mpc/
 ├── apps/                         # Applications
 │   ├── browser-extension/        # Chrome/Firefox extension
 │   ├── native-node/              # Desktop GUI application (Slint)
 │   ├── tui-node/                 # Terminal UI application (Ratatui)
 │   └── signal-server/            # WebRTC signaling (server + Cloudflare Worker)
 │
-├── packages/@mpc-wallet/         # Shared packages
+├── packages/@frost-mpc/         # Shared packages
 │   ├── frost-core/               # FROST protocol implementation (Rust)
 │   ├── core-wasm/                # WebAssembly bindings
 │   ├── blockchain/               # Multi-chain support (Ethereum/Solana/Bitcoin)
@@ -191,13 +191,13 @@ The MPC Wallet is designed around threshold cryptography primitives:
 
 - Root secret entropy is split via FROST DKG — the combined private key
   never exists in memory on any single participant
-- Keystore at rest is PBKDF2 + AES-256-GCM (see `packages/@mpc-wallet/frost-core/src/keystore.rs`)
+- Keystore at rest is PBKDF2 + AES-256-GCM (see `packages/@frost-mpc/frost-core/src/keystore.rs`)
 - Peer-to-peer traffic rides WebRTC (DTLS-SRTP); signaling over WSS
 - FROST implementation comes from the [ZCash Foundation](https://github.com/ZcashFoundation/frost)
   crates (`frost-core 2.2`, `frost-ed25519 2.2`, `frost-secp256k1 2.2`)
 
 No third-party security audit has been performed on this codebase as a
-whole. Report vulnerabilities via [GitHub Security Advisories](https://github.com/hecoinfo/mpc-wallet/security/advisories/new).
+whole. Report vulnerabilities via [GitHub Security Advisories](https://github.com/hecoinfo/frost-mpc/security/advisories/new).
 
 ## Performance
 
@@ -236,8 +236,8 @@ We welcome contributions! Please see our [Contributing Guide](docs/CONTRIBUTING.
 
 ### Community
 
-- [GitHub Issues](https://github.com/hecoinfo/mpc-wallet/issues) - Report bugs
-- [GitHub Discussions](https://github.com/hecoinfo/mpc-wallet/discussions) - Ask questions
+- [GitHub Issues](https://github.com/hecoinfo/frost-mpc/issues) - Report bugs
+- [GitHub Discussions](https://github.com/hecoinfo/frost-mpc/discussions) - Ask questions
 - [Documentation](docs/) - Full documentation in this repo
 
 ## Roadmap
@@ -276,7 +276,7 @@ scheduled delivery date; contributions welcome via PR. See
 - [ ] Hardware-wallet co-signer integration (Ledger / Trezor).
 - [ ] Additional blockchains beyond Ethereum (secp256k1) + Solana
   (ed25519) — each new chain needs per-curve address derivation
-  + encoding work (see `packages/@mpc-wallet/blockchain/`).
+  + encoding work (see `packages/@frost-mpc/blockchain/`).
 - [ ] Structured audit-log emission (the absent feature flagged
   across the security docs).
 
@@ -285,7 +285,7 @@ scheduled delivery date; contributions welcome via PR. See
 The workspace-level `Cargo.toml` declares `license = "Apache-2.0"`.
 Individual crates under `packages/` and `apps/signal-server/` set their
 own — see each crate's `Cargo.toml` for specifics
-(`packages/@mpc-wallet/blockchain` is MIT; signal-server is dual
+(`packages/@frost-mpc/blockchain` is MIT; signal-server is dual
 MIT-or-Apache-2.0; everything else Apache-2.0). A repo-root `LICENSE`
 file hasn't been committed yet — contribute the Apache-2.0 text
 (or whichever single license you pick for the project) to settle
@@ -303,11 +303,11 @@ the ambiguity.
 If you use this software in your research, please cite:
 
 ```bibtex
-@software{mpc_wallet,
+@software{frost_mpc,
   title = {MPC Wallet: Multi-Party Computation Wallet},
   author = {MPC Wallet Team},
   year = {2025},
-  url = {https://github.com/hecoinfo/mpc-wallet}
+  url = {https://github.com/hecoinfo/frost-mpc}
 }
 ```
 

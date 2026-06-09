@@ -222,11 +222,11 @@ Curve dispatch: same `C: Ciphersuite` generic pattern the DKG/signing drivers us
 
 ## 9. CLI / serve surface
 
-- One-shot: `mpc-wallet-cli reshare --wallet-id W --keep alice,bob --password-file f
+- One-shot: `frost-mpc-cli reshare --wallet-id W --keep alice,bob --password-file f
   --room R --signal-server …` (creator); co-signers run `serve` and approve the
   `reshare_request` (auto-approve policy reused) or `session join`.
 - The in-process resharing engine stays as a CI check via the library
-  (`mpc_wallet_cli::reshare::run_reshare_simulation`, exercised by the cli-node
+  (`frost_mpc_cli::reshare::run_reshare_simulation`, exercised by the cli-node
   integration tests) — it is no longer a user-facing CLI subcommand.
 - Bridge events: `reshare_request` (discovered), `reshare_progress`,
   `reshare_complete{wallet_id, group_public_key}`.
@@ -281,7 +281,7 @@ Curve dispatch: same `C: Ciphersuite` generic pattern the DKG/signing drivers us
    - ⬜ **4b** (#56) — async mesh transport (`WebRTCMessage` reshare rounds +
      device/webrtc routing) + `StartReshare`/`JoinReshare` command+message
      handlers + mesh-ready trigger.
-   - ⬜ **4c** (#56) — `mpc-wallet-cli reshare` one-shot + `serve` approve path +
+   - ⬜ **4c** (#56) — `frost-mpc-cli reshare` one-shot + `serve` approve path +
      **L3 cross-process e2e test** ("the button works").
 5. ⬜ **Other clients (later)** — native/TUI reuse the core; extension implements
    the same three messages over its WASM `refresh_*` (separate effort, like its DKG).

@@ -1,6 +1,6 @@
 import { mainnet, sepolia } from 'viem/chains';
-import type { Chain } from "@mpc-wallet/types/network";
-import type { SupportedChain } from "@mpc-wallet/types/appstate";
+import type { Chain } from "@frost-mpc/types/network";
+import type { SupportedChain } from "@frost-mpc/types/appstate";
 import { createPublicClient, http } from 'viem';
 
 type NetworkChangeCallback = (network: Chain | undefined) => void;

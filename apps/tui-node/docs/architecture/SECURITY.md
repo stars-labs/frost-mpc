@@ -24,7 +24,7 @@ The FROST MPC TUI Wallet implements defense-in-depth security architecture, comb
 4. **Fail Secure**: System fails to a secure state
 5. **Observability via tracing**: Ceremony-level events land in
    the `tracing`-subscribed log (path via `--log-location`,
-   default `~/.frost_keystore/logs/mpc-wallet.log`). This is
+   default `~/.frost_keystore/logs/frost-mpc.log`). This is
    unstructured informational logging, NOT a tamper-evident
    audit log — earlier drafts of this principle claimed
    "All security-relevant events are logged" with audit-grade
@@ -169,7 +169,7 @@ frost-core implementation — this workspace never handles raw
 `pub(crate)` constructors per the "frost-core internal types"
 note in the top-of-repo CLAUDE.md). RNG seeding flows through
 `rand_core::OsRng` + `rand_chacha::ChaCha20Rng` per
-`packages/@mpc-wallet/frost-core/src/root_secret.rs`.
+`packages/@frost-mpc/frost-core/src/root_secret.rs`.
 
 Earlier drafts of this section showed hand-rolled
 `Scalar::random` / `VerifiableSecretSharing::commit` calls; those
@@ -270,7 +270,7 @@ metadata + `.dat` ciphertext); that layout never shipped.
 
 ### Memory Protection
 
-Today only `packages/@mpc-wallet/frost-core/src/root_secret.rs`
+Today only `packages/@frost-mpc/frost-core/src/root_secret.rs`
 zeros sensitive material on drop, and it does so via a manual
 `self.0.fill(0)` inside `impl Drop for RootSecret` at
 `root_secret.rs:62-67` — NOT via the `zeroize` crate (`zeroize`
@@ -466,8 +466,8 @@ Contacts table with fabricated phone numbers (`+1-555-0100`) and
 email prefixes (`security@frost`, `tech@frost`). None of that
 scaffolding exists. The real reporting path is:
 
-- **Security vulnerabilities**: [GitHub Security Advisories](https://github.com/hecoinfo/mpc-wallet/security/advisories/new)
-- **Operational bugs**: [GitHub Issues](https://github.com/hecoinfo/mpc-wallet/issues)
+- **Security vulnerabilities**: [GitHub Security Advisories](https://github.com/hecoinfo/frost-mpc/security/advisories/new)
+- **Operational bugs**: [GitHub Issues](https://github.com/hecoinfo/frost-mpc/issues)
 
 Each report is handled by whoever is maintaining the project;
 best-effort response, not a contractual SLA.
@@ -601,5 +601,5 @@ response SLA — those live outside this doc and, if needed, must
 be added by the operator.
 
 For vulnerability reports, open a private advisory via
-[GitHub Security Advisories](https://github.com/hecoinfo/mpc-wallet/security/advisories/new).
-For operational bugs, use [GitHub Issues](https://github.com/hecoinfo/mpc-wallet/issues).
+[GitHub Security Advisories](https://github.com/hecoinfo/frost-mpc/security/advisories/new).
+For operational bugs, use [GitHub Issues](https://github.com/hecoinfo/frost-mpc/issues).

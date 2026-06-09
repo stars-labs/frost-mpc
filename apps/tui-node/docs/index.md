@@ -8,7 +8,7 @@ Ratatui + tui-realm in the Elm architecture.
 
 - Full keyboard-driven TUI — no REPL, no typed commands. Navigate
   with arrow keys, confirm with Enter, back out with Esc.
-- Runs as the standalone `mpc-wallet-tui` binary. Reuses the same
+- Runs as the standalone `frost-mpc-tui` binary. Reuses the same
   `frost-core` backend as the browser extension and native desktop
   app, so TUI participants can co-sign with extension or native
   participants in the same mesh.
@@ -47,7 +47,7 @@ Ratatui + tui-realm in the Elm architecture.
 
 ```bash
 # From the repo root
-cargo run --bin mpc-wallet-tui -p tui-node -- --device-id alice
+cargo run --bin frost-mpc-tui -p tui-node -- --device-id alice
 ```
 
 Keyboard basics:
@@ -124,5 +124,5 @@ actually provides vs. what's open hardening work.
 
 ## Support
 
-- **Issues**: [GitHub Issues](https://github.com/hecoinfo/mpc-wallet/issues)
-- **Security**: [GitHub Security Advisories](https://github.com/hecoinfo/mpc-wallet/security/advisories/new)
+- **Issues**: [GitHub Issues](https://github.com/hecoinfo/frost-mpc/issues)
+- **Security**: [GitHub Security Advisories](https://github.com/hecoinfo/frost-mpc/security/advisories/new)

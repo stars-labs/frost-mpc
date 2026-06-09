@@ -595,7 +595,7 @@ methods that serialize to JSON — none exist. Persistence surface:
   `src/keystore/storage.rs:251` — earlier drafts called the
   re-read method `load_wallet` which does not exist.
 - **Tracing log file**: append-only at `--log-location` (default
-  `~/.frost_keystore/logs/mpc-wallet.log`).
+  `~/.frost_keystore/logs/frost-mpc.log`).
 
 That's the full durable state. On crash, anything in-memory on
 `Model` / `AppState<C>` that hasn't been written through the

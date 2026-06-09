@@ -3,7 +3,7 @@
   "configVersion": 0,
   "workspaces": {
     "": {
-      "name": "@mpc-wallet/monorepo",
+      "name": "@frost-mpc/monorepo",
       "devDependencies": {
         "@solana/web3.js": "^1.98.4",
         "npm-run-all": "^4.1.5",
@@ -11,11 +11,11 @@
       },
     },
     "apps/browser-extension": {
-      "name": "@mpc-wallet/browser-extension",
+      "name": "@frost-mpc/browser-extension",
       "version": "0.0.0",
       "dependencies": {
-        "@mpc-wallet/core-wasm": "workspace:*",
-        "@mpc-wallet/types": "workspace:*",
+        "@frost-mpc/core-wasm": "workspace:*",
+        "@frost-mpc/types": "workspace:*",
         "@tailwindcss/vite": "^4.3.0",
         "tailwindcss": "^4.3.0",
         "uuid": "^14.0.0",
@@ -37,15 +37,15 @@
         "wxt": "^0.20.26",
       },
     },
-    "packages/@mpc-wallet/core-wasm": {
-      "name": "@mpc-wallet/core-wasm",
+    "packages/@frost-mpc/core-wasm": {
+      "name": "@frost-mpc/core-wasm",
       "version": "0.1.0",
       "devDependencies": {
         "wasm-pack": "^0.13.1",
       },
     },
-    "packages/@mpc-wallet/types": {
-      "name": "@mpc-wallet/types",
+    "packages/@frost-mpc/types": {
+      "name": "@frost-mpc/types",
       "version": "0.1.0",
       "devDependencies": {
         "typescript": "^5.8.3",
@@ -147,11 +147,11 @@
 
     "@jridgewell/trace-mapping": ["@jridgewell/trace-mapping@0.3.25", "", { "dependencies": { "@jridgewell/resolve-uri": "^3.1.0", "@jridgewell/sourcemap-codec": "^1.4.14" } }, "sha512-vNk6aEwybGtawWmy/PzwnGDOjCkLWSD2wqvjGGAgOAwCGWySYXfYoxt00IJkTF+8Lb57DwOb3Aa0o9CApepiYQ=="],
 
-    "@mpc-wallet/browser-extension": ["@mpc-wallet/browser-extension@workspace:apps/browser-extension"],
+    "@frost-mpc/browser-extension": ["@frost-mpc/browser-extension@workspace:apps/browser-extension"],
 
-    "@mpc-wallet/core-wasm": ["@mpc-wallet/core-wasm@workspace:packages/@mpc-wallet/core-wasm"],
+    "@frost-mpc/core-wasm": ["@frost-mpc/core-wasm@workspace:packages/@frost-mpc/core-wasm"],
 
-    "@mpc-wallet/types": ["@mpc-wallet/types@workspace:packages/@mpc-wallet/types"],
+    "@frost-mpc/types": ["@frost-mpc/types@workspace:packages/@frost-mpc/types"],
 
     "@napi-rs/wasm-runtime": ["@napi-rs/wasm-runtime@1.1.4", "", { "dependencies": { "@tybys/wasm-util": "^0.10.1" }, "peerDependencies": { "@emnapi/core": "^1.7.1", "@emnapi/runtime": "^1.7.1" } }, "sha512-3NQNNgA1YSlJb/kMH1ildASP9HW7/7kYnRI2szWJaofaS1hWmbGI4H+d3+22aGzXXN9IJ+n+GiFVcGipJP18ow=="],
 
@@ -1303,7 +1303,7 @@
 
     "@devicefarmer/adbkit/debug": ["debug@4.3.7", "", { "dependencies": { "ms": "^2.1.3" } }, "sha512-Er2nc/H7RrMXZBFCEim6TCmMk02Z8vLC2Rbi1KEBggpo0fS6l0S1nnapwmIi3yW/+GOJap1Krg4w0Hg80oCqgQ=="],
 
-    "@mpc-wallet/types/typescript": ["typescript@5.8.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-p1diW6TqL9L07nNxvRMM7hMMw4c5XOo/1ibL4aAIGmSAt9slTE1Xgw5KWuof2uTOvCg9BY7ZRi+GaF+7sfgPeQ=="],
+    "@frost-mpc/types/typescript": ["typescript@5.8.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-p1diW6TqL9L07nNxvRMM7hMMw4c5XOo/1ibL4aAIGmSAt9slTE1Xgw5KWuof2uTOvCg9BY7ZRi+GaF+7sfgPeQ=="],
 
     "@pnpm/network.ca-file/graceful-fs": ["graceful-fs@4.2.10", "", {}, "sha512-9ByhssR2fPVsNZj478qUUbKfmL0+t5BDVyjShtyZZLiK7ZDAArFFfopyOTj0M05wE2tJPisA4iTnnXl2YoPvOA=="],
 

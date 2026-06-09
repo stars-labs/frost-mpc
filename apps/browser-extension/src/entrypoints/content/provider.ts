@@ -6,7 +6,7 @@ import type {
     ContentToInjectedMsg,
     JsonRpcRequest,
     JsonRpcResponse
-} from "@mpc-wallet/types/messages";
+} from "@frost-mpc/types/messages";
 
 // 定义消息接口
 export interface ContentMessage {

@@ -14,7 +14,7 @@ use tui_node::elm::ElmApp;
 #[command(author, version, about, long_about = None)]
 struct Args {
     /// Log file location
-    #[arg(long, default_value = "~/.frost_keystore/logs/mpc-wallet.log")]
+    #[arg(long, default_value = "~/.frost_keystore/logs/frost-mpc.log")]
     log_location: String,
 
     /// Log level (error, warn, info, debug, trace)
@@ -109,7 +109,7 @@ async fn main() -> anyhow::Result<()> {
     });
 
     // Setup logging to file (since TUI takes over terminal)
-    let log_filename = format!("mpc-wallet-{}.log", device_id);
+    let log_filename = format!("frost-mpc-{}.log", device_id);
     println!("Logging to: {}", log_filename);
     println!(
         "Current directory: {:?}",

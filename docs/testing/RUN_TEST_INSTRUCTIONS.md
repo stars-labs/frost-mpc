@@ -15,17 +15,17 @@ top-of-file comments.
 ## Build first
 
 ```bash
-cargo build -p tui-node --bin mpc-wallet-tui
+cargo build -p tui-node --bin frost-mpc-tui
 ```
 
 The instructions below assume the debug binary is at
-`./target/debug/mpc-wallet-tui` (the default workspace target
+`./target/debug/frost-mpc-tui` (the default workspace target
 directory).
 
 ## Terminal 1 — MPC-1 (session creator)
 
 ```bash
-RUST_LOG=info ./target/debug/mpc-wallet-tui --device-id mpc-1
+RUST_LOG=info ./target/debug/frost-mpc-tui --device-id mpc-1
 ```
 
 Navigate with arrow keys:
@@ -37,7 +37,7 @@ Navigate with arrow keys:
 ## Terminal 2 — MPC-2 (joiner)
 
 ```bash
-RUST_LOG=info ./target/debug/mpc-wallet-tui --device-id mpc-2
+RUST_LOG=info ./target/debug/frost-mpc-tui --device-id mpc-2
 ```
 
 1. Select **Join Session** from the main menu.
@@ -47,7 +47,7 @@ RUST_LOG=info ./target/debug/mpc-wallet-tui --device-id mpc-2
 ## Terminal 3 — MPC-3 (joiner)
 
 ```bash
-RUST_LOG=info ./target/debug/mpc-wallet-tui --device-id mpc-3
+RUST_LOG=info ./target/debug/frost-mpc-tui --device-id mpc-3
 ```
 
 Same steps as MPC-2.
@@ -96,7 +96,7 @@ uppercase string isn't emitted. The real log uses
 
 By default the TUI connects to the production signal server
 (`wss://xiongchenyu.dpdns.org`, per the `--signal-server` default
-in `apps/tui-node/src/bin/mpc-wallet-tui.rs`). To run against a
+in `apps/tui-node/src/bin/frost-mpc-tui.rs`). To run against a
 local signal server instead, pass `--signal-server ws://localhost:9000`
 and start the server in a fourth terminal:
 

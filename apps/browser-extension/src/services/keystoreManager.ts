@@ -8,7 +8,7 @@
 // ===================================================================
 
 import { KeystoreService } from './keystoreService';
-import type { KeyShareData, ExtensionWalletMetadata } from "@mpc-wallet/types/keystore";
+import type { KeyShareData, ExtensionWalletMetadata } from "@frost-mpc/types/keystore";
 
 interface KeystoreSession {
     unlocked: boolean;

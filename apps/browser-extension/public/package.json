@@ -1,5 +1,5 @@
 {
-  "name": "mpc-wallet",
+  "name": "frost-mpc",
   "type": "module",
   "collaborators": [
     "The wasm-bindgen Developers"

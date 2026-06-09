@@ -1511,8 +1511,8 @@ Main menu for all recovery and backup operations.
 │   │  Stack Trace (abbreviated):                                      │     │
 │   │  ┌─────────────────────────────────────────────────────────┐   │     │
 │   │  │ at frost_core::dkg::round2::verify_share()              │   │     │
-│   │  │ at mpc_wallet::protocol::handle_dkg_round2()            │   │     │
-│   │  │ at mpc_wallet::session::process_message()               │   │     │
+│   │  │ at frost_mpc::protocol::handle_dkg_round2()            │   │     │
+│   │  │ at frost_mpc::session::process_message()               │   │     │
 │   │  └─────────────────────────────────────────────────────────┘   │     │
 │   │                                                                   │     │
 │   │  Actions:                                                        │     │

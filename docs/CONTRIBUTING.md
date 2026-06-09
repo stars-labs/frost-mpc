@@ -52,7 +52,7 @@ Before contributing, ensure you have:
    ```
 
    `wasm-pack` is a devDependency of
-   `packages/@mpc-wallet/core-wasm/package.json`, so `bun install`
+   `packages/@frost-mpc/core-wasm/package.json`, so `bun install`
    pulls it in — no separate `cargo install wasm-pack` needed.
    `cargo-watch` isn't used by anything in this repo; earlier
    drafts of this doc suggested installing it, but nothing in the
@@ -60,13 +60,13 @@ Before contributing, ensure you have:
 
 2. **Fork and Clone**
    ```bash
-   # Fork the repository on GitHub (https://github.com/hecoinfo/mpc-wallet)
+   # Fork the repository on GitHub (https://github.com/hecoinfo/frost-mpc)
    # Then clone your fork:
-   git clone https://github.com/YOUR_USERNAME/mpc-wallet.git
-   cd mpc-wallet
+   git clone https://github.com/YOUR_USERNAME/frost-mpc.git
+   cd frost-mpc
 
    # Add upstream remote pointing at the canonical repo
-   git remote add upstream https://github.com/hecoinfo/mpc-wallet.git
+   git remote add upstream https://github.com/hecoinfo/frost-mpc.git
    ```
 
 3. **Install Dependencies**
@@ -299,7 +299,7 @@ impl WalletManager {
 //   KeystoreError        (src/keystore/mod.rs:24)
 //   FrostKeystoreError   (src/keystore/frost_keystore.rs:19)
 //   OfflineError         (src/offline/mod.rs:24)
-// Plus upstream `FrostError` from packages/@mpc-wallet/frost-core
+// Plus upstream `FrostError` from packages/@frost-mpc/frost-core
 // which has `SigningError`/etc. variants.
 match operation() {
     Ok(result) => process(result),
@@ -441,12 +441,12 @@ describe("DKG Process", () => {
 ### Running Tests
 
 ```bash
-# All tests (Rust + TypeScript). Excludes mpc-wallet-native which
+# All tests (Rust + TypeScript). Excludes frost-mpc-native which
 # pulls graphics deps unsuitable for headless runs.
 ./scripts/test-all.sh
 
-# Rust tests only. Same --exclude mpc-wallet-native guard.
-cargo test --workspace --lib --tests --exclude mpc-wallet-native
+# Rust tests only. Same --exclude frost-mpc-native guard.
+cargo test --workspace --lib --tests --exclude frost-mpc-native
 
 # TypeScript tests only (run from apps/browser-extension).
 cd apps/browser-extension && bun test
@@ -455,9 +455,9 @@ cd apps/browser-extension && bun test
 # tarpaulin/grcov/llvm-cov config file ships, and no CI step
 # produces a coverage report. If you want coverage locally:
 cargo install cargo-tarpaulin
-cargo tarpaulin --workspace --exclude mpc-wallet-native --out Html
+cargo tarpaulin --workspace --exclude frost-mpc-native --out Html
 #   — runs standalone (no .tarpaulin.toml required). The `--exclude
-#   mpc-wallet-native` guard matches test-all.sh's headless-run
+#   frost-mpc-native` guard matches test-all.sh's headless-run
 #   exclusion.
 ```
 
@@ -502,7 +502,7 @@ When changing code:
 **DO NOT** create public issues for security vulnerabilities.
 
 Instead:
-1. Open a private advisory via [GitHub Security Advisories](https://github.com/hecoinfo/mpc-wallet/security/advisories/new)
+1. Open a private advisory via [GitHub Security Advisories](https://github.com/hecoinfo/frost-mpc/security/advisories/new)
 2. Include:
    - Description of the vulnerability
    - Steps to reproduce
@@ -558,7 +558,7 @@ own — check each crate's `Cargo.toml` before submitting.
 ## Questions?
 
 If you have questions about contributing, please ask in
-[GitHub Discussions](https://github.com/hecoinfo/mpc-wallet/discussions).
+[GitHub Discussions](https://github.com/hecoinfo/frost-mpc/discussions).
 
 ---
 

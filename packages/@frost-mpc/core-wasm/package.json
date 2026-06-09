@@ -1,14 +1,14 @@
 {
-  "name": "@mpc-wallet/core-wasm",
+  "name": "@frost-mpc/core-wasm",
   "version": "0.1.0",
   "description": "FROST MPC WASM bindings for MPC Wallet",
   "type": "module",
-  "main": "./pkg/mpc_wallet_core_wasm.js",
-  "types": "./pkg/mpc_wallet_core_wasm.d.ts",
+  "main": "./pkg/frost_mpc_core_wasm.js",
+  "types": "./pkg/frost_mpc_core_wasm.d.ts",
   "exports": {
     ".": {
-      "import": "./pkg/mpc_wallet_core_wasm.js",
-      "types": "./pkg/mpc_wallet_core_wasm.d.ts"
+      "import": "./pkg/frost_mpc_core_wasm.js",
+      "types": "./pkg/frost_mpc_core_wasm.d.ts"
     }
   },
   "files": [

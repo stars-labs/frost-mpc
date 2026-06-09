@@ -115,7 +115,7 @@ The MPC Wallet follows a **distributed, peer-to-peer architecture**:
 The project is organized as a monorepo with shared dependencies:
 
 ```
-mpc-wallet/
+frost-mpc/
 ├── apps/
 │   ├── browser-extension/          # WXT + Svelte 5, MV3
 │   │   ├── src/entrypoints/        # background / popup / offscreen / content
@@ -131,7 +131,7 @@ mpc-wallet/
 │   │   └── ui/main_enhanced.slint  # Slint UI, compiled by build.rs
 │   │
 │   ├── tui-node/                   # Ratatui Elm-architecture TUI
-│   │   ├── src/bin/                # mpc-wallet-tui binary entry
+│   │   ├── src/bin/                # frost-mpc-tui binary entry
 │   │   ├── src/elm/                # Model / Update / View / Command,
 │   │   │                           # per-screen components, and the
 │   │   │                           # real runtime WebRTC driver at
@@ -153,7 +153,7 @@ mpc-wallet/
 │       ├── server/                 # Standalone tokio + tokio-tungstenite
 │       └── cloudflare-worker/      # Rust-over-WASM via `worker` crate
 │
-├── packages/@mpc-wallet/
+├── packages/@frost-mpc/
 │   ├── frost-core/                 # FROST wrapper: unified_dkg, hd_derivation,
 │   │                               # traits, ed25519, secp256k1, keystore, root_secret
 │   ├── core-wasm/                  # wasm-bindgen wrapper around frost-core
@@ -173,13 +173,13 @@ in-tree; rename would be a broad refactor and is not blocking.
 
 ## Core Components
 
-### 1. FROST Protocol Core (`packages/@mpc-wallet/frost-core`)
+### 1. FROST Protocol Core (`packages/@frost-mpc/frost-core`)
 
 The heart of the MPC wallet, implementing the FROST threshold signature scheme.
 
 #### Key Modules
 
-Real layout — see `packages/@mpc-wallet/frost-core/src/`:
+Real layout — see `packages/@frost-mpc/frost-core/src/`:
 
 ```
 lib.rs                   # Re-exports + wiring
@@ -307,7 +307,7 @@ vary with `wallet_count`:
 Earlier drafts printed a numbered-hotkey layout
 (`[1] Wallet / [2] DKG / [3] Sign / [4] Session / [5] Network /
 [6] Settings / [Q] Quit`) with a right-hand pane showing
-`Current Wallet: mpc_wallet_01 / Address: 0x742d35Cc6634C053... /
+`Current Wallet: frost_mpc_01 / Address: 0x742d35Cc6634C053... /
 Balance: 1.234 ETH / Connected Peers: 2/3 / Session Status: Active`.
 None of that is real:
 
@@ -822,7 +822,7 @@ rustup target add wasm32-unknown-unknown  # for core-wasm
 curl -fsSL https://bun.sh/install | bash
 ```
 
-`wasm-pack` is a devDependency of `packages/@mpc-wallet/core-wasm`
+`wasm-pack` is a devDependency of `packages/@frost-mpc/core-wasm`
 so `bun install` at the repo root pulls it in — no separate
 `cargo install wasm-pack` needed. There is no watch-script
 infrastructure; earlier drafts of this section recommended
@@ -834,8 +834,8 @@ workspace.
 #### 1. Clone Repository
 
 ```bash
-git clone https://github.com/hecoinfo/mpc-wallet.git
-cd mpc-wallet
+git clone https://github.com/hecoinfo/frost-mpc.git
+cd frost-mpc
 ```
 
 #### 2. Install Dependencies
@@ -851,7 +851,7 @@ cargo build --workspace
 #### 3. Build WASM Module
 
 ```bash
-cd packages/@mpc-wallet/core-wasm
+cd packages/@frost-mpc/core-wasm
 wasm-pack build --target web --out-dir pkg
 ```
 
@@ -909,7 +909,7 @@ cargo run
 
 # Build for distribution
 cargo build --release
-# Binary at: target/release/mpc-wallet-native
+# Binary at: target/release/frost-mpc-native
 ```
 
 ### Testing
@@ -1017,7 +1017,7 @@ extension don't share infrastructure:
   events. Filter via the `RUST_LOG` env var:
 
   ```bash
-  RUST_LOG=tui_node=debug,webrtc=info mpc-wallet-tui --device-id alice
+  RUST_LOG=tui_node=debug,webrtc=info frost-mpc-tui --device-id alice
   ```
 
   Most ceremony-relevant logs are at `info`; verbose mesh / FROST
@@ -1087,10 +1087,10 @@ flow from `personal_sign` to aggregate signature.
 
 ### Terminal UI CLI Arguments
 
-Authoritative definitions in `apps/tui-node/src/bin/mpc-wallet-tui.rs`:
+Authoritative definitions in `apps/tui-node/src/bin/frost-mpc-tui.rs`:
 
 ```
-mpc-wallet-tui [OPTIONS]
+frost-mpc-tui [OPTIONS]
 
 OPTIONS:
     --device-id <ID>           FROST participant identity.
@@ -1099,7 +1099,7 @@ OPTIONS:
                                Default: wss://xiongchenyu.dpdns.org
     --offline                  Run in offline (SD-card air-gap) mode.
     --log-location <PATH>      Log file path.
-                               Default: ~/.frost_keystore/logs/mpc-wallet.log
+                               Default: ~/.frost_keystore/logs/frost-mpc.log
     --log-level <LEVEL>        error | warn | info | debug | trace
                                Default: info
 ```
@@ -1117,7 +1117,7 @@ per-screen components; see `apps/tui-node/docs/KEYBOARD_NAVIGATION_GUIDE.md`.
 Shape-compatible with the TUI's wire format. Top-level serde tag is
 `type` (`snake_case`), each envelope has peer addressing + session
 context as inline fields. Authoritative: `apps/tui-node/src/protocal/signal.rs`
-and the TypeScript mirror in `packages/@mpc-wallet/types/src/session.ts`.
+and the TypeScript mirror in `packages/@frost-mpc/types/src/session.ts`.
 
 Message types actually used:
 
@@ -1241,7 +1241,7 @@ curl -v https://xiongchenyu.dpdns.org/
 # reachability failure here means your outbound UDP path is broken.
 
 # Enable debug logging
-RUST_LOG=debug cargo run -p tui-node --bin mpc-wallet-tui
+RUST_LOG=debug cargo run -p tui-node --bin frost-mpc-tui
 ```
 
 #### 2. WebRTC Connection Issues
@@ -1306,7 +1306,7 @@ messages in a trace, which is not backed by any real type in source.
 The practical tools are:
 
 - `RUST_LOG=tui_node=debug` (or a finer scope like `tui_node::protocal::dkg=trace`)
-  + the session log at `~/.frost_keystore/logs/mpc-wallet.log`
+  + the session log at `~/.frost_keystore/logs/frost-mpc.log`
 - `chrome://webrtc-internals` for the browser side
 - `wscat -c wss://xiongchenyu.dpdns.org/` + `Register` / `ListDevices`
   ClientMsg payloads for manual signal-server probes
@@ -1343,7 +1343,7 @@ Rust types live per-domain: `KeystoreError` in
 `apps/tui-node/src/keystore/mod.rs:24`, `FrostKeystoreError` in
 `src/keystore/frost_keystore.rs:19`, `OfflineError` in
 `src/offline/mod.rs:24`, `CoreError` in `src/core/mod.rs:21`; plus
-upstream `FrostError` from `packages/@mpc-wallet/frost-core` with
+upstream `FrostError` from `packages/@frost-mpc/frost-core` with
 `SigningError` / other variants. No top-level `src/errors.rs`
 umbrella file exists.
 
@@ -1385,7 +1385,7 @@ No third-party security audit has been performed on this codebase.
 Earlier drafts of this appendix listed a "2024-Q4 Internal: FROST
 implementation: Passed" line that had no corresponding audit report
 in the repo — fabricated and removed. Report vulnerabilities via
-[GitHub Security Advisories](https://github.com/hecoinfo/mpc-wallet/security/advisories/new).
+[GitHub Security Advisories](https://github.com/hecoinfo/frost-mpc/security/advisories/new).
 
 The FROST protocol implementation itself comes from the
 [ZCash Foundation's audited `frost-*` crates](https://github.com/ZcashFoundation/frost)
@@ -1436,7 +1436,7 @@ a common `frost-core` backend and interoperate over a WebRTC mesh
 established by a small signal server. It's early-stage development
 software — no tagged release, no third-party security audit, no
 hardware-wallet integration, no benchmarks. For the latest state see
-the repository at [github.com/hecoinfo/mpc-wallet](https://github.com/hecoinfo/mpc-wallet).
+the repository at [github.com/hecoinfo/frost-mpc](https://github.com/hecoinfo/frost-mpc).
 
 Open contributions tracked in the repo rather than in this doc —
 check `git log` and the `CLAUDE.md` file at the workspace root for

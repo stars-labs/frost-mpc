@@ -440,7 +440,7 @@ single `.json` document, and the `.dat` convention was fabricated.
 
 The TUI currently has no config-file, session-history, log-archive, or
 automated-backup functionality — all runtime config goes through CLI
-flags (see `apps/tui-node/src/bin/mpc-wallet-tui.rs`), and logs stream
+flags (see `apps/tui-node/src/bin/frost-mpc-tui.rs`), and logs stream
 to the path passed via `--log-location`.
 
 ### Data Persistence
@@ -597,7 +597,7 @@ pub trait WalletPlugin {
 ```
 
 Today, adding a chain requires hand-editing
-`packages/@mpc-wallet/blockchain/src/*.rs` (see 5fd8378 for the
+`packages/@frost-mpc/blockchain/src/*.rs` (see 5fd8378 for the
 multi-L2 support precedent).
 
 ### Custom UI Themes (proposal)
@@ -612,7 +612,7 @@ struct is a reasonable design but not in source.
 Hypothetical work, none underway:
 
 - Additional curves beyond ed25519 / secp256k1 (would need
-  `FrostCurve` impl in `packages/@mpc-wallet/frost-core`)
+  `FrostCurve` impl in `packages/@frost-mpc/frost-core`)
 - Custom threshold schemes (FROST share refresh, accountable
   threshold signatures, etc.)
 - Hardware-wallet co-signing
@@ -652,7 +652,7 @@ See the TUI file-structure appendix in
 to drop the earlier `app_runner.rs` / `handlers/` / `ui/tui.rs`
 tree that predated the Elm-architecture migration). In short:
 
-- `src/bin/mpc-wallet-tui.rs` — CLI entry
+- `src/bin/frost-mpc-tui.rs` — CLI entry
 - `src/elm/` — Elm-architecture app shell + per-screen components
 - `src/core/` — long-lived managers reused by native-node
 - `src/protocal/` — wire types + DKG/signing state machines
@@ -683,7 +683,7 @@ pub enum OfflineError { /* variants */ }
 // src/core/mod.rs:21
 pub enum CoreError { /* variants */ }
 
-// Upstream, from packages/@mpc-wallet/frost-core:
+// Upstream, from packages/@frost-mpc/frost-core:
 pub enum FrostError {
     SigningError(String),
     /* plus other crypto-operation variants */

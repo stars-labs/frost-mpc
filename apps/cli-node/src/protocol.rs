@@ -217,7 +217,7 @@ impl CliEvent {
 }
 
 /// A machine-readable catalog of commands and events, for LLM/agent
-/// self-discovery (`mpc-wallet-cli schema`). Kept hand-curated and terse;
+/// self-discovery (`frost-mpc-cli schema`). Kept hand-curated and terse;
 /// the authoritative shapes are the serde types above.
 pub fn schema_json() -> String {
     let schema = serde_json::json!({

@@ -1,5 +1,5 @@
 import { Buffer } from 'buffer';
-import wasmInit, { FrostDkgEd25519, FrostDkgSecp256k1 } from '@mpc-wallet/core-wasm';
+import wasmInit, { FrostDkgEd25519, FrostDkgSecp256k1 } from '@frost-mpc/core-wasm';
 import fs from 'fs';
 import path from 'path';
 
@@ -10,9 +10,9 @@ export async function initializeWasmIfNeeded(): Promise<boolean> {
     if (!wasmInitialized) {
         try {
             // Previous versions of this helper read the WASM bytes from
-            // `apps/browser-extension/pkg/mpc_wallet_bg.wasm` — a stale
+            // `apps/browser-extension/pkg/frost_mpc_bg.wasm` — a stale
             // path from before core-wasm was split into its own package.
-            // The @mpc-wallet/core-wasm entry (pkg/mpc_wallet_core_wasm.js)
+            // The @frost-mpc/core-wasm entry (pkg/frost_mpc_core_wasm.js)
             // resolves the adjacent .wasm file itself under Bun, so the
             // no-arg form works correctly.
             await wasmInit();

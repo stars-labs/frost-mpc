@@ -433,7 +433,7 @@ persistence:
 - **TUI tracing log**: append-only `tracing` output from the TUI
   itself (not the signal server) at the path passed to
   `--log-location` (default
-  `~/.frost_keystore/logs/mpc-wallet.log`). Earlier drafts
+  `~/.frost_keystore/logs/frost-mpc.log`). Earlier drafts
   labelled this the "signal-server log" — it's not; the signal
   server is a separate process with its own stderr. This is the
   local TUI binary's structured-log file.
@@ -459,7 +459,7 @@ fabrications this section inherited. In brief:
   constants in `src/keystore/encryption.rs:19-20` (SALT + NONCE;
   KEY_LEN = 32 at :21, PBKDF2_ITERATIONS at :25).
 - **Memory zeroization**: only
-  `packages/@mpc-wallet/frost-core/src/root_secret.rs` zeros on
+  `packages/@frost-mpc/frost-core/src/root_secret.rs` zeros on
   drop, via a manual `self.0.fill(0)` in its `Drop` impl
   (`root_secret.rs:62-67`) — NOT via the `zeroize` crate (which
   isn't a workspace dependency). Key shares and decrypted keystore
@@ -567,21 +567,21 @@ measurement run behind them. Removed.
 
 #### Development
 ```bash
-cargo build --bin mpc-wallet-tui
-RUST_LOG=debug ./target/debug/mpc-wallet-tui
+cargo build --bin frost-mpc-tui
+RUST_LOG=debug ./target/debug/frost-mpc-tui
 ```
 
 #### Release
 ```bash
-cargo build --release --bin mpc-wallet-tui
-strip target/release/mpc-wallet-tui
+cargo build --release --bin frost-mpc-tui
+strip target/release/frost-mpc-tui
 ```
 
 #### Platform-Specific
 
 **All platforms**: `cargo build --release -p tui-node
---bin mpc-wallet-tui` produces a single static binary at
-`target/release/mpc-wallet-tui`. Distribute the binary directly —
+--bin frost-mpc-tui` produces a single static binary at
+`target/release/frost-mpc-tui`. Distribute the binary directly —
 there is no installer scaffolding in the repo.
 
 Earlier drafts of this section suggested `cargo deb` / `cargo rpm
@@ -634,7 +634,7 @@ Dockerfile would need:
 - Placement at the monorepo root, not under apps/tui-node/
 - A multi-stage build that copies every workspace member crate so
   cargo can resolve the full dep graph, then builds just the TUI
-  binary: `cargo build --release --bin mpc-wallet-tui -p tui-node`
+  binary: `cargo build --release --bin frost-mpc-tui -p tui-node`
 
 See `apps/tui-node/docs/DEPLOYMENT_GUIDE.md` for the currently-
 supported deployment paths (systemd + launch scripts).
@@ -880,7 +880,7 @@ call surface.
 ### A. Configuration
 
 The TUI has no config file today — runtime settings come from CLI
-flags only. See `apps/tui-node/src/bin/mpc-wallet-tui.rs` for the
+flags only. See `apps/tui-node/src/bin/frost-mpc-tui.rs` for the
 authoritative `clap::Args` struct, or `apps/tui-node/docs/README.md`
 § Configuration for the summary. The TOML schema originally sketched
 here described features that were never implemented (theme, auto-lock,
@@ -898,7 +898,7 @@ live per-domain (no top-level `src/errors.rs` umbrella file):
   - `CoreError`           (`src/core/mod.rs:21`)
 
 plus upstream `FrostError` from
-`packages/@mpc-wallet/frost-core` which carries FROST-specific
+`packages/@frost-mpc/frost-core` which carries FROST-specific
 variants like `SigningError(String)`. A shared numeric registry
 across Rust + TypeScript is open future work.
 
@@ -1034,6 +1034,6 @@ no benchmarks ship. What DOES ship:
   land on `main`.
 
 For the latest state see
-[github.com/hecoinfo/mpc-wallet](https://github.com/hecoinfo/mpc-wallet)
+[github.com/hecoinfo/frost-mpc](https://github.com/hecoinfo/frost-mpc)
 and `git log`; for security reports use
-[GitHub Security Advisories](https://github.com/hecoinfo/mpc-wallet/security/advisories/new).
+[GitHub Security Advisories](https://github.com/hecoinfo/frost-mpc/security/advisories/new).

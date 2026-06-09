@@ -200,8 +200,8 @@ mkdir -p /Volumes/DKG_TRANSFER/dkg_ceremony/final
 
 2. **Launch MPC Wallet in Offline Mode**
    ```bash
-   cd /path/to/mpc-wallet-tui
-   ./mpc-wallet-tui --offline --device-id participant_1
+   cd /path/to/frost-mpc-tui
+   ./frost-mpc-tui --offline --device-id participant_1
    ```
 
 3. **Navigate to Offline DKG**

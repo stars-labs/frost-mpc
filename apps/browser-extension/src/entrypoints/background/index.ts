@@ -35,11 +35,11 @@ import { PopupMessageHandler, OffscreenMessageHandler } from './messageHandlers'
 import { KeepaliveController } from './keepaliveController';
 
 // Import types
-import { AppState, INITIAL_APP_STATE } from "@mpc-wallet/types/appstate";
-import { SessionProposal, SessionResponse, SessionInfo } from "@mpc-wallet/types/session";
+import { AppState, INITIAL_APP_STATE } from "@frost-mpc/types/appstate";
+import { SessionProposal, SessionResponse, SessionInfo } from "@frost-mpc/types/session";
 import { getSignalServerUrl } from "../../config/signal-server";
-import { MeshStatusType, MeshStatus } from "@mpc-wallet/types/mesh";
-import { DkgState } from "@mpc-wallet/types/dkg";
+import { MeshStatusType, MeshStatus } from "@frost-mpc/types/mesh";
+import { DkgState } from "@frost-mpc/types/dkg";
 import {
     type JsonRpcRequest,
     type PopupToBackgroundMessage,
@@ -60,8 +60,8 @@ import {
     type BackgroundMessage,
     type OffscreenMessage,
     type PopupMessage,
-} from "@mpc-wallet/types/messages";
-import { ServerMsg, ClientMsg, WebSocketMessagePayload, WebRTCSignal } from "@mpc-wallet/types/websocket";
+} from "@frost-mpc/types/messages";
+import { ServerMsg, ClientMsg, WebSocketMessagePayload, WebRTCSignal } from "@frost-mpc/types/websocket";
 
 // ===================================================================
 // SERVICE INITIALIZATION AND GLOBAL STATE

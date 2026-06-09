@@ -49,8 +49,8 @@ The UI is keyboard-driven and documented inline via the
 
 ```bash
 # Clone repository
-git clone https://github.com/hecoinfo/mpc-wallet
-cd mpc-wallet/apps/tui-node
+git clone https://github.com/hecoinfo/frost-mpc
+cd frost-mpc/apps/tui-node
 
 # Build from source
 cargo build --release
@@ -75,7 +75,7 @@ those are real:
 - `--help` works because `clap::Parser` generates it automatically;
   it isn't an explicit flag in the `Args` struct.
 
-Verified against `apps/tui-node/src/bin/mpc-wallet-tui.rs:13-39`.
+Verified against `apps/tui-node/src/bin/frost-mpc-tui.rs:13-39`.
 
 ## User Interface
 
@@ -198,12 +198,12 @@ passed as CLI flags. Keystore location is fixed at `~/.frost_keystore`.
                             Default: wss://xiongchenyu.dpdns.org
 --offline                   Run without network (SD-card DKG mode).
 --log-location <PATH>       Log file path.
-                            Default: ~/.frost_keystore/logs/mpc-wallet.log
+                            Default: ~/.frost_keystore/logs/frost-mpc.log
 --log-level <LEVEL>         error | warn | info | debug | trace
                             Default: info
 ```
 
-See `apps/tui-node/src/bin/mpc-wallet-tui.rs` for the authoritative
+See `apps/tui-node/src/bin/frost-mpc-tui.rs` for the authoritative
 definitions.
 
 ### Environment Variables
@@ -224,7 +224,7 @@ For air-gapped operations, launch with `--offline` and navigate
 via arrow keys + Enter:
 
 ```bash
-mpc-wallet-tui --offline --device-id Device-001
+frost-mpc-tui --offline --device-id Device-001
 ```
 
 The menu structure — no numeric hotkeys — is:
@@ -276,7 +276,7 @@ That's the whole performance story today.
 curl -v https://xiongchenyu.dpdns.org/
 
 # Enable debug logging
-RUST_LOG=debug mpc-wallet-tui --device-id Device-001
+RUST_LOG=debug frost-mpc-tui --device-id Device-001
 ```
 
 #### DKG Failures
@@ -319,7 +319,7 @@ keyboard guides.)
 ## Support
 
 For help and support:
-- [GitHub Issues](https://github.com/hecoinfo/mpc-wallet/issues)
+- [GitHub Issues](https://github.com/hecoinfo/frost-mpc/issues)
 - [Documentation](../../../docs/)
 
 ---

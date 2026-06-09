@@ -1,4 +1,4 @@
-//! `mpc-wallet-cli` library surface.
+//! `frost-mpc-cli` library surface.
 //!
 //! The CLI is split into a lib + a thin bin (`src/main.rs`) so the
 //! protocol types, the serve daemon, and the multi-node `simulate`

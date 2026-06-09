@@ -33,11 +33,11 @@
 
 ```bash
 # once per device
-git clone <repo> && cd mpc-wallet
+git clone <repo> && cd frost-mpc
 nix develop                      # or have the toolchain installed
 
 # Track A (raw CLI): build the CLI
-cargo build --release -p mpc-wallet-cli      # binary: ./target/release/mpc-wallet-cli
+cargo build --release -p frost-mpc-cli      # binary: ./target/release/frost-mpc-cli
 # Track B (TUI): build the TUI
 cargo build --release -p tui-node
 ```
@@ -74,7 +74,7 @@ SIGNAL=wss://panda.qzz.io scripts/demo/preflight.sh
 它会**端到端**跑完整的 DKG（2-of-2 / 2-of-3 / 3-of-5）和门限签名，每个只需几秒，然后检查信令服务器是否可达。全部 ✅ → 可以开始。任何 ❌ → 修好它，或降级（§6）。这是最重要的一步 —— 它就是对"出事怎么办"的回答：你先在私下确保根本不会出事。
 
 > 为什么它值得信任：`preflight` 运行 `scripts/demo/ceremony.sh`，它把一个真实的 N 节点
-> FROST 仪式作为**彼此独立的 `mpc-wallet-cli` 进程**拉起 —— 每个进程都有自己的磁盘密钥库，
+> FROST 仪式作为**彼此独立的 `frost-mpc-cli` 进程**拉起 —— 每个进程都有自己的磁盘密钥库，
 > 通过真实的 WebRTC、经由真实的（本地）信令服务器通信。没有任何东西在单一进程里造假，
 > 它与真实客户端走的是同一条代码路径。
 
@@ -94,7 +94,7 @@ SIGNAL=wss://panda.qzz.io scripts/demo/preflight.sh
 > | "这是预录的 / 提前准备好的。" | 由投资人**当场指定消息**。签名随之改变；它仍然能通过验证。 |
 > | "密钥是一次性生成后硬编码进去的。" | **现场通过 DKG 创建一个全新的钱包**；密钥每次运行都不同，并依赖于三台机器各自的随机数。 |
 
-> **协议传输层。** 每个节点运行 `mpc-wallet-cli serve`，它说的是
+> **协议传输层。** 每个节点运行 `frost-mpc-cli serve`，它说的是
 > **以换行符分隔的 JSON**：你在 stdin 上输入一个命令对象，它在 stdout 上打印事件对象。
 > 投资人字面上能看到线路协议 —— 没有任何隐藏。
 
@@ -104,17 +104,17 @@ SIGNAL=wss://panda.qzz.io scripts/demo/preflight.sh
 
 ```bash
 # alice
-./target/release/mpc-wallet-cli serve --curve ed25519 \
+./target/release/frost-mpc-cli serve --curve ed25519 \
   --device-id alice --keystore ~/.frost_alice \
   --signal-server wss://panda.qzz.io --room "$ROOM"
 
 # bob
-./target/release/mpc-wallet-cli serve --curve ed25519 \
+./target/release/frost-mpc-cli serve --curve ed25519 \
   --device-id bob --keystore ~/.frost_bob \
   --signal-server wss://panda.qzz.io --room "$ROOM"
 
 # carol
-./target/release/mpc-wallet-cli serve --curve ed25519 \
+./target/release/frost-mpc-cli serve --curve ed25519 \
   --device-id carol --keystore ~/.frost_carol \
   --signal-server wss://panda.qzz.io --room "$ROOM"
 ```
@@ -238,7 +238,7 @@ openssl pkeyutl -verify -pubin -inkey pub.pem -rawin -in msg.bin -sigfile sig.bi
 
 ### 3.4 进阶：一笔真实的 Solana 区块链交易
 
-最有力的版本：MPC 钱包签署一笔真实的 Solana 转账，并让它上链，可在公开的区块浏览器中看到。分工（这正是它可信的原因）：由**标准的 `@solana/web3.js` 库**来构建并提交交易；我们的**原生 `mpc-wallet-cli` 只负责签名**。辅助脚本：`scripts/demo/solana_onchain.mjs`。
+最有力的版本：MPC 钱包签署一笔真实的 Solana 转账，并让它上链，可在公开的区块浏览器中看到。分工（这正是它可信的原因）：由**标准的 `@solana/web3.js` 库**来构建并提交交易；我们的**原生 `frost-mpc-cli` 只负责签名**。辅助脚本：`scripts/demo/solana_onchain.mjs`。
 
 > **始终从 `group_public_key` 派生地址**（`solana_onchain.mjs address
 > <groupKeyHex>`），而不是从 `dkg_complete` 事件的 `address` 字段派生 —— 该字段目前对 ed25519
@@ -293,7 +293,7 @@ node scripts/demo/solana_onchain.mjs finalize <signatureHex>          # submits;
 每位参与者在自己的笔记本上启动终端界面：
 
 ```bash
-cargo run --release --bin mpc-wallet-tui -p tui-node -- \
+cargo run --release --bin frost-mpc-tui -p tui-node -- \
   --device-id alice \
   --signal-server wss://panda.qzz.io \
   --room "$ROOM"
@@ -332,7 +332,7 @@ cargo run --release --bin mpc-wallet-tui -p tui-node -- \
 
 ```bash
 # 在持有钱包的节点上 —— 轮换所有分片（地址不变，分片全新）：
-mpc-wallet-cli reshare --wallet-id <W> --room "$ROOM"
+frost-mpc-cli reshare --wallet-id <W> --room "$ROOM"
 #   → 保留下来的签名方在被广播的 reshare 会话上执行 `session join`
 #     （或 `serve --auto-approve`）来批准，就像一笔多方共签的交易。
 
@@ -351,7 +351,7 @@ scripts/demo/ceremony.sh --nodes 3 --threshold 2 --reshare
 > 单密钥的托管钱包做不到这其中任何一点。"
 
 > **无需现场搭建的证明：** `scripts/demo/ceremony.sh … --reshare` 在真实的独立进程上跑完
-> 整个刷新，并断言地址保持不变；该引擎同时也在测试套件里被验证（`cargo test -p mpc-wallet-cli`）。
+> 整个刷新，并断言地址保持不变；该引擎同时也在测试套件里被验证（`cargo test -p frost-mpc-cli`）。
 > 完整的威胁模型 + 话术见 `docs/RECOVERY_AND_RESHARING.md`。
 
 ---
@@ -431,7 +431,7 @@ PASSWORD:     demo                             # throwaway, never a real one
 PRE-FLIGHT:   SIGNAL=wss://panda.qzz.io scripts/demo/preflight.sh     # all ✅ → go
 
 — Track A (raw CLI) —
-START (each):  mpc-wallet-cli serve --curve ed25519 --device-id <name> \
+START (each):  frost-mpc-cli serve --curve ed25519 --device-id <name> \
                  --keystore ~/.frost_<name> --signal-server wss://panda.qzz.io --room "$ROOM"
 alice:         {"cmd":"create_wallet","threshold":2,"total":3,"password":"demo"}
 bob,carol:     {"cmd":"join_session","session_id":"<dkg_…>","password":"demo"}

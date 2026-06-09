@@ -27,8 +27,8 @@ MPC Wallet enables threshold signatures where private keys are split across mult
 
 ```bash
 # Clone the repository
-git clone https://github.com/hecoinfo/mpc-wallet.git
-cd mpc-wallet
+git clone https://github.com/hecoinfo/frost-mpc.git
+cd frost-mpc
 
 # Install dependencies
 bun install
@@ -57,9 +57,9 @@ bun run dev
 #### Terminal UI
 
 ```bash
-# Run the TUI application (binary name is mpc-wallet-tui,
+# Run the TUI application (binary name is frost-mpc-tui,
 # lives in the tui-node package)
-cargo run -p tui-node --bin mpc-wallet-tui -- --device-id Device-001
+cargo run -p tui-node --bin frost-mpc-tui -- --device-id Device-001
 ```
 
 Inside the TUI, navigate with arrow keys → `Create New Wallet`
@@ -70,12 +70,7 @@ line-mode REPL.)
 
 #### Desktop Application
 
-```bash
-# Run the native desktop app (package name is mpc-wallet-native,
-# NOT native-node — the directory is native-node/ but the
-# Cargo package is mpc-wallet-native)
-cargo run -p mpc-wallet-native
-```
+The Iced desktop app lives in its own repo: **[stars-labs/starlab-desktop](https://github.com/stars-labs/starlab-desktop)**. It consumes this repo's `tui-node` library (engine + `core::*Manager`) as a dependency.
 
 ## Documentation
 
@@ -101,8 +96,7 @@ cargo run -p mpc-wallet-native
 - [Offline Mode](apps/tui-node/docs/guides/offline-mode.md) - Air-gapped operation guide
 
 #### Native Desktop Application
-- [Native App README](apps/native-node/README.md) - Architecture diagram, feature-parity matrix, build + run instructions
-- [Docs subtree](apps/native-node/docs/README.md) - Additional native-node documentation
+- Moved to its own repo: **[stars-labs/starlab-desktop](https://github.com/stars-labs/starlab-desktop)** (Iced GUI consuming this repo's `tui-node`).
 
 #### Signal Server
 - [Signal Server Guide](apps/signal-server/docs/README.md) - WebRTC signaling server
@@ -130,14 +124,15 @@ cargo run -p mpc-wallet-native
 ## Project Structure
 
 ```
-mpc-wallet/
+frost-mpc/
 ├── apps/                         # Applications
-│   ├── browser-extension/        # Chrome/Firefox extension
-│   ├── native-node/              # Desktop GUI application (Slint)
+│   ├── browser-extension/        # Chrome/Firefox extension (→ stars-labs/starlab-wallet)
+│   ├── cli-node/                 # Headless CLI (frost-mpc-cli) — conformance oracle
 │   ├── tui-node/                 # Terminal UI application (Ratatui)
 │   └── signal-server/            # WebRTC signaling (server + Cloudflare Worker)
+│   # Desktop GUI moved to stars-labs/starlab-desktop (Iced)
 │
-├── packages/@mpc-wallet/         # Shared packages
+├── packages/@frost-mpc/         # Shared packages
 │   ├── frost-core/               # FROST protocol implementation (Rust)
 │   ├── core-wasm/                # WebAssembly bindings
 │   ├── blockchain/               # Multi-chain support (Ethereum/Solana/Bitcoin)
@@ -156,7 +151,7 @@ mpc-wallet/
 - **WebAssembly**: Bridge between Rust and JavaScript
 - **WebRTC**: Peer-to-peer communication
 - **Svelte**: Browser extension UI
-- **Slint**: Native desktop UI framework
+- **Iced**: Native desktop UI framework (MIT)
 - **Ratatui**: Terminal UI framework
 
 ### Cryptography
@@ -191,13 +186,13 @@ The MPC Wallet is designed around threshold cryptography primitives:
 
 - Root secret entropy is split via FROST DKG — the combined private key
   never exists in memory on any single participant
-- Keystore at rest is PBKDF2 + AES-256-GCM (see `packages/@mpc-wallet/frost-core/src/keystore.rs`)
+- Keystore at rest is PBKDF2 + AES-256-GCM (see `packages/@frost-mpc/frost-core/src/keystore.rs`)
 - Peer-to-peer traffic rides WebRTC (DTLS-SRTP); signaling over WSS
 - FROST implementation comes from the [ZCash Foundation](https://github.com/ZcashFoundation/frost)
   crates (`frost-core 2.2`, `frost-ed25519 2.2`, `frost-secp256k1 2.2`)
 
 No third-party security audit has been performed on this codebase as a
-whole. Report vulnerabilities via [GitHub Security Advisories](https://github.com/hecoinfo/mpc-wallet/security/advisories/new).
+whole. Report vulnerabilities via [GitHub Security Advisories](https://github.com/hecoinfo/frost-mpc/security/advisories/new).
 
 ## Performance
 
@@ -236,8 +231,8 @@ We welcome contributions! Please see our [Contributing Guide](docs/CONTRIBUTING.
 
 ### Community
 
-- [GitHub Issues](https://github.com/hecoinfo/mpc-wallet/issues) - Report bugs
-- [GitHub Discussions](https://github.com/hecoinfo/mpc-wallet/discussions) - Ask questions
+- [GitHub Issues](https://github.com/hecoinfo/frost-mpc/issues) - Report bugs
+- [GitHub Discussions](https://github.com/hecoinfo/frost-mpc/discussions) - Ask questions
 - [Documentation](docs/) - Full documentation in this repo
 
 ## Roadmap
@@ -247,11 +242,9 @@ We welcome contributions! Please see our [Contributing Guide](docs/CONTRIBUTING.
   signing + EIP-1193 / EIP-6963 dApp integration
 - [x] Terminal UI (`apps/tui-node/`) — keyboard-driven FROST
   frontend with online (WebRTC mesh) + offline (SD-card) modes
-- [x] Desktop application (`apps/native-node/`) — Slint GUI reusing
-  `tui-node::core::*Manager` types; feature-parity with TUI except
-  for the `SigningManager::approve` stub (see
-  [`apps/native-node/README.md`](apps/native-node/README.md) for
-  the precise ⚠-marked matrix)
+- [x] Desktop application — Iced GUI reusing this repo's
+  `tui-node::core::*Manager` types; now in its own repo
+  **[stars-labs/starlab-desktop](https://github.com/stars-labs/starlab-desktop)**
 - [x] Cloudflare Worker signal server (Rust-over-WASM) and
   standalone `cargo`-built signal server
 
@@ -262,9 +255,8 @@ scheduled delivery date; contributions welcome via PR. See
 [`CLAUDE.md`](CLAUDE.md) for deeper context where noted.
 
 - [ ] Extract `SigningManager::approve` onto a ciphersuite-generic
-  backend so native-node shares the real signing path with the TUI
-  (last remaining feature-parity gap — see the native-node README
-  + `CLAUDE.md § Native desktop node`).
+  backend so the desktop app (starlab-desktop) shares the real
+  signing path with the TUI (its last feature-parity gap).
 - [ ] `criterion` benches for DKG / signing / keystore so future
   perf-optimization claims have reproducible numbers.
 - [ ] FROST share refresh (proactive share rotation preserving the
@@ -272,11 +264,11 @@ scheduled delivery date; contributions welcome via PR. See
   doesn't wire it up yet.
 - [ ] Third-party security audit of the full stack. The upstream
   ZCash Foundation `frost-*` crates are audited; this workspace's
-  integration layer + extension + TUI + native frontends are not.
+  integration layer + TUI + the GUI frontends are not.
 - [ ] Hardware-wallet co-signer integration (Ledger / Trezor).
 - [ ] Additional blockchains beyond Ethereum (secp256k1) + Solana
   (ed25519) — each new chain needs per-curve address derivation
-  + encoding work (see `packages/@mpc-wallet/blockchain/`).
+  + encoding work (see `packages/@frost-mpc/blockchain/`).
 - [ ] Structured audit-log emission (the absent feature flagged
   across the security docs).
 
@@ -285,7 +277,7 @@ scheduled delivery date; contributions welcome via PR. See
 The workspace-level `Cargo.toml` declares `license = "Apache-2.0"`.
 Individual crates under `packages/` and `apps/signal-server/` set their
 own — see each crate's `Cargo.toml` for specifics
-(`packages/@mpc-wallet/blockchain` is MIT; signal-server is dual
+(`packages/@frost-mpc/blockchain` is MIT; signal-server is dual
 MIT-or-Apache-2.0; everything else Apache-2.0). A repo-root `LICENSE`
 file hasn't been committed yet — contribute the Apache-2.0 text
 (or whichever single license you pick for the project) to settle
@@ -303,11 +295,11 @@ the ambiguity.
 If you use this software in your research, please cite:
 
 ```bibtex
-@software{mpc_wallet,
+@software{frost_mpc,
   title = {MPC Wallet: Multi-Party Computation Wallet},
   author = {MPC Wallet Team},
   year = {2025},
-  url = {https://github.com/hecoinfo/mpc-wallet}
+  url = {https://github.com/hecoinfo/frost-mpc}
 }
 ```
 

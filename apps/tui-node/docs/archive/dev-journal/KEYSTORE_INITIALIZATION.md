@@ -9,7 +9,7 @@ The keystore initialization was only triggered by manual commands (`/init_keysto
 ## Solution Implemented
 
 ### 1. Automatic Initialization on Startup
-**Location**: `/apps/tui-node/src/bin/mpc-wallet-tui.rs`
+**Location**: `/apps/tui-node/src/bin/frost-mpc-tui.rs`
 
 ```rust
 // After WebSocket connection
@@ -120,13 +120,13 @@ if app_state.keystore.is_none() {
 
 ```bash
 # Run the TUI
-cargo run --bin mpc-wallet-tui
+cargo run --bin frost-mpc-tui
 
 # Open Manage Wallets (press 'm' then select option 2)
 # Should no longer see "Keystore not initialized"
 
 # Check logs for initialization
-tail -f mpc-wallet-*.log | grep -i keystore
+tail -f frost-mpc-*.log | grep -i keystore
 ```
 
 ## Future Improvements

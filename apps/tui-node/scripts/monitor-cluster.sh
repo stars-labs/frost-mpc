@@ -77,7 +77,7 @@ show_status_dashboard() {
     # Show resource usage
     echo -e "${BLUE}--- System Resources ---${NC}"
     echo "Memory usage:"
-    ps aux | grep -E "(mpc-wallet|webrtc-signal)" | grep -v grep | awk '{print "  " $11 ": " $4"% RAM, " $3"% CPU"}' || echo "  No processes found"
+    ps aux | grep -E "(frost-mpc|webrtc-signal)" | grep -v grep | awk '{print "  " $11 ": " $4"% RAM, " $3"% CPU"}' || echo "  No processes found"
     
     echo ""
     echo "Disk usage (data directory):"

@@ -17,7 +17,7 @@ protocol:
 | TUI node (`apps/tui-node`) | Rust | `tui_node::elm` + `tui_node::core` | Ratatui |
 | Native node (`apps/native-node`) | Rust | reuses `tui_node::core` + `HeadlessRunner` | Slint |
 | CLI node (`apps/cli-node`) | Rust | reuses `tui_node::elm::HeadlessRunner` | JSONL stdin/stdout |
-| Browser extension (`apps/browser-extension`) | TypeScript + WASM | independent reimpl of FROST glue over `@mpc-wallet/core-wasm` | Svelte 5 |
+| Browser extension (`apps/browser-extension`) | TypeScript + WASM | independent reimpl of FROST glue over `@frost-mpc/core-wasm` | Svelte 5 |
 
 Three of the four (TUI, native, CLI) share the **same Rust Elm core**. The extension is a
 **separate implementation** of the same ceremony, sharing only the FROST primitives (via
@@ -343,7 +343,7 @@ Three sub-harnesses, one per non-CLI client:
 
 #### L3·0 — CLI ↔ CLI across processes (foundation) ✅
 
-Before any cross-*client* interop, the substrate is two real `mpc-wallet-cli
+Before any cross-*client* interop, the substrate is two real `frost-mpc-cli
 serve` **binaries** driven over JSONL, with the signal server in-process. This
 is the first thing to exercise the compiled bin's stdin/stdout surface (the lib
 tests never do) and the first place teardown is real OS process death — which is
@@ -559,7 +559,7 @@ The existing `.github/workflows/ci.yml` (rust job + extension bun job) is extend
 `bun install`s, builds the extension, boots `apps/signal-server`, and runs Playwright.
 
 Golden regeneration is a deliberate, reviewed action (`BLESS=1 cargo test -p
-mpc-wallet-cli`), so a protocol change shows up as a fixture diff in the PR.
+frost-mpc-cli`), so a protocol change shows up as a fixture diff in the PR.
 
 ---
 
@@ -662,7 +662,7 @@ None had any prior test.
 A static check of the extension's independent crypto answered the most important L4
 question without a browser:
 
-- **Address derivation.** The extension's WASM (`@mpc-wallet/core-wasm`) derives Ethereum
+- **Address derivation.** The extension's WASM (`@frost-mpc/core-wasm`) derives Ethereum
   addresses via `frost-core::Secp256k1Curve::get_eth_address`, which **decompresses the key
   correctly** (`k256::from_sec1_bytes → to_encoded_point(false) → keccak(X‖Y)[12..]`). So
   bug #2 was specific to the divergent `tui_node::blockchain_config` impl (now fixed to

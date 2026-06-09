@@ -12,9 +12,9 @@ echo "Project directory: $PROJECT_ROOT"
 
 cd "$PROJECT_ROOT"
 
-cargo build --release --bin mpc-wallet-tui
+cargo build --release --bin frost-mpc-tui
 
-BINARY_PATH="$PROJECT_ROOT/target/release/mpc-wallet-tui"
+BINARY_PATH="$PROJECT_ROOT/target/release/frost-mpc-tui"
 
 if [ ! -f "$BINARY_PATH" ]; then
     echo "Error: Binary not found at $BINARY_PATH" >&2
@@ -24,12 +24,12 @@ fi
 echo "TUI node built successfully at: $BINARY_PATH"
 
 # Optionally copy to deployment directory
-DEPLOY_DIR="/opt/mpc-wallet"
+DEPLOY_DIR="/opt/frost-mpc"
 if [ -d "$DEPLOY_DIR" ] && [ -w "$DEPLOY_DIR" ]; then
     echo "Copying TUI node to deployment directory..."
-    cp "$BINARY_PATH" "$DEPLOY_DIR/mpc-wallet-tui"
-    chmod +x "$DEPLOY_DIR/mpc-wallet-tui"
-    echo "TUI node deployed to: $DEPLOY_DIR/mpc-wallet-tui"
+    cp "$BINARY_PATH" "$DEPLOY_DIR/frost-mpc-tui"
+    chmod +x "$DEPLOY_DIR/frost-mpc-tui"
+    echo "TUI node deployed to: $DEPLOY_DIR/frost-mpc-tui"
 fi
 
 echo "Build complete!"

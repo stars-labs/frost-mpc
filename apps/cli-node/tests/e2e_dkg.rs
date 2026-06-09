@@ -3,9 +3,9 @@
 //! process, against an embedded signal server, WebRTC over loopback.
 //!
 //! `#[ignore]` by default (real UDP/ICE on loopback, ~seconds). Run with:
-//!   cargo test -p mpc-wallet-cli --test e2e_dkg -- --ignored --nocapture
+//!   cargo test -p frost-mpc-cli --test e2e_dkg -- --ignored --nocapture
 
-use mpc_wallet_cli::simulate::{run_signing_simulation, run_simulation, SimulateOpts};
+use frost_mpc_cli::simulate::{run_signing_simulation, run_simulation, SimulateOpts};
 
 fn init_logs() {
     let _ = tracing_subscriber::fmt()
@@ -95,8 +95,8 @@ async fn reshare_then_sign_2_of_3_preserves_group_key() {
     // node refreshes its share; the group key (address) must be unchanged and a
     // threshold signature with the REFRESHED shares must verify.
     init_logs();
-    let r = mpc_wallet_cli::simulate::run_reshare_e2e(
-        mpc_wallet_cli::simulate::SimulateOpts {
+    let r = frost_mpc_cli::simulate::run_reshare_e2e(
+        frost_mpc_cli::simulate::SimulateOpts {
             nodes: 3,
             threshold: 2,
             curve: "secp256k1".into(),

@@ -11,7 +11,7 @@ A general WebRTC signal server for device-to-device communication, written in Ru
 
 ## Usage
 
-From the mpc-wallet monorepo root:
+From the frost-mpc monorepo root:
 
 ```sh
 cargo build -p webrtc-signal-server --release
@@ -86,7 +86,7 @@ MIT OR Apache-2.0
 
 ## Repository
 
-This crate lives in the [mpc-wallet monorepo](https://github.com/hecoinfo/mpc-wallet)
+This crate lives in the [frost-mpc monorepo](https://github.com/hecoinfo/frost-mpc)
 under `apps/signal-server/server/`. It was previously published from
 `stars-labs/crypto-rust-tools` before being absorbed into the monorepo;
 older crates.io metadata may still point there.

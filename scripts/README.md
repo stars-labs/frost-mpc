@@ -1,4 +1,4 @@
-# Test harness for mpc-wallet-tui
+# Test harness for frost-mpc-tui
 
 ## Three feedback loops, fastest first
 
@@ -16,7 +16,7 @@ Run the fastest loop that can disprove your hypothesis. Don't reach for smoke-dk
 ./scripts/smoke-dkg.sh [--manual | --tmux] [--timeout SECS]
 ```
 
-- `--manual` (default) — you open 3 terminals, run `target/debug/mpc-wallet-tui --device-id mpc-{1,2,3}`, drive the UI. The script tails the logs and prints `PASS` / `FAIL` plus per-device log excerpts when all three converge on the same group verifying key.
+- `--manual` (default) — you open 3 terminals, run `target/debug/frost-mpc-tui --device-id mpc-{1,2,3}`, drive the UI. The script tails the logs and prints `PASS` / `FAIL` plus per-device log excerpts when all three converge on the same group verifying key.
 - `--tmux` — the script spawns a 3-pane `mpc-smoke` tmux session with one TUI per pane. You still drive the UI (keystroke automation is a TODO — see source). Attach with `tmux attach -t mpc-smoke`; clean up with `tmux kill-session -t mpc-smoke`.
 
 Exit 0 = all 3 nodes agree on the group key. Exit 1 = timeout or mismatch.

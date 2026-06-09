@@ -110,7 +110,7 @@ Authoritative enum: `ClientMsg` / `ServerMsg` in
 
 The `session_info` payload is a JSON blob whose shape is defined
 by the sender (browser extension, TUI, native-node all share it
-via `packages/@mpc-wallet/types/src/session.ts` on the TS side
+via `packages/@frost-mpc/types/src/session.ts` on the TS side
 and ad-hoc on the Rust side). The signal server treats the inner
 payload as opaque.
 
@@ -137,7 +137,7 @@ Once a direct WebRTC connection is established, nodes exchange application-level
 >
 > A real `DkgRound1Package` message over the data channel has the
 > shape (verified against `src/network/webrtc.rs:78-82` and the
-> TypeScript mirror at `packages/@mpc-wallet/types/src/webrtc.ts:26`):
+> TypeScript mirror at `packages/@frost-mpc/types/src/webrtc.ts:26`):
 >
 > ```json
 > {
@@ -223,7 +223,7 @@ the wire the discriminator value is the **PascalCase** variant
 name (`DkgRound1Package`, not `dkg_round1_package`). Earlier
 drafts of this note claimed snake_case; verify against
 `signal.rs:204` + the TS mirror at
-`packages/@mpc-wallet/types/src/webrtc.ts:26`.
+`packages/@frost-mpc/types/src/webrtc.ts:26`.
 
 ```json
 {

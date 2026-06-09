@@ -4,7 +4,7 @@ import type {
     WebSocketClientMsg,
     WebSocketServerMsg,
     OffscreenToBackgroundMsg
-} from "@mpc-wallet/types/messages";
+} from "@frost-mpc/types/messages";
 
 type MessageCallback = (message: WebSocketServerMsg) => void;
 type ErrorCallback = (error: Event) => void;

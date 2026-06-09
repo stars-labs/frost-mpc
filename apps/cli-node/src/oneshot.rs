@@ -277,7 +277,7 @@ pub async fn wallet_create(
         };
         eprintln!(
             "note: session id = {session_id}\n  → on each of the other {} device(s), run (unique \
-             --device-id, SAME password):\n      mpc-wallet-cli session join --session-id \
+             --device-id, SAME password):\n      frost-mpc-cli session join --session-id \
              {session_id}{room_flag} --device-id <unique>",
             total - 1
         );
@@ -287,7 +287,7 @@ pub async fn wallet_create(
         opts.timeout_secs,
         "the DKG to complete",
         "\n  → DKG needs ALL participants online together. On each OTHER device run \
-         `mpc-wallet-cli session join --session-id <id shown above>` with the SAME --room and a \
+         `frost-mpc-cli session join --session-id <id shown above>` with the SAME --room and a \
          unique --device-id.",
         Some(&roster),
         |e| matches!(e, CliEvent::DkgComplete { .. }),

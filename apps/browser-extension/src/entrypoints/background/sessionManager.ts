@@ -9,13 +9,13 @@
 // - Session state validation
 // ===================================================================
 
-import { AppState } from "@mpc-wallet/types/appstate";
-import { SessionInfo, SessionProposal, SessionResponse } from "@mpc-wallet/types/session";
-import { MeshStatus } from "@mpc-wallet/types/mesh";
-import { DkgState } from "@mpc-wallet/types/dkg";
+import { AppState } from "@frost-mpc/types/appstate";
+import { SessionInfo, SessionProposal, SessionResponse } from "@frost-mpc/types/session";
+import { MeshStatus } from "@frost-mpc/types/mesh";
+import { DkgState } from "@frost-mpc/types/dkg";
 import { WebSocketClient } from "./websocket";
-import { validateSessionProposal, validateSessionAcceptance } from "@mpc-wallet/types/messages";
-import type { BackgroundToPopupMessage, OffscreenMessage } from "@mpc-wallet/types/messages";
+import { validateSessionProposal, validateSessionAcceptance } from "@frost-mpc/types/messages";
+import type { BackgroundToPopupMessage, OffscreenMessage } from "@frost-mpc/types/messages";
 import { buildWireSessionInfo } from "../../utils/session-parse";
 
 // Session persistence removed - sessions are ephemeral for security

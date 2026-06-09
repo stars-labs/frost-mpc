@@ -1,6 +1,6 @@
-import { SessionInfo, DkgState, MeshStatus, MeshStatusType } from "@mpc-wallet/types/appstate";
-import { WebRTCAppMessage } from "@mpc-wallet/types/webrtc";
-import { WebSocketMessagePayload, WebRTCSignal } from "@mpc-wallet/types/websocket";
+import { SessionInfo, DkgState, MeshStatus, MeshStatusType } from "@frost-mpc/types/appstate";
+import { WebRTCAppMessage } from "@frost-mpc/types/webrtc";
+import { WebSocketMessagePayload, WebRTCSignal } from "@frost-mpc/types/websocket";
 
 export { DkgState, MeshStatusType }; // Export DkgState and MeshStatusType
 
@@ -1827,7 +1827,7 @@ export class WebRTCManager {
     );
 
     const { FrostDkgSecp256k1, FrostDkgEd25519 } = await import(
-      "@mpc-wallet/core-wasm"
+      "@frost-mpc/core-wasm"
     );
     const instance =
       blockchain === "ethereum"

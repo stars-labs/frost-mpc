@@ -14,7 +14,7 @@ import { writable } from "svelte/store";
 
 export type ThemeMode = "system" | "light" | "dark";
 
-export const THEME_KEY = "mpc_wallet_theme";
+export const THEME_KEY = "frost_mpc_theme";
 
 function systemPrefersDark(): boolean {
     return (

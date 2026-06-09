@@ -19,7 +19,7 @@
  * caller (webSocketManager) logs and drops malformed payloads rather
  * than throwing.
  */
-import type { SessionInfo, SessionTypeTag } from "@mpc-wallet/types/session";
+import type { SessionInfo, SessionTypeTag } from "@frost-mpc/types/session";
 
 export function parseSessionInfoFromWire(raw: unknown): SessionInfo | null {
     if (typeof raw !== "object" || raw === null) {

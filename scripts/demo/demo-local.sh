@@ -23,7 +23,7 @@ NAMES=(alice bob carol dave erin frank)
 # Nuclear fallback: no UI, no network — prove the whole ceremony in ~5s.
 if [ "${NUCLEAR:-0}" = "1" ]; then
   echo "NUCLEAR fallback: full ${2:-2}-of-${N} DKG + signing, self-contained:"
-  cargo run --release --quiet -p mpc-wallet-cli -- \
+  cargo run --release --quiet -p frost-mpc-cli -- \
     simulate --nodes "$N" --threshold "${2:-2}" --sign "live investor demo"
   exit $?
 fi
@@ -46,7 +46,7 @@ sleep 2  # let it bind before nodes dial
 for i in $(seq 0 $((N-1))); do
   dev="${NAMES[$i]:-node$i}"
   tmux split-window -t "$SESSION" \
-    "cargo run --release --quiet --bin mpc-wallet-tui -p tui-node -- --device-id ${dev} --signal-server ${URL}; read"
+    "cargo run --release --quiet --bin frost-mpc-tui -p tui-node -- --device-id ${dev} --signal-server ${URL}; read"
   tmux select-layout -t "$SESSION" tiled
 done
 

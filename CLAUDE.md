@@ -8,11 +8,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 # Rust (all workspace crates)
 cargo build                              # Build all workspace members
 cargo test                               # Run all Rust tests
-cargo test -p mpc-wallet-frost-core      # Test specific package
+cargo test -p frost-mpc-frost-core      # Test specific package
 cargo test -p tui-node                   # Test TUI node
 cargo test test_name                     # Run single test by name
-cargo run --example unified_dkg -p mpc-wallet-frost-core  # Run example
-cargo run --bin mpc-wallet-tui -p tui-node                # Run TUI app
+cargo run --example unified_dkg -p frost-mpc-frost-core  # Run example
+cargo run --bin frost-mpc-tui -p tui-node                # Run TUI app
 cargo check                              # Fast type check without codegen
 
 # Browser extension (Bun + WASM)
@@ -31,7 +31,7 @@ bun test path/to/test.ts                 # Run single test file
 
 Rust monorepo (edition 2024) with a Bun-managed browser extension. Seven Cargo workspace members:
 
-### Core Library: `packages/@mpc-wallet/frost-core/`
+### Core Library: `packages/@frost-mpc/frost-core/`
 Shared FROST cryptographic implementation used by all Rust targets. Key modules:
 - `unified_dkg.rs` — Runs FROST DKG for ed25519 + secp256k1 simultaneously from a single root secret
 - `hd_derivation.rs` — BIP-44 style HD key derivation using additive scalar offsets (no extra DKG rounds)
@@ -41,14 +41,13 @@ Shared FROST cryptographic implementation used by all Rust targets. Key modules:
 - `root_secret.rs` — Root entropy → deterministic per-curve RNGs via HKDF
 
 ### Applications
-- **`apps/tui-node/`** — Terminal UI (Ratatui) with Elm architecture (`src/elm/` for Model/Update/View). Exposes `lib.rs` so native-node can reuse business logic. Supports online (WebRTC mesh) and offline (SD card air-gap) DKG modes.
-- **`apps/native-node/`** — Desktop GUI (Slint 1.x) reusing `tui-node::core::{*Manager, CoreState}` for business logic. Native UI events are bridged through the `UICallback` trait (impl: `NativeUICallback` in `src/ui_callback.rs`) which posts closures onto the Slint event loop via `Weak<MainWindow>` + `slint::invoke_from_event_loop` (closures must be `Send`; `MainWindow` is `!Send`). File dialogs use the `rfd` crate. See `apps/native-node/README.md` for feature-parity status.
+- **`apps/tui-node/`** — Terminal UI (Ratatui) with Elm architecture (`src/elm/` for Model/Update/View). Exposes `lib.rs` (the Elm core + `core::*Manager` + `HeadlessRunner`) so the desktop app (`stars-labs/starlab-desktop`) can reuse the business logic cross-repo. Supports online (WebRTC mesh) and offline (SD card air-gap) DKG modes.
 - **`apps/browser-extension/`** — Chrome/Firefox extension (WXT + Svelte 5). Manifest V3 with background worker, popup, offscreen document (WebRTC + WASM), content script.
 - **`apps/signal-server/`** — WebRTC signaling: standard WebSocket server + Cloudflare Worker variant
 
 ### WASM & Blockchain
-- **`packages/@mpc-wallet/core-wasm/`** — Thin `wasm-bindgen` wrapper around frost-core
-- **`packages/@mpc-wallet/blockchain/`** — Multi-chain support. Only `solana-sdk` is pulled in directly; `bitcoin.rs` and `ethereum.rs` are hand-rolled over `sha2` / `sha3` / `bs58` primitives (ethers/bitcoin crate deps were removed when their dependent examples were disabled — see the Cargo.toml comment at line 27)
+- **`packages/@frost-mpc/core-wasm/`** — Thin `wasm-bindgen` wrapper around frost-core
+- **`packages/@frost-mpc/blockchain/`** — Multi-chain support. Only `solana-sdk` is pulled in directly; `bitcoin.rs` and `ethereum.rs` are hand-rolled over `sha2` / `sha3` / `bs58` primitives (ethers/bitcoin crate deps were removed when their dependent examples were disabled — see the Cargo.toml comment at line 27)
 
 ## Key Patterns
 
@@ -58,7 +57,7 @@ Shared FROST cryptographic implementation used by all Rust targets. Key modules:
 
 **UIProvider trait** (`apps/tui-node/src/elm/provider.rs`): Abstracts the TUI's Elm app loop over a UI backend. Separate from `UICallback` (see below).
 
-**UICallback trait** (`apps/tui-node/src/core/mod.rs`): Event-push surface for the non-Elm managers in `tui-node::core`. Both TUI and native-node consume `core::*Manager` types — TUI goes through the Elm loop, native-node implements `UICallback` directly (`NativeUICallback` in `apps/native-node/src/ui_callback.rs`) to push state onto Slint globals.
+**UICallback trait** (`apps/tui-node/src/core/mod.rs`): Event-push surface for the non-Elm managers in `tui-node::core`. The TUI goes through the Elm loop; the desktop app (`starlab-desktop`, cross-repo) implements `UICallback` directly to push `UiEvent`s into an mpsc channel that its Iced `Subscription` turns into messages. Keep this trait + the `core::*Manager` types `pub` for that cross-repo consumer.
 
 **Elm architecture** in TUI: State is `Model`, transitions via `Update`, rendering via `View`. Event-driven through `InternalCommand<C>` enum.
 
@@ -68,7 +67,7 @@ The extension is a standalone MPC client with TUI wire-protocol parity — any c
 
 1. **Popup** (`src/entrypoints/popup/App.svelte`) — Svelte 5 legacy reactivity (NOT runes). Lives only while the browser-action panel is open. Talks to background via `chrome.runtime.connect({name: "popup"})`.
 2. **Background SW** (`src/entrypoints/background/`) — Orchestrates. Owns `StateManager`, `SessionManager`, `WebSocketManager` (signal server), `OffscreenManager`. MV3 service workers terminate after ~30s idle; `KeepaliveController` pings during active DKG/signing states to prevent death.
-3. **Offscreen** (`src/entrypoints/offscreen/`) — Long-lived WebRTC + WASM host. Loads `@mpc-wallet/core-wasm` (FROST); holds `WebRTCManager` with all FROST state (`frostDkg`, `signingInfo`, `signingCommitments` Map, `signingShares` Map). Background↔offscreen communicate via `chrome.runtime.sendMessage` wrapped in `{type: "fromBackground"|"fromOffscreen", payload}`.
+3. **Offscreen** (`src/entrypoints/offscreen/`) — Long-lived WebRTC + WASM host. Loads `@frost-mpc/core-wasm` (FROST); holds `WebRTCManager` with all FROST state (`frostDkg`, `signingInfo`, `signingCommitments` Map, `signingShares` Map). Background↔offscreen communicate via `chrome.runtime.sendMessage` wrapped in `{type: "fromBackground"|"fromOffscreen", payload}`.
 4. **Content + injected** — Injects an EIP-1193 provider into page context. The provider is scoped to `window.starlabEthereum` only (never `window.ethereum`, to coexist with other wallet extensions); dApps discover it via EIP-6963 `eip6963:announceProvider` events. `window.starlabEthereum.request({method: 'personal_sign', ...})` → content script → `background.rpcHandler.handleSignMessageRequest`.
 
 ### Signing pipeline (end-to-end)
@@ -107,7 +106,7 @@ dApp .personal_sign OR popup "Sign Message"
 
 Shape-compatible with TUI (see TUI's `command.rs`). Top-level serde tag `type`, `snake_case`.
 
-- `announce_session` / `session_available` — session-discovery broadcasts. Flat `session_type: "dkg" | "signing"` string; signing sessions carry top-level `wallet_name`, `group_public_key`, `blockchain`, `signing_message_hex` siblings. See `packages/@mpc-wallet/types/src/session.ts`. Parser in `src/utils/session-parse.ts` synthesizes `accepted_devices: []` (TUI omits it) so downstream can always index.
+- `announce_session` / `session_available` — session-discovery broadcasts. Flat `session_type: "dkg" | "signing"` string; signing sessions carry top-level `wallet_name`, `group_public_key`, `blockchain`, `signing_message_hex` siblings. See `packages/@frost-mpc/types/src/session.ts`. Parser in `src/utils/session-parse.ts` synthesizes `accepted_devices: []` (TUI omits it) so downstream can always index.
 - `request_active_sessions` / `sessions_for_device` — cold-start replay. Extension fires `requestActiveSessions()` 2s after WS open so sessions announced before our connect aren't missed.
 - `session_status_update` — outbound only; emitted on join.
 - `relay` (generic peer-to-peer, wraps `websocket_msg_type`) — used for WebRTCSignal, SessionProposal, SessionResponse, and `SigningDecline` (Ext-3c, explicit rejection without joining the mesh).
@@ -138,35 +137,25 @@ DKG is analogous: `generate_round1()` returns our round-1 package as hex; `add_r
 
 Signal-server live smoke tests need 3 browser instances — no bun harness exercises full FROST+WebRTC pairing. Unit coverage via `tests/entrypoints/background/` (regression suites: `dkgAutoTrigger`, `signingAutoTrigger`, `signingNotification`, `dappSignatureApproval`, `signingDecline`).
 
-## Native desktop node: Slint + tui-node::core
+## GUI products live in their own repos
 
-`apps/native-node/` is a third MPC client that reuses `tui-node::core::{WalletManager, SessionManager, DkgManager, OfflineManager, ConnectionManager, SigningManager, CoreState}` as its business-logic backend. Architecture:
+This repo is the **headless engine + terminal clients**: the crypto packages
+(`frost-core` / `core-wasm` / `blockchain` / `types`), the CLI (`frost-mpc-cli`,
+the conformance oracle + headless automation), the TUI (`tui-node`), and the
+signal server. The consumer GUI products are separate:
 
-```
-ui/*.slint (Slint 1.x)  <---callbacks--->  src/main.rs  <--->  src/core_adapter.rs  --->  tui_node::core::*Manager
-     |                                                              |
-     | AppState globals                                              | UICallback events
-     |                                                               ↓
-     |<-------------------- NativeUICallback (src/ui_callback.rs)   |
-                          dispatches via Weak<MainWindow> +
-                          slint::invoke_from_event_loop
-                          (closures must be Send;
-                           MainWindow is !Send → upgrade INSIDE closure)
-```
+- **Desktop app** — `stars-labs/starlab-desktop` (Iced, MIT). It consumes
+  `tui-node` (and its `core::*Manager` + `CoreState` + `HeadlessRunner`) as a
+  cross-repo dependency, so `tui-node` MUST keep that surface `pub`. The
+  SD-card air-gap convention is shared: export/import dirs are
+  `frost_mpc_export` / `frost_mpc_import` (see `tui-node`'s `offline_manager.rs`)
+  — a mismatch breaks desktop↔TUI air-gap interop.
+- **Browser extension** — being split into `stars-labs/starlab-wallet`
+  (FROST + YubiKey + sandbox execution); consumes `@frost-mpc/core-wasm`.
 
-**Send bridge pattern**. `MainWindow` contains `Cell<u32>` / `UnsafeCell<...>` and is therefore `!Send`. `invoke_from_event_loop` requires `Send + 'static` closures, so `NativeUICallback` holds `Weak<MainWindow>` (which IS Send), clones it into each callback closure, and upgrades inside. Pre-compute all values (e.g. `Vec<SlintWalletInfo>`) before the closure so only owned data crosses the Send boundary.
-
-**File dialogs**: `rfd` crate. Always spawn via `tokio::task::spawn_blocking(|| rfd::FileDialog::new()...)` — the dialog thread blocks; running it on the main tokio executor freezes the Slint event loop.
-
-**Slint 1.x gotchas** (all fixed during the rehabilitation pass, documented so future Slint bumps have a cheat-sheet):
-- `vertical-alignment` is only valid on `Text` — remove from `Rectangle` / `VerticalBox` / `HorizontalBox`.
-- `linear-gradient(...)` requires `@` prefix; stops take explicit percentages.
-- Strings have no `.length` / `.substring` / `.slice` — compute on the Rust side and push through struct properties.
-- `Rectangle` doesn't accept `padding` or `margin-*` — move to an inner layout element.
-- `Image.rotation-angle` removed (renamed `rotation`); `animate { loop: true }` unsupported.
-- `GridBox { Row { ... } }` doesn't accept `if`/`for` children — use `HorizontalBox`.
-
-**Feature-parity status** (see `apps/native-node/README.md` for the matrix): DKG + sessions + WebRTC + keystore import/export with password + signing UX (approve/reject modal) + SD-card export/import/clear all wired end-to-end. The single remaining gap: `SigningManager::approve` + SD-card artefact emission both delegate to stubs because `tui_node::protocal::{signing, dkg}` operates on `AppState<C>` via the Elm `Message` loop. Extracting a ciphersuite-generic backend shared between the Elm loop and `core::*Manager` is the one-PR remaining for full parity — UI surface + CoreAdapter wiring are all in place.
+When changing `tui-node::core` (`WalletManager`, `SessionManager`, `DkgManager`,
+`SigningManager`, `OfflineManager`, `ConnectionManager`, `CoreState`) or
+`HeadlessRunner`, remember the desktop app depends on it across repos.
 
 ## Dependencies
 
@@ -181,11 +170,11 @@ Cargo.toml              # Workspace root, resolver = "2"
 package.json            # Bun monorepo (browser extension)
 flake.nix               # Nix dev environment (Linux + macOS)
 apps/
-  tui-node/             # Rust binary + library
-  native-node/          # Rust binary (Slint GUI)
+  tui-node/             # Rust binary + library (lib reused by starlab-desktop)
+  cli-node/             # Headless CLI (crate frost-mpc-cli) — conformance oracle
   signal-server/        # server/ + cloudflare-worker/
-  browser-extension/    # WXT + Svelte + TailwindCSS
-packages/@mpc-wallet/
+  browser-extension/    # WXT + Svelte (splitting out → stars-labs/starlab-wallet)
+packages/@frost-mpc/
   frost-core/           # Core crypto library
   core-wasm/            # WASM bindings
   blockchain/           # Chain integrations

@@ -32,7 +32,7 @@ fi
 echo "Signal server built successfully at: $BINARY_PATH"
 
 # Optionally copy to deployment directory
-DEPLOY_DIR="/opt/mpc-wallet"
+DEPLOY_DIR="/opt/frost-mpc"
 if [ -d "$DEPLOY_DIR" ] && [ -w "$DEPLOY_DIR" ]; then
     echo "Copying signal server to deployment directory..."
     cp "$BINARY_PATH" "$DEPLOY_DIR/signal-server"

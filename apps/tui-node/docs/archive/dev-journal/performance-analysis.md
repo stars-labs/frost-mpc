@@ -378,7 +378,7 @@ impl<C: Ciphersuite> OptimizedStateManager<C> {
 > 2. Add `[[bench]] name = "performance" harness = false` to the same file.
 > 3. Create `apps/tui-node/benches/performance.rs` with the shape below.
 >
-> Note the `tui_node` crate name (not `mpc_wallet_tui` — that was the old name).
+> Note the `tui_node` crate name (not `frost_mpc_tui` — that was the old name).
 
 ```rust
 // Save as apps/tui-node/benches/performance.rs

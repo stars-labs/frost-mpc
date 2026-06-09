@@ -743,7 +743,7 @@ paths exist today.
 ```
 apps/tui-node/src/
 ├── bin/
-│   └── mpc-wallet-tui.rs        # clap entry + keystore init + ElmApp bootstrap
+│   └── frost-mpc-tui.rs        # clap entry + keystore init + ElmApp bootstrap
 ├── elm/
 │   ├── app.rs                   # ElmApp<C> — main event loop + tui-realm shell
 │   ├── model.rs                 # Model — single source of UI state;

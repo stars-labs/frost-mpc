@@ -2,7 +2,7 @@
 
 **Status:** Authoritative caveat (matches shipped code)
 **Scope:** which chains can actually **verify** a FROST threshold signature, and the sharp exception for standard Ethereum-family EOAs.
-**Code:** `apps/tui-node/src/blockchain_config.rs` (chain↔curve table + `signing_caveat`), `packages/@mpc-wallet/blockchain/`
+**Code:** `apps/tui-node/src/blockchain_config.rs` (chain↔curve table + `signing_caveat`), `packages/@frost-mpc/blockchain/`
 
 ---
 

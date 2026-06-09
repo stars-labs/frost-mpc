@@ -7,7 +7,7 @@ The MPC Wallet has been restructured as a monorepo to support multiple platforms
 ## Directory Structure
 
 ```
-mpc-wallet/
+frost-mpc/
 ├── apps/                        # All applications
 │   ├── browser-extension/       # Chrome/Firefox extension (WXT + Svelte 5)
 │   ├── tui-node/                # Terminal UI (Ratatui) + shared tui-node::core library
@@ -16,7 +16,7 @@ mpc-wallet/
 │       ├── server/              # Standard WebSocket server
 │       └── cloudflare-worker/   # Edge deployment
 │
-├── packages/@mpc-wallet/        # Shared packages
+├── packages/@frost-mpc/        # Shared packages
 │   ├── frost-core/              # Core FROST cryptography (Rust)
 │   ├── core-wasm/               # WebAssembly bindings (Rust → JS)
 │   ├── blockchain/              # Chain integrations (solana-sdk only; Ethereum/Bitcoin hand-rolled over sha2/sha3/bs58)
@@ -40,14 +40,14 @@ mpc-wallet/
 - **Technology**: Rust, Ratatui (terminal UI), tui-realm (Elm architecture), WebRTC
 - **Features**: Terminal UI, offline/SD-card mode, keystore management
 - **Build**: `cargo build -p tui-node`
-- **Run**: `cargo run --bin mpc-wallet-tui -p tui-node -- --device-id mpc-1`
+- **Run**: `cargo run --bin frost-mpc-tui -p tui-node -- --device-id mpc-1`
 - **Library**: Exposes `tui-node::core::{WalletManager, SessionManager, DkgManager, OfflineManager, ConnectionManager, SigningManager}` for reuse by native-node.
 
 ### Native Node (`apps/native-node/`)
 - **Technology**: Rust, Slint 1.x UI framework, `rfd` for native file dialogs
 - **Features**: Desktop GUI reusing tui-node::core business logic; session management, DKG, encrypted keystore import/export, signing modal, SD-card export/import
-- **Build**: `cargo build -p mpc-wallet-native`
-- **Run**: `cargo run --bin mpc-wallet-native`
+- **Build**: `cargo build -p frost-mpc-native`
+- **Run**: `cargo run --bin frost-mpc-native`
 
 ### Signal Servers (`apps/signal-server/`)
 - **Standard Server**: Rust WebSocket server for development
@@ -55,20 +55,20 @@ mpc-wallet/
 
 ## Shared Packages
 
-### `@mpc-wallet/frost-core`
+### `@frost-mpc/frost-core`
 Core FROST implementation in Rust, shared between TUI, native, and the WASM bindings:
 - DKG (Distributed Key Generation)
 - Threshold signing
 - Keystore management
 - Multi-curve support (secp256k1, ed25519)
 
-### `@mpc-wallet/core-wasm`
+### `@frost-mpc/core-wasm`
 Thin WebAssembly wrapper around frost-core:
 - Browser-compatible cryptography
 - Async/await interface
 - TypeScript bindings
 
-### `@mpc-wallet/types`
+### `@frost-mpc/types`
 Centralized TypeScript type definitions:
 - Message types for all communication
 - State management interfaces
@@ -116,15 +116,15 @@ cargo test                    # Rust tests
 
 ### Development Tips
 
-1. **Shared Types**: Always define types in `@mpc-wallet/types`
+1. **Shared Types**: Always define types in `@frost-mpc/types`
 2. **Crypto Code**: Implement in `frost-core`, not in apps
-3. **Import Paths**: Use `@mpc-wallet/types` not relative paths
+3. **Import Paths**: Use `@frost-mpc/types` not relative paths
 4. **Workspace Commands**: Run from root, not subdirectories
 
 ## Architecture Principles
 
 ### 1. Code Sharing
-- Cryptographic operations in `packages/@mpc-wallet/frost-core`
+- Cryptographic operations in `packages/@frost-mpc/frost-core`
 - Business logic (WalletManager / SessionManager / DkgManager /
   OfflineManager / ConnectionManager / SigningManager) lives in
   `apps/tui-node/src/core/` and is re-exported via `tui-node::lib.rs`.
@@ -162,14 +162,14 @@ Browser Extension          TUI Node              Native Node
        |------WebRTC----------|------WebRTC---------|
        
 All apps use the same:
-- Message types (@mpc-wallet/types)
-- Cryptography (@mpc-wallet/frost-core)
+- Message types (@frost-mpc/types)
+- Cryptography (@frost-mpc/frost-core)
 - Network protocols
 ```
 
 ## Adding New Features
 
-1. **Define types** in `@mpc-wallet/types`
+1. **Define types** in `@frost-mpc/types`
 2. **Implement crypto** in `frost-core` if needed
 3. **Add to apps** with platform-specific UI
 4. **Test across platforms** to ensure compatibility
@@ -191,15 +191,15 @@ clarify what the layout can accommodate, not what's under way.
 
 ### Common Issues
 
-1. **Import errors**: Ensure `@mpc-wallet/types` is built
+1. **Import errors**: Ensure `@frost-mpc/types` is built
 2. **WASM not found**: Run `bun run build:wasm` first
 3. **Type conflicts**: Check for duplicate type definitions
 4. **Build failures**: Clean and rebuild from root
 
 ### Build Order
-1. `packages/@mpc-wallet/types`
-2. `packages/@mpc-wallet/frost-core`
-3. `packages/@mpc-wallet/core-wasm`
+1. `packages/@frost-mpc/types`
+2. `packages/@frost-mpc/frost-core`
+3. `packages/@frost-mpc/core-wasm`
 4. Applications
 
 ## Contributing

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ceremony.sh — run a REAL multi-process MPC ceremony end to end.
 #
-# This drives the ACTUAL `mpc-wallet-cli` as separate OS processes: a creator
+# This drives the ACTUAL `frost-mpc-cli` as separate OS processes: a creator
 # (`wallet create`) plus N-1 joiners (`session join`) for DKG, then —
 #   --sign     an initiator (`sign`) + a quorum of co-signers (`serve
 #              --auto-approve`) produce a threshold signature;
@@ -47,7 +47,7 @@ while [ $# -gt 0 ]; do
 done
 
 cd "$(dirname "$0")/../.."
-CLI=./target/release/mpc-wallet-cli
+CLI=./target/release/frost-mpc-cli
 SIG_BIN=./target/release/webrtc-signal-server
 
 c_ok()  { printf '\033[32m%s\033[0m\n' "$1"; }
@@ -56,7 +56,7 @@ c_dim() { printf '\033[2m%s\033[0m\n' "$1"; }
 
 # --- build the binaries we need ---
 c_dim "▸ building (release)…"
-cargo build --release -q -p mpc-wallet-cli
+cargo build --release -q -p frost-mpc-cli
 [ -z "$SIGNAL" ] && cargo build --release -q -p webrtc-signal-server
 
 # --- isolated workspace + cleanup ---

@@ -1,5 +1,5 @@
 use wasm_bindgen::prelude::*;
-use mpc_wallet_frost_core::{
+use frost_mpc_frost_core::{
     FrostCurve, FrostError,
     ed25519::Ed25519Curve,
     secp256k1::Secp256k1Curve,

@@ -11,14 +11,14 @@
 // - Cross-component state consistency
 // ===================================================================
 
-import { AppState, INITIAL_APP_STATE } from "@mpc-wallet/types/appstate";
-import { MeshStatusType } from "@mpc-wallet/types/mesh";
-import { DkgState } from "@mpc-wallet/types/dkg";
+import { AppState, INITIAL_APP_STATE } from "@frost-mpc/types/appstate";
+import { MeshStatusType } from "@frost-mpc/types/mesh";
+import { DkgState } from "@frost-mpc/types/dkg";
 import type {
     BackgroundToPopupMessage,
     InitialStateMessage,
     OffscreenToBackgroundMessage
-} from "@mpc-wallet/types/messages";
+} from "@frost-mpc/types/messages";
 
 /** Listener fired whenever `appState.dkgState` changes. Registered
  *  via `addDkgStateListener`. Used by the keepalive controller to
@@ -32,7 +32,7 @@ export type DkgStateListener = (state: DkgState) => void;
 export class StateManager {
     private appState: AppState;
     private popupPorts = new Set<chrome.runtime.Port>();
-    private static readonly STATE_STORAGE_KEY = 'mpc_wallet_background_state';
+    private static readonly STATE_STORAGE_KEY = 'frost_mpc_background_state';
     private isStateLoaded = false;
     private pendingPopupPorts: chrome.runtime.Port[] = [];
     private rpcHandler?: any; // Will be set after initialization

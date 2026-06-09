@@ -136,7 +136,7 @@ When modifying keyboard handling:
 
 1. **Enable trace logging**:
    ```bash
-   RUST_LOG=trace cargo run --bin mpc-wallet-tui
+   RUST_LOG=trace cargo run --bin frost-mpc-tui
    ```
 
 2. **Check component mounting**:

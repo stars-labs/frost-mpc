@@ -287,7 +287,7 @@ Developer settings, performance tuning, and system optimization.
 │   │  │ Log Level:  [○ ERROR] [○ WARN] [⚫ INFO] [○ DEBUG]     │   │     │
 │   │  │ Log Output: [✓] File  [✓] Console  [ ] Remote          │   │     │
 │   │  │ Max Size:   [100] MB   Rotation: [7] days             │   │     │
-│   │  │ Path:       [/var/log/mpc-wallet/____________]         │   │     │
+│   │  │ Path:       [/var/log/frost-mpc/____________]         │   │     │
 │   │  │                                                           │   │     │
 │   │  │ Debug Features:                                          │   │     │
 │   │  │ [ ] Enable transaction simulation                       │   │     │

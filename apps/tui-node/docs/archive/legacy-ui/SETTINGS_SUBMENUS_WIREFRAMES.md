@@ -405,15 +405,15 @@ This document contains detailed wireframes for all settings and configuration su
 │ │ Data Locations:                                             │  │
 │ │                                                             │  │
 │ │ Keystore directory:                                         │  │
-│ │ [~/.mpc-wallet/keystore_______________] [Browse]           │  │
+│ │ [~/.frost-mpc/keystore_______________] [Browse]           │  │
 │ │ Current size: 45.2 MB                                       │  │
 │ │                                                             │  │
 │ │ Log directory:                                              │  │
-│ │ [~/.mpc-wallet/logs__________________] [Browse]           │  │
+│ │ [~/.frost-mpc/logs__________________] [Browse]           │  │
 │ │ Current size: 128.5 MB                                      │  │
 │ │                                                             │  │
 │ │ Cache directory:                                            │  │
-│ │ [~/.mpc-wallet/cache_________________] [Browse]           │  │
+│ │ [~/.frost-mpc/cache_________________] [Browse]           │  │
 │ │ Current size: 512.3 MB                                      │  │
 │ │                                                             │  │
 │ │ Cleanup Settings:                                           │  │

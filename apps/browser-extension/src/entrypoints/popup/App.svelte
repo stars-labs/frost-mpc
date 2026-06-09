@@ -14,17 +14,17 @@
     import { guideError } from "../../utils/error-guidance";
     import Collapsible from "../../lib/ui/Collapsible.svelte";
     import { storage } from "#imports";
-    import type { AppState } from "@mpc-wallet/types/appstate";
-    import { MeshStatusType } from "@mpc-wallet/types/mesh";
-    import { DkgState } from "@mpc-wallet/types/dkg";
-    import { INITIAL_APP_STATE } from "@mpc-wallet/types/appstate";
+    import type { AppState } from "@frost-mpc/types/appstate";
+    import { MeshStatusType } from "@frost-mpc/types/mesh";
+    import { DkgState } from "@frost-mpc/types/dkg";
+    import { INITIAL_APP_STATE } from "@frost-mpc/types/appstate";
     import Settings from "../../components/Settings.svelte";
     import AccountManager from "../../components/AccountManager.svelte";
     import SignatureRequest from "../../components/SignatureRequest.svelte";
     import PasswordPrompt from "./components/PasswordPrompt.svelte";
     import WalletSelector from "./components/WalletSelector.svelte";
     import CreateWalletForm from "../../components/CreateWalletForm.svelte";
-    import { MESSAGE_TYPES } from "@mpc-wallet/types/messages";
+    import { MESSAGE_TYPES } from "@frost-mpc/types/messages";
     import { hashMessage } from "viem";
 
     // Theme (system | light | dark). initTheme() applies the saved mode
@@ -149,7 +149,7 @@
     // Review → join, or Later → dismiss (stays in invites list,
     // won't re-pop for this session_id). No auto-modal if we're
     // the proposer or already in an active ceremony.
-    let incomingSigningInvite: import("@mpc-wallet/types/session").SessionInfo | null = null;
+    let incomingSigningInvite: import("@frost-mpc/types/session").SessionInfo | null = null;
     let dismissedSigningInvites: Set<string> = new Set();
 
     // Ext-3c: proposer-side toast when a co-signer explicitly
@@ -206,8 +206,8 @@
     let keystoreStatus: {
         initialized: boolean;
         locked: boolean;
-        wallets: import("@mpc-wallet/types/keystore").ExtensionWalletMetadata[];
-        activeWallet: import("@mpc-wallet/types/keystore").ExtensionWalletMetadata | null;
+        wallets: import("@frost-mpc/types/keystore").ExtensionWalletMetadata[];
+        activeWallet: import("@frost-mpc/types/keystore").ExtensionWalletMetadata | null;
         pendingImport: boolean;
     } = {
         initialized: false,
@@ -238,7 +238,7 @@
     };
 
     // Local storage for UI preferences persistence (not real-time connection state)
-    const UI_STATE_KEY = "mpc_wallet_ui_preferences";
+    const UI_STATE_KEY = "frost_mpc_ui_preferences";
 
     // Save ONLY UI preferences to localStorage (not real-time connection states)
     function saveUIState() {
@@ -728,7 +728,7 @@
                 //   - not already in an active ceremony (busy signal)
                 {
                     const s = message.session as
-                        | import("@mpc-wallet/types/session").SessionInfo
+                        | import("@frost-mpc/types/session").SessionInfo
                         | undefined;
                     if (!s) break;
                     if (s.session_type !== "signing") break;
@@ -2748,7 +2748,7 @@
                                             const a =
                                                 document.createElement("a");
                                             a.href = url;
-                                            a.download = `mpc-wallet-keystore-${appState.chain}-${Date.now()}.json`;
+                                            a.download = `frost-mpc-keystore-${appState.chain}-${Date.now()}.json`;
                                             document.body.appendChild(a);
                                             a.click();
                                             document.body.removeChild(a);

@@ -1,4 +1,4 @@
-// Library exports for mpc-wallet-tui
+// Library exports for frost-mpc-tui
 
 pub mod blockchain_config;
 #[cfg(test)]

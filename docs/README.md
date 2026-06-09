@@ -9,7 +9,7 @@ workspace member.
 
 - [`INVESTOR_GUIDE.md`](INVESTOR_GUIDE.md) — **the single investor demo
   guide** (中文: `INVESTOR_GUIDE.zh.md`). Two tracks: **A** = raw
-  `mpc-wallet-cli` across three machines (ed25519), signature verified by an
+  `frost-mpc-cli` across three machines (ed25519), signature verified by an
   *external* tool (Node/Python/OpenSSL), key shown as a real Solana address;
   **B** = the polished TUI multi-device demo (air-gap, multi-chain). Includes
   talking points, the "one device can't sign alone" proof, on-chain beat,

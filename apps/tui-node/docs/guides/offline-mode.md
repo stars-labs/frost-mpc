@@ -19,7 +19,7 @@
 > expires_at / data`.
 >
 > **How the TUI really exposes offline mode**: launch with
-> `--offline` CLI flag (`apps/tui-node/src/bin/mpc-wallet-tui.rs:32`),
+> `--offline` CLI flag (`apps/tui-node/src/bin/frost-mpc-tui.rs:32`),
 > navigate the arrow-key menu to Create New Wallet → select
 > offline mode / or Join Session for the signer role. Individual
 > export / import steps are surfaced via per-screen buttons /
@@ -171,7 +171,7 @@ All data exchanged via SD card uses JSON format with the following structure:
 #### Offline Mode Initialization
 ```bash
 # Start node in offline mode
-mpc-wallet-tui --offline --device-id offline-signer-1
+frost-mpc-tui --offline --device-id offline-signer-1
 
 # Or toggle offline mode in running node
 /offline on

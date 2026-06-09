@@ -11,8 +11,8 @@
 // ===================================================================
 
 import { WebSocketClient } from "./websocket";
-import { AppState } from "@mpc-wallet/types/appstate";
-import type { SessionInfo } from "@mpc-wallet/types/session";
+import { AppState } from "@frost-mpc/types/appstate";
+import type { SessionInfo } from "@frost-mpc/types/session";
 import { SessionManager } from "./sessionManager";
 import { SigningNotifier } from "./signingNotification";
 import { getSignalServerUrl } from "../../config/signal-server";
@@ -21,8 +21,8 @@ import type {
     BackgroundToPopupMessage,
     InitialStateMessage,
     OffscreenMessage
-} from "@mpc-wallet/types/messages";
-import { ServerMsg, WebSocketMessagePayload } from "@mpc-wallet/types/websocket";
+} from "@frost-mpc/types/messages";
+import { ServerMsg, WebSocketMessagePayload } from "@frost-mpc/types/websocket";
 
 /**
  * Manages WebSocket connections and message handling for MPC coordination

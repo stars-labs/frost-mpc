@@ -123,6 +123,24 @@ enum WalletCmd {
         #[command(flatten)]
         common: OneShot,
     },
+    /// Derive a BIP-44-style child wallet (HD) from an existing wallet —
+    /// offline, no network. Every participant deriving the SAME path gets the
+    /// SAME child key, so a threshold of them can sign for the child address.
+    Derive {
+        #[arg(long)]
+        wallet_id: String,
+        /// Derivation path, e.g. "m/44'/60'/0'/0/1".
+        #[arg(long)]
+        path: String,
+        /// Persist the child share to the keystore (it then shows up in
+        /// `wallet list` and can sign like any wallet).
+        #[arg(long)]
+        save: bool,
+        #[command(flatten)]
+        pw: PasswordArgs,
+        #[command(flatten)]
+        common: OneShot,
+    },
     /// Create a shared wallet via DKG; blocks until complete.
     Create {
         #[arg(long, default_value = "Wallet")]
@@ -310,6 +328,13 @@ async fn run() -> anyhow::Result<()> {
         Command::Wallet { sub } => match sub {
             WalletCmd::List { common } => {
                 finish(oneshot::wallet_list(common.init_and_opts()).await)
+            }
+            WalletCmd::Derive { wallet_id, path, save, pw, common } => {
+                let password = pw.resolve()?;
+                finish(
+                    oneshot::wallet_derive(common.init_and_opts(), wallet_id, path, password, save)
+                        .await,
+                )
             }
             WalletCmd::Create {
                 name,

@@ -174,6 +174,16 @@ pub enum CliEvent {
         signature: String,
         message_hash: String,
     },
+    /// HD child addresses derived from a wallet (reply to `wallet derive`).
+    DerivedAddresses {
+        wallet_id: String,
+        path: String,
+        /// Deterministic child wallet id (same on every participant).
+        child_id: String,
+        addresses: Vec<ChainAddress>,
+        /// Whether the child share was persisted to the keystore (--save).
+        saved: bool,
+    },
     /// Something went wrong.
     Error {
         #[serde(default, skip_serializing_if = "Option::is_none")]

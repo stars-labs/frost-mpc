@@ -191,7 +191,7 @@ pub enum Command {
 /// JSON/bincode because the frost-core types don't all gate their serde
 /// derives on the same feature flag and `.serialize()` is the
 /// canonical round-trip pairing with `.deserialize()`.
-pub(crate) fn encode_keystore_blob<C: frost_core::Ciphersuite>(
+pub fn encode_keystore_blob<C: frost_core::Ciphersuite>(
     key_package: &frost_core::keys::KeyPackage<C>,
     public_key_package: &frost_core::keys::PublicKeyPackage<C>,
 ) -> Result<Vec<u8>, String> {
@@ -216,7 +216,7 @@ pub(crate) fn encode_keystore_blob<C: frost_core::Ciphersuite>(
 /// any truncation, over-read, or FROST deserialize failure — so
 /// `UnlockWallet` can turn those into a `WalletUnlockFailed` rather than a
 /// panic on a malformed file.
-pub(crate) fn decode_keystore_blob<C: frost_core::Ciphersuite>(
+pub fn decode_keystore_blob<C: frost_core::Ciphersuite>(
     bytes: &[u8],
 ) -> Result<
     (

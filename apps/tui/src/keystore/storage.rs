@@ -394,17 +394,30 @@ impl Keystore {
         Ok(())
     }
 
-    /// Loads encrypted wallet data from a file
+    /// Loads encrypted wallet data from a file (first-match curve — see
+    /// [`Self::load_wallet_file_for_curve`] for unified wallets that store
+    /// the same id under BOTH curve directories).
     pub fn load_wallet_file(&self, wallet_id: &str, password: &str) -> Result<Vec<u8>> {
-        // Get wallet metadata to find curve type
         let wallet = self.get_wallet(wallet_id)
             .ok_or_else(|| KeystoreError::WalletNotFound(wallet_id.to_string()))?;
-        
+        let curve = wallet.curve_type.clone();
+        self.load_wallet_file_for_curve(wallet_id, &curve, password)
+    }
+
+    /// Curve-explicit variant of [`Self::load_wallet_file`]: a unified wallet
+    /// has one encrypted share per curve under the same id; callers that care
+    /// which curve they get (HD derivation, reshare) must say so.
+    pub fn load_wallet_file_for_curve(
+        &self,
+        wallet_id: &str,
+        curve_type: &str,
+        password: &str,
+    ) -> Result<Vec<u8>> {
         // Device-specific wallet path with curve type
         let wallet_dir = self
             .base_path
             .join(&self.device_id)
-            .join(&wallet.curve_type);
+            .join(curve_type);
             
         let json_path = wallet_dir.join(format!("{}.json", wallet_id));
         

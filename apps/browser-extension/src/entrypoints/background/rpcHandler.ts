@@ -14,7 +14,7 @@ import WalletClientService from '../../services/walletClient';
 import WalletController from "../../services/walletController";
 import { getPermissionService } from '../../services/permissionService';
 import { toHex } from 'viem';
-import type { JsonRpcRequest } from "@starlab/types/messages";
+import type { JsonRpcRequest } from "@stars-labs/types/messages";
 import type { SessionManager } from './sessionManager';
 
 /**

@@ -28,7 +28,7 @@ Despite configuration attempts, these files cannot be excluded with current Bun 
 Earlier drafts of this section referenced these files at
 `pkg/starlab_mpc.js` and `src/entrypoints/offscreen/test-utils.ts`
 respectively — both paths moved during the monorepo migration
-(WASM bindings live in the shared `@starlab/core-wasm` package;
+(WASM bindings live in the shared `@stars-labs/core-wasm` package;
 test utilities live under the extension's `tests/` tree, not
 `src/`). Historical coverage percentages (45.93% func / 49.02% line
 for the WASM bindings; 69.23% func / 70.59% line for the test

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, mock } from 'bun:test';
 import AccountService from '../../src/services/accountService';
-import type { Account } from '@starlab/types/account';
+import type { Account } from '@stars-labs/types/account';
 
 // Helper function to create test accounts with required fields
 function createTestAccount(partial: Partial<Account> & { 

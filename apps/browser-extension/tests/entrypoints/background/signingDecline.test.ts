@@ -20,10 +20,10 @@
  */
 import { describe, it, expect, beforeEach, jest } from "bun:test";
 import { WebSocketManager } from "../../../src/entrypoints/background/webSocketManager";
-import { DkgState } from "@starlab/types/dkg";
-import { MeshStatusType } from "@starlab/types/mesh";
-import type { AppState } from "@starlab/types/appstate";
-import type { SessionInfo } from "@starlab/types/session";
+import { DkgState } from "@stars-labs/types/dkg";
+import { MeshStatusType } from "@stars-labs/types/mesh";
+import type { AppState } from "@stars-labs/types/appstate";
+import type { SessionInfo } from "@stars-labs/types/session";
 
 function makeWsManager(opts?: {
     deviceId?: string;

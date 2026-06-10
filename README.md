@@ -45,7 +45,7 @@ Also published: `starlab-core-wasm` (browser bindings), `starlab-client` (engine
 **TypeScript (npm):**
 
 ```bash
-npm install @starlab/core-wasm @starlab/types
+npm install @stars-labs/core-wasm @stars-labs/types
 ```
 
 ## Quick Start
@@ -163,7 +163,7 @@ starlab-mpc/
 │   ├── core/                     # FROST protocol core (crate: starlab-core)
 │   ├── core-wasm/                # WebAssembly bindings (crate: starlab-core-wasm)
 │   ├── blockchain/               # Multi-chain support (EVM / Bitcoin / Solana / Sui)
-│   └── types/                    # TypeScript type definitions (@starlab/types)
+│   └── types/                    # TypeScript type definitions (@stars-labs/types)
 │
 ├── docs/                         # Documentation
 └── scripts/                      # Build, test, and operational scripts
@@ -280,7 +280,7 @@ We welcome contributions! Please see our [Contributing Guide](docs/CONTRIBUTING.
   **[stars-labs/starlab-desktop](https://github.com/stars-labs/starlab-desktop)**
 - [x] Cloudflare Worker signal server (Rust-over-WASM) and
   standalone `cargo`-built signal server
-- [x] Published to crates.io (`starlab-*`) and npm (`@starlab/*`)
+- [x] Published to crates.io (`starlab-*`) and npm (`@stars-labs/*`)
 
 ### Open work (no committed timelines)
 

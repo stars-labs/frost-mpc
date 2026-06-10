@@ -25,22 +25,22 @@ signing UX. See `git log` for the authoritative record.
 - **Native desktop app** (`apps/native-node/`): Slint 1.x UI reusing
   `starlab-client::core::{*Manager, CoreState}` via a `UICallback` trait.
 - **Shared packages**:
-  - `@starlab/core`: ciphersuite-generic FROST library used
+  - `@stars-labs/core`: ciphersuite-generic FROST library used
     by TUI, native, and (via WASM) the browser extension.
-  - `@starlab/core-wasm`: thin `wasm-bindgen` wrapper.
-  - `@starlab/types`: shared TypeScript types for the extension.
+  - `@stars-labs/core-wasm`: thin `wasm-bindgen` wrapper.
+  - `@stars-labs/types`: shared TypeScript types for the extension.
 - **Build tooling**: Unified Cargo workspace (edition 2024, requires
   Rust 1.85+); Bun workspace for TypeScript packages.
 
 ### Changed
 - **Browser extension**: Moved from repo root to `apps/browser-extension/`.
-- **TypeScript imports**: Standardized on `@starlab/types` package path.
+- **TypeScript imports**: Standardized on `@stars-labs/types` package path.
 - **Build commands**: All `bun run *` scripts run from the repo root.
 - **Nix flake**: Added GUI libs (Wayland, X11, accesskit deps) for Slint.
 
 ### Breaking
 - File paths changed wholesale due to the monorepo restructure.
-- Import statements rewritten to use `@starlab/types`.
+- Import statements rewritten to use `@stars-labs/types`.
 - Build commands must be run from the workspace root, not inside apps.
 
 ## Pre-monorepo milestone — July 2025

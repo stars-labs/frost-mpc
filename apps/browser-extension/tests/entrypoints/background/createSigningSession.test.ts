@@ -9,9 +9,9 @@
  */
 import { describe, it, expect, beforeEach, jest } from "bun:test";
 import { SessionManager } from "../../../src/entrypoints/background/sessionManager";
-import { DkgState } from "@starlab/types/dkg";
-import { MeshStatusType } from "@starlab/types/mesh";
-import type { AppState } from "@starlab/types/appstate";
+import { DkgState } from "@stars-labs/types/dkg";
+import { MeshStatusType } from "@stars-labs/types/mesh";
+import type { AppState } from "@stars-labs/types/appstate";
 
 function makeSessionManager() {
     const appState: AppState = {

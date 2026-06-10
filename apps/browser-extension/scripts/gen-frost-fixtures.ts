@@ -7,7 +7,7 @@
 // for a given WASM build — regenerate whenever the on-disk
 // keystore schema in packages/@starlab/core changes.
 
-import wasmInit, { FrostDkgSecp256k1, FrostDkgEd25519 } from '@starlab/core-wasm';
+import wasmInit, { FrostDkgSecp256k1, FrostDkgEd25519 } from '@stars-labs/core-wasm';
 import { writeFileSync } from 'fs';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';

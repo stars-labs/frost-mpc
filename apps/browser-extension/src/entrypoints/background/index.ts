@@ -35,11 +35,11 @@ import { PopupMessageHandler, OffscreenMessageHandler } from './messageHandlers'
 import { KeepaliveController } from './keepaliveController';
 
 // Import types
-import { AppState, INITIAL_APP_STATE } from "@starlab/types/appstate";
-import { SessionProposal, SessionResponse, SessionInfo } from "@starlab/types/session";
+import { AppState, INITIAL_APP_STATE } from "@stars-labs/types/appstate";
+import { SessionProposal, SessionResponse, SessionInfo } from "@stars-labs/types/session";
 import { getSignalServerUrl } from "../../config/signal-server";
-import { MeshStatusType, MeshStatus } from "@starlab/types/mesh";
-import { DkgState } from "@starlab/types/dkg";
+import { MeshStatusType, MeshStatus } from "@stars-labs/types/mesh";
+import { DkgState } from "@stars-labs/types/dkg";
 import {
     type JsonRpcRequest,
     type PopupToBackgroundMessage,
@@ -60,8 +60,8 @@ import {
     type BackgroundMessage,
     type OffscreenMessage,
     type PopupMessage,
-} from "@starlab/types/messages";
-import { ServerMsg, ClientMsg, WebSocketMessagePayload, WebRTCSignal } from "@starlab/types/websocket";
+} from "@stars-labs/types/messages";
+import { ServerMsg, ClientMsg, WebSocketMessagePayload, WebRTCSignal } from "@stars-labs/types/websocket";
 
 // ===================================================================
 // SERVICE INITIALIZATION AND GLOBAL STATE

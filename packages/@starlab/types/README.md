@@ -1,4 +1,4 @@
-# @starlab/types
+# @stars-labs/types
 
 Shared TypeScript type definitions for the MPC Wallet ecosystem.
 
@@ -9,15 +9,15 @@ npm. The monorepo's root `package.json` is marked `"private":
 true` and workspace members consume it via
 
 ```json
-"@starlab/types": "workspace:*"
+"@stars-labs/types": "workspace:*"
 ```
 
 in their own `package.json`, resolved by Bun's workspace
 linker (see `apps/browser-extension/package.json:42` for the
 reference pattern).
 
-Earlier drafts of this README showed `bun add @starlab/types`
-/ `npm install @starlab/types` as install commands; both
+Earlier drafts of this README showed `bun add @stars-labs/types`
+/ `npm install @stars-labs/types` as install commands; both
 would fail for external consumers because the package isn't
 on any registry. To use these types outside the monorepo
 you would need to copy the source or publish a fork yourself.
@@ -27,7 +27,7 @@ you would need to copy the source or publish a fork yourself.
 ### Import specific types
 
 ```typescript
-import { AppState, SessionInfo, DkgState } from '@starlab/types';
+import { AppState, SessionInfo, DkgState } from '@stars-labs/types';
 ```
 
 ### Import message types
@@ -37,7 +37,7 @@ import {
     PopupToBackgroundMessage,
     BackgroundToOffscreenMessage,
     MESSAGE_TYPES 
-} from '@starlab/types';
+} from '@stars-labs/types';
 ```
 
 ### Import constants and utilities
@@ -47,7 +47,7 @@ import {
     INITIAL_APP_STATE,
     MeshStatusType,
     validateSessionProposal 
-} from '@starlab/types';
+} from '@stars-labs/types';
 ```
 
 ## Available Types
@@ -91,7 +91,7 @@ as the re-export aggregator):
 - `webrtc.ts` - WebRTC communication types
   (`WebRTCAppMessage` with `webrtc_msg_type` tag)
 - `websocket.ts` - WebSocket signaling types
-- `index.ts` - re-exports everything for the `@starlab/types`
+- `index.ts` - re-exports everything for the `@stars-labs/types`
   root import (earlier drafts of this list omitted `index.ts`)
 
 ## Development

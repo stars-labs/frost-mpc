@@ -20,7 +20,7 @@ This document does two things:
 
 | | Browser extension | CLI (`starlab-cli`) | TUI / native |
 |---|---|---|---|
-| FROST crypto | `@starlab/core-wasm` (Rust→WASM) | `starlab_client` core (Rust) | `starlab_client` core |
+| FROST crypto | `@stars-labs/core-wasm` (Rust→WASM) | `starlab_client` core (Rust) | `starlab_client` core |
 | Same FROST crates? | **yes** (`frost_secp256k1`/`frost_ed25519` via frost-core) | yes | yes |
 | Wire protocol | hand-written TS, modeled on TUI | Rust core | Rust core |
 | Transport | WebSocket (signal) + WebRTC (mesh) | same | same |

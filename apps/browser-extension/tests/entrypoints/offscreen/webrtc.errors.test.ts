@@ -7,7 +7,7 @@ import {
     dummySend,
     cleanupDkgInstances
 } from './test-utils';
-import { FrostDkgEd25519 } from '@starlab/core-wasm';
+import { FrostDkgEd25519 } from '@stars-labs/core-wasm';
 
 let manager: WebRTCManager;
 

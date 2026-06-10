@@ -55,20 +55,20 @@ starlab-mpc/
 
 ## Shared Packages
 
-### `@starlab/core`
+### `@stars-labs/core`
 Core FROST implementation in Rust, shared between TUI, native, and the WASM bindings:
 - DKG (Distributed Key Generation)
 - Threshold signing
 - Keystore management
 - Multi-curve support (secp256k1, ed25519)
 
-### `@starlab/core-wasm`
+### `@stars-labs/core-wasm`
 Thin WebAssembly wrapper around frost-core:
 - Browser-compatible cryptography
 - Async/await interface
 - TypeScript bindings
 
-### `@starlab/types`
+### `@stars-labs/types`
 Centralized TypeScript type definitions:
 - Message types for all communication
 - State management interfaces
@@ -116,9 +116,9 @@ cargo test                    # Rust tests
 
 ### Development Tips
 
-1. **Shared Types**: Always define types in `@starlab/types`
+1. **Shared Types**: Always define types in `@stars-labs/types`
 2. **Crypto Code**: Implement in `frost-core`, not in apps
-3. **Import Paths**: Use `@starlab/types` not relative paths
+3. **Import Paths**: Use `@stars-labs/types` not relative paths
 4. **Workspace Commands**: Run from root, not subdirectories
 
 ## Architecture Principles
@@ -162,14 +162,14 @@ Browser Extension          TUI Node              Native Node
        |------WebRTC----------|------WebRTC---------|
        
 All apps use the same:
-- Message types (@starlab/types)
-- Cryptography (@starlab/core)
+- Message types (@stars-labs/types)
+- Cryptography (@stars-labs/core)
 - Network protocols
 ```
 
 ## Adding New Features
 
-1. **Define types** in `@starlab/types`
+1. **Define types** in `@stars-labs/types`
 2. **Implement crypto** in `frost-core` if needed
 3. **Add to apps** with platform-specific UI
 4. **Test across platforms** to ensure compatibility
@@ -191,7 +191,7 @@ clarify what the layout can accommodate, not what's under way.
 
 ### Common Issues
 
-1. **Import errors**: Ensure `@starlab/types` is built
+1. **Import errors**: Ensure `@stars-labs/types` is built
 2. **WASM not found**: Run `bun run build:wasm` first
 3. **Type conflicts**: Check for duplicate type definitions
 4. **Build failures**: Clean and rebuild from root

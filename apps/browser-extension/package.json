@@ -1,5 +1,5 @@
 {
-  "name": "@starlab/browser-extension",
+  "name": "@stars-labs/browser-extension",
   "description": "MPC Wallet Browser Extension",
   "private": true,
   "version": "0.0.0",
@@ -41,8 +41,8 @@
     "wxt": "^0.20.26"
   },
   "dependencies": {
-    "@starlab/core-wasm": "workspace:*",
-    "@starlab/types": "workspace:*",
+    "@stars-labs/core-wasm": "workspace:*",
+    "@stars-labs/types": "workspace:*",
     "@tailwindcss/vite": "^4.3.0",
     "tailwindcss": "^4.3.0",
     "uuid": "^14.0.0",

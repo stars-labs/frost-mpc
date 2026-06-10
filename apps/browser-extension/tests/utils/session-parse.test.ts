@@ -18,7 +18,7 @@ import {
     parseSessionInfoFromWire,
     buildWireSessionInfo,
 } from "../../src/utils/session-parse";
-import type { SessionInfo } from "@starlab/types/session";
+import type { SessionInfo } from "@stars-labs/types/session";
 
 describe("parseSessionInfoFromWire", () => {
     it("accepts a minimal TUI-shaped DKG announcement", () => {

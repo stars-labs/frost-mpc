@@ -119,7 +119,7 @@ apps/browser-extension/
 ├── wxt.config.ts         # WXT framework config
 └── package.json          # Bun workspace member
 
-# Types and shared schemas live in the workspace `@starlab/types`
+# Types and shared schemas live in the workspace `@stars-labs/types`
 # package, NOT under the extension's own `src/`:
 packages/@starlab/types/src/
 ├── messages.ts           # All cross-context message types

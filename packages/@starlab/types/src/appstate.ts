@@ -1,4 +1,4 @@
-// Re-export domain types so existing imports from '@starlab/types/appstate' still work.
+// Re-export domain types so existing imports from '@stars-labs/types/appstate' still work.
 // Canonical definitions live in session.ts, dkg.ts, mesh.ts, and webrtc.ts.
 export type { SessionInfo, SessionProposal, SessionResponse } from './session';
 export { DkgState } from './dkg';

@@ -1,6 +1,6 @@
-import { Account } from "@starlab/types/account";
+import { Account } from "@stars-labs/types/account";
 import { KeystoreManager } from './keystoreManager';
-import type { NewAccountSession } from "@starlab/types/keystore";
+import type { NewAccountSession } from "@stars-labs/types/keystore";
 
 type AccountChangeCallback = (account: Account | null) => void;
 

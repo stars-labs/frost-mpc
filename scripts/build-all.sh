@@ -6,18 +6,18 @@ set -e
 echo "🔨 Building MPC Wallet Monorepo..."
 
 # Build WASM package first
-echo "📦 Building @starlab/core-wasm..."
+echo "📦 Building @stars-labs/core-wasm..."
 cd packages/@starlab/core-wasm
 bun run build
 cd ../../..
 
 # Build TypeScript types package
-echo "📦 Building @starlab/types..."
+echo "📦 Building @stars-labs/types..."
 cd packages/@starlab/types
 bun run build
 cd ../../..
 
-# Note: `@starlab/utils` used to be listed here but the package
+# Note: `@stars-labs/utils` used to be listed here but the package
 # was never created in the monorepo transform; the previous script
 # would error out at `cd packages/@starlab/utils`.
 

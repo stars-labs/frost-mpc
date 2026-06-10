@@ -54,14 +54,14 @@ jobs:
       - uses: oven-sh/setup-bun@v2
 
       # `--ignore-scripts`: the extension's postinstall (`wxt prepare`) imports
-      # @starlab/types/* and would fail before its dist/ exists. Build the
+      # @stars-labs/types/* and would fail before its dist/ exists. Build the
       # deps first, then prepare — mirrors the `extension` job in ci.yml.
       - run: bun install --frozen-lockfile --ignore-scripts
 
       - name: Build core-wasm (the extension loads the real WASM FROST glue)
         run: cd packages/@starlab/core-wasm && wasm-pack build --target web --out-dir pkg
-      - name: Build shared types (@starlab/types/* dist subpaths)
-        run: bun run --filter '@starlab/types' build
+      - name: Build shared types (@stars-labs/types/* dist subpaths)
+        run: bun run --filter '@stars-labs/types' build
       - name: Prepare WXT (now that types dist exists)
         run: cd apps/browser-extension && bunx wxt prepare
 

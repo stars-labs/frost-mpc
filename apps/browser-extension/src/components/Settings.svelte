@@ -2,13 +2,13 @@
     import { onMount } from "svelte";
     import NetworkService from "../services/networkService";
     import { mainnet } from "viem/chains";
-    import type { Chain } from "@starlab/types/network";
-    import type { SupportedChain } from "@starlab/types/appstate";
+    import type { Chain } from "@stars-labs/types/network";
+    import type { SupportedChain } from "@stars-labs/types/appstate";
     import {
         CURVE_COMPATIBLE_CHAINS,
         getCompatibleChains,
         getRequiredCurve,
-    } from "@starlab/types/appstate";
+    } from "@stars-labs/types/appstate";
     import { createPublicClient, http } from "viem";
     import { createEventDispatcher } from "svelte";
     import { themeMode, setTheme, type ThemeMode } from "../lib/theme";

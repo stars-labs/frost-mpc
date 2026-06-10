@@ -331,6 +331,24 @@ fn render_human(ev: &CliEvent) -> String {
         } => format!(
             "✔ Reshare complete — group key (and address) unchanged\n  Wallet ID:  {wallet_id}\n  Group key:  {group_public_key}"
         ),
+        CliEvent::DerivedAddresses {
+            wallet_id,
+            path,
+            child_id,
+            addresses,
+            saved,
+        } => {
+            let rows: Vec<Vec<String>> = addresses
+                .iter()
+                .map(|a| vec![a.chain.clone(), a.address.clone()])
+                .collect();
+            let mut out = format!(
+                "✔ Derived {path} from {wallet_id}\n  Child wallet:  {child_id}{}\n\n",
+                if *saved { "  (saved — co-signers must run the same derive --save)" } else { "  (preview — re-run with --save to persist)" }
+            );
+            out.push_str(&render_table(&["CHAIN", "ADDRESS"], &rows));
+            out
+        }
         CliEvent::Error { code, message, .. } => format!("✖ {code}: {message}"),
         CliEvent::Ready {
             protocol,
@@ -615,6 +633,222 @@ pub async fn sign(
     .await?;
     print(&ev, opts.json);
     Ok(true)
+}
+
+/// Deterministic child wallet id: every participant deriving the same
+/// (parent, path) must land on the same id so co-signing "just works".
+fn child_wallet_id(parent: &str, path: &str) -> String {
+    let sanitized: String = path
+        .trim_start_matches("m/")
+        .replace('\'', "h")
+        .replace('/', "-");
+    format!("{parent}-{sanitized}")
+}
+
+/// Derive a child (key share + group key) for one curve from a decrypted
+/// keystore blob. Returns (child blob, child group public key hex).
+fn derive_child_for_curve<C: frost_core::Ciphersuite>(
+    blob: &[u8],
+    path: &starlab_core::DerivationPath,
+) -> anyhow::Result<(Vec<u8>, String)> {
+    use starlab_client::elm::command::{decode_keystore_blob, encode_keystore_blob};
+    let (kp, pp) = decode_keystore_blob::<C>(blob)
+        .map_err(|e| anyhow::anyhow!("decode key share: {e}"))?;
+    let group = pp
+        .verifying_key()
+        .serialize()
+        .map_err(|e| anyhow::anyhow!("serialize group key: {e}"))?;
+    let chain_code = starlab_core::ChainCode::from_group_key(group.as_ref());
+    let derived = starlab_core::derive_child_key_path::<C>(&kp, &pp, &chain_code, path)
+        .map_err(|e| anyhow::anyhow!("derive: {e}"))?;
+    let child_group = derived
+        .public_key_package
+        .verifying_key()
+        .serialize()
+        .map_err(|e| anyhow::anyhow!("serialize child group key: {e}"))?;
+    let child_blob = encode_keystore_blob::<C>(&derived.key_package, &derived.public_key_package)
+        .map_err(|e| anyhow::anyhow!("encode child share: {e}"))?;
+    Ok((child_blob, hex::encode(child_group)))
+}
+
+/// `wallet derive` — BIP-44-style HD child derivation. Fully offline: reads
+/// the encrypted share(s), derives per curve, optionally persists the child.
+/// Deterministic across participants (the chain code comes from the group
+/// key), so a threshold of co-signers deriving the SAME path can sign for
+/// the child address.
+pub async fn wallet_derive(
+    opts: OneShotOpts,
+    wallet_id: String,
+    path: String,
+    password: String,
+    save: bool,
+) -> anyhow::Result<bool> {
+    use crate::bridge::{chains_for_curve, derive_address};
+    use starlab_client::keystore::Keystore;
+
+    let parsed = starlab_core::DerivationPath::parse(&path)
+        .map_err(|e| anyhow::anyhow!("bad --path {path:?}: {e}"))?;
+
+    let mut ks = Keystore::new(&opts.keystore_path, &opts.device_id)
+        .map_err(|e| anyhow::anyhow!("open keystore {}: {e}", opts.keystore_path))?;
+    let metas: Vec<_> = ks
+        .list_wallets()
+        .into_iter()
+        .filter(|w| w.session_id == wallet_id)
+        .cloned()
+        .collect();
+    if metas.is_empty() {
+        anyhow::bail!(
+            "wallet '{wallet_id}' not found in {} (device {}). Run `starlab-cli wallet list`.",
+            opts.keystore_path,
+            opts.device_id
+        );
+    }
+
+    let child_id = child_wallet_id(&wallet_id, &path);
+    let mut addresses: Vec<crate::protocol::ChainAddress> = Vec::new();
+    // (curve, child_group_hex, child_blob) per curve, for the optional save.
+    let mut children: Vec<(String, String, Vec<u8>)> = Vec::new();
+
+    for meta in &metas {
+        let blob = ks
+            .load_wallet_file_for_curve(&wallet_id, &meta.curve_type, &password)
+            .map_err(|e| anyhow::anyhow!("unlock '{wallet_id}' ({}): {e}", meta.curve_type))?;
+        let (child_blob, child_group_hex) = match meta.curve_type.as_str() {
+            "ed25519" => derive_child_for_curve::<frost_ed25519::Ed25519Sha512>(&blob, &parsed)?,
+            "secp256k1" => {
+                derive_child_for_curve::<frost_secp256k1::Secp256K1Sha256>(&blob, &parsed)?
+            }
+            other => anyhow::bail!("unsupported curve in keystore: {other}"),
+        };
+        for (key, display) in chains_for_curve(&meta.curve_type) {
+            let address = derive_address(&child_group_hex, &meta.curve_type, key);
+            if !address.is_empty() {
+                addresses.push(crate::protocol::ChainAddress {
+                    chain: (*display).to_string(),
+                    address,
+                });
+            }
+        }
+        children.push((meta.curve_type.clone(), child_group_hex, child_blob));
+    }
+
+    if save {
+        let m0 = &metas[0];
+        let ed = children.iter().find(|(c, _, _)| c == "ed25519");
+        let secp = children.iter().find(|(c, _, _)| c == "secp256k1");
+        match (ed, secp) {
+            (Some((_, ed_g, ed_b)), Some((_, sp_g, sp_b))) => {
+                ks.create_wallet_unified(
+                    &child_id,
+                    m0.threshold,
+                    m0.total_participants,
+                    m0.participant_index,
+                    m0.participants.clone(),
+                    Some(path.clone()),
+                    &password,
+                    ed_g,
+                    ed_b,
+                    sp_g,
+                    sp_b,
+                )
+                .map_err(|e| anyhow::anyhow!("save child wallet: {e}"))?;
+            }
+            _ => {
+                let (curve, group_hex, blob) = &children[0];
+                ks.create_wallet_multi_chain(
+                    &child_id,
+                    curve,
+                    vec![],
+                    m0.threshold,
+                    m0.total_participants,
+                    group_hex,
+                    blob,
+                    &password,
+                    vec![],
+                    None,
+                    m0.participant_index,
+                    m0.participants.clone(),
+                    Some(path.clone()),
+                )
+                .map_err(|e| anyhow::anyhow!("save child wallet: {e}"))?;
+            }
+        }
+    }
+
+    print(
+        &CliEvent::DerivedAddresses {
+            wallet_id,
+            path,
+            child_id,
+            addresses,
+            saved: save,
+        },
+        opts.json,
+    );
+    Ok(true)
+}
+
+#[cfg(test)]
+mod derive_tests {
+    use super::*;
+    use starlab_client::elm::command::encode_keystore_blob;
+    use starlab_core::resharing::{dkg_keypackages, threshold_sign_verify};
+    use frost_secp256k1::Secp256K1Sha256 as Secp;
+    use std::collections::BTreeMap;
+
+    #[test]
+    fn child_id_is_deterministic_and_filename_safe() {
+        let id = child_wallet_id("6ced1766e7ff", "m/44'/60'/0'/0/1");
+        assert_eq!(id, "6ced1766e7ff-44h-60h-0h-0-1");
+        assert!(!id.contains('/') && !id.contains('\''));
+    }
+
+    /// THE money test: two participants independently derive the same path
+    /// from their own shares → identical child group key, and a threshold of
+    /// the DERIVED shares produces a verifying signature. HD children are
+    /// first-class signing wallets, not just display addresses.
+    #[test]
+    fn derived_children_share_a_group_key_and_can_threshold_sign() {
+        let (kps, pp) = dkg_keypackages::<Secp>(3, 2, 41).unwrap();
+        let path = starlab_core::DerivationPath::parse("m/44'/60'/0'/0/1").unwrap();
+
+        let mut child_kps = BTreeMap::new();
+        let mut child_groups = Vec::new();
+        for i in [1u16, 2, 3] {
+            let blob = encode_keystore_blob::<Secp>(&kps[&i], &pp).unwrap();
+            let (child_blob, group_hex) =
+                derive_child_for_curve::<Secp>(&blob, &path).unwrap();
+            let (ckp, cpp) =
+                starlab_client::elm::command::decode_keystore_blob::<Secp>(&child_blob).unwrap();
+            child_kps.insert(i, ckp);
+            child_groups.push(group_hex);
+            if i == 3 {
+                // quorum {1,3} of the DERIVED shares signs under the child key
+                let mut quorum = BTreeMap::new();
+                quorum.insert(1u16, child_kps[&1].clone());
+                quorum.insert(3u16, child_kps[&3].clone());
+                threshold_sign_verify::<Secp>(&quorum, &[1, 3], &cpp, b"hd-child-sign").unwrap();
+            }
+        }
+        // all participants agree on the child group key
+        assert_eq!(child_groups[0], child_groups[1]);
+        assert_eq!(child_groups[1], child_groups[2]);
+        // and the child key differs from the parent
+        let parent_hex = hex::encode(pp.verifying_key().serialize().unwrap());
+        assert_ne!(child_groups[0], parent_hex);
+    }
+
+    #[test]
+    fn different_paths_yield_different_children() {
+        let (kps, pp) = dkg_keypackages::<Secp>(2, 2, 42).unwrap();
+        let blob = encode_keystore_blob::<Secp>(&kps[&1], &pp).unwrap();
+        let p1 = starlab_core::DerivationPath::parse("m/44'/60'/0'/0/1").unwrap();
+        let p2 = starlab_core::DerivationPath::parse("m/44'/60'/0'/0/2").unwrap();
+        let (_, g1) = derive_child_for_curve::<Secp>(&blob, &p1).unwrap();
+        let (_, g2) = derive_child_for_curve::<Secp>(&blob, &p2).unwrap();
+        assert_ne!(g1, g2);
+    }
 }
 
 #[cfg(test)]

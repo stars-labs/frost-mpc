@@ -14,17 +14,17 @@
     import { guideError } from "../../utils/error-guidance";
     import Collapsible from "../../lib/ui/Collapsible.svelte";
     import { storage } from "#imports";
-    import type { AppState } from "@starlab/types/appstate";
-    import { MeshStatusType } from "@starlab/types/mesh";
-    import { DkgState } from "@starlab/types/dkg";
-    import { INITIAL_APP_STATE } from "@starlab/types/appstate";
+    import type { AppState } from "@stars-labs/types/appstate";
+    import { MeshStatusType } from "@stars-labs/types/mesh";
+    import { DkgState } from "@stars-labs/types/dkg";
+    import { INITIAL_APP_STATE } from "@stars-labs/types/appstate";
     import Settings from "../../components/Settings.svelte";
     import AccountManager from "../../components/AccountManager.svelte";
     import SignatureRequest from "../../components/SignatureRequest.svelte";
     import PasswordPrompt from "./components/PasswordPrompt.svelte";
     import WalletSelector from "./components/WalletSelector.svelte";
     import CreateWalletForm from "../../components/CreateWalletForm.svelte";
-    import { MESSAGE_TYPES } from "@starlab/types/messages";
+    import { MESSAGE_TYPES } from "@stars-labs/types/messages";
     import { hashMessage } from "viem";
 
     // Theme (system | light | dark). initTheme() applies the saved mode
@@ -149,7 +149,7 @@
     // Review → join, or Later → dismiss (stays in invites list,
     // won't re-pop for this session_id). No auto-modal if we're
     // the proposer or already in an active ceremony.
-    let incomingSigningInvite: import("@starlab/types/session").SessionInfo | null = null;
+    let incomingSigningInvite: import("@stars-labs/types/session").SessionInfo | null = null;
     let dismissedSigningInvites: Set<string> = new Set();
 
     // Ext-3c: proposer-side toast when a co-signer explicitly
@@ -206,8 +206,8 @@
     let keystoreStatus: {
         initialized: boolean;
         locked: boolean;
-        wallets: import("@starlab/types/keystore").ExtensionWalletMetadata[];
-        activeWallet: import("@starlab/types/keystore").ExtensionWalletMetadata | null;
+        wallets: import("@stars-labs/types/keystore").ExtensionWalletMetadata[];
+        activeWallet: import("@stars-labs/types/keystore").ExtensionWalletMetadata | null;
         pendingImport: boolean;
     } = {
         initialized: false,
@@ -728,7 +728,7 @@
                 //   - not already in an active ceremony (busy signal)
                 {
                     const s = message.session as
-                        | import("@starlab/types/session").SessionInfo
+                        | import("@stars-labs/types/session").SessionInfo
                         | undefined;
                     if (!s) break;
                     if (s.session_type !== "signing") break;

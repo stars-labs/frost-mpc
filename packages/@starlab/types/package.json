@@ -1,5 +1,5 @@
 {
-  "name": "@starlab/types",
+  "name": "@stars-labs/types",
   "version": "0.1.0",
   "description": "Shared TypeScript types for the Starlab MPC wallet engine (DKG, sessions, keystore, WebRTC mesh).",
   "license": "MIT OR Apache-2.0",

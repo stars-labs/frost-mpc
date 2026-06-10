@@ -4,7 +4,7 @@ import type {
     WebSocketClientMsg,
     WebSocketServerMsg,
     OffscreenToBackgroundMsg
-} from "@starlab/types/messages";
+} from "@stars-labs/types/messages";
 
 type MessageCallback = (message: WebSocketServerMsg) => void;
 type ErrorCallback = (error: Event) => void;

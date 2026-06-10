@@ -1,6 +1,6 @@
 import { mainnet, sepolia } from 'viem/chains';
-import type { Chain } from "@starlab/types/network";
-import type { SupportedChain } from "@starlab/types/appstate";
+import type { Chain } from "@stars-labs/types/network";
+import type { SupportedChain } from "@stars-labs/types/appstate";
 import { createPublicClient, http } from 'viem';
 
 type NetworkChangeCallback = (network: Chain | undefined) => void;

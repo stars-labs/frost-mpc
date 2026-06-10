@@ -1,5 +1,5 @@
 {
-  "name": "@starlab/core-wasm",
+  "name": "@stars-labs/core-wasm",
   "version": "0.1.0",
   "description": "FROST MPC WASM bindings for MPC Wallet",
   "type": "module",

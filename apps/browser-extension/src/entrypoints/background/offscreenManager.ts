@@ -12,8 +12,8 @@
 import type {
     BackgroundToOffscreenWrapper,
     OffscreenMessage
-} from "@starlab/types/messages";
-import { AppState } from "@starlab/types/appstate";
+} from "@stars-labs/types/messages";
+import { AppState } from "@stars-labs/types/appstate";
 import { getSignalServerUrl } from "../../config/signal-server";
 
 /**

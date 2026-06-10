@@ -76,7 +76,7 @@ jobs:
       - uses: actions/checkout@v4
 
       # The extension tests load the REAL core-wasm glue (not a mock) and import
-      # @starlab/types subpaths (e.g. .../dkg) that resolve to the types
+      # @stars-labs/types subpaths (e.g. .../dkg) that resolve to the types
       # package's `dist/` — neither is committed, so both must be built here.
       - name: Install Rust toolchain (wasm32 for wasm-pack)
         uses: dtolnay/rust-toolchain@stable
@@ -94,7 +94,7 @@ jobs:
       - uses: oven-sh/setup-bun@v2
 
       # `--ignore-scripts`: the extension's postinstall (`wxt prepare`) imports
-      # @starlab/types/* and would fail before `dist/` exists. Skip lifecycle
+      # @stars-labs/types/* and would fail before `dist/` exists. Skip lifecycle
       # scripts at install, build the deps, then prepare explicitly.
       - run: bun install --frozen-lockfile --ignore-scripts
 
@@ -103,8 +103,8 @@ jobs:
       - name: Build core-wasm (tests load the real WASM glue)
         run: cd packages/@starlab/core-wasm && wasm-pack build --target web --out-dir pkg
 
-      - name: Build shared types (provides @starlab/types/* dist subpaths)
-        run: bun run --filter '@starlab/types' build
+      - name: Build shared types (provides @stars-labs/types/* dist subpaths)
+        run: bun run --filter '@stars-labs/types' build
 
       - name: Prepare WXT (now that types dist exists)
         run: cd apps/browser-extension && bunx wxt prepare

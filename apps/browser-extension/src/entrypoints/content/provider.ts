@@ -6,7 +6,7 @@ import type {
     ContentToInjectedMsg,
     JsonRpcRequest,
     JsonRpcResponse
-} from "@starlab/types/messages";
+} from "@stars-labs/types/messages";
 
 // 定义消息接口
 export interface ContentMessage {

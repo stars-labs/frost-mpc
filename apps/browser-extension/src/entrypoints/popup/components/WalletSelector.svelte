@@ -1,6 +1,6 @@
 <script lang="ts">
     import { createEventDispatcher } from 'svelte';
-    import type { ExtensionWalletMetadata } from "@starlab/types/keystore";
+    import type { ExtensionWalletMetadata } from "@stars-labs/types/keystore";
     
     export let wallets: ExtensionWalletMetadata[] = [];
     export let activeWallet: ExtensionWalletMetadata | null = null;

@@ -9,13 +9,13 @@
 // - Session state validation
 // ===================================================================
 
-import { AppState } from "@starlab/types/appstate";
-import { SessionInfo, SessionProposal, SessionResponse } from "@starlab/types/session";
-import { MeshStatus } from "@starlab/types/mesh";
-import { DkgState } from "@starlab/types/dkg";
+import { AppState } from "@stars-labs/types/appstate";
+import { SessionInfo, SessionProposal, SessionResponse } from "@stars-labs/types/session";
+import { MeshStatus } from "@stars-labs/types/mesh";
+import { DkgState } from "@stars-labs/types/dkg";
 import { WebSocketClient } from "./websocket";
-import { validateSessionProposal, validateSessionAcceptance } from "@starlab/types/messages";
-import type { BackgroundToPopupMessage, OffscreenMessage } from "@starlab/types/messages";
+import { validateSessionProposal, validateSessionAcceptance } from "@stars-labs/types/messages";
+import type { BackgroundToPopupMessage, OffscreenMessage } from "@stars-labs/types/messages";
 import { buildWireSessionInfo } from "../../utils/session-parse";
 
 // Session persistence removed - sessions are ephemeral for security

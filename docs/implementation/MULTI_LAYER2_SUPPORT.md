@@ -9,7 +9,7 @@ Successfully decoupled cryptographic curve selection from specific blockchain ch
 ### 1. Type System Updates (`packages/@starlab/types/src/appstate.ts`)
 
 Note: types were hoisted out of `apps/browser-extension/src/types/` into
-the shared `@starlab/types` package as part of the monorepo
+the shared `@stars-labs/types` package as part of the monorepo
 restructure — earlier drafts of this doc referenced the old
 extension-local path.
 

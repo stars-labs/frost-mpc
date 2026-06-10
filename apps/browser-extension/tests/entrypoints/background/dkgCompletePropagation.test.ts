@@ -18,7 +18,7 @@
  */
 import { describe, it, expect, beforeEach, jest } from "bun:test";
 import { StateManager } from "../../../src/entrypoints/background/stateManager";
-import { DkgState } from "@starlab/types/dkg";
+import { DkgState } from "@stars-labs/types/dkg";
 
 describe("StateManager: dkgComplete propagation", () => {
     let mgr: StateManager;

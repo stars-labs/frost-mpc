@@ -9,7 +9,7 @@ import {
     createTestDkgInstances,
     cleanupDkgInstances
 } from './test-utils';
-import { FrostDkgEd25519, FrostDkgSecp256k1 } from '@starlab/core-wasm';
+import { FrostDkgEd25519, FrostDkgSecp256k1 } from '@stars-labs/core-wasm';
 
 let originalConsoleLog: any;
 let originalConsoleError: any;

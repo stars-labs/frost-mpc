@@ -20,7 +20,7 @@ import type {
     WalletFile,
     BlockchainInfo,
     NewAccountSession
-} from "@starlab/types/keystore";
+} from "@stars-labs/types/keystore";
 
 export class KeystoreService {
     private static instance: KeystoreService;

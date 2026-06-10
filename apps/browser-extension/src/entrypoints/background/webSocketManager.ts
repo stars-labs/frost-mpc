@@ -11,8 +11,8 @@
 // ===================================================================
 
 import { WebSocketClient } from "./websocket";
-import { AppState } from "@starlab/types/appstate";
-import type { SessionInfo } from "@starlab/types/session";
+import { AppState } from "@stars-labs/types/appstate";
+import type { SessionInfo } from "@stars-labs/types/session";
 import { SessionManager } from "./sessionManager";
 import { SigningNotifier } from "./signingNotification";
 import { getSignalServerUrl } from "../../config/signal-server";
@@ -21,8 +21,8 @@ import type {
     BackgroundToPopupMessage,
     InitialStateMessage,
     OffscreenMessage
-} from "@starlab/types/messages";
-import { ServerMsg, WebSocketMessagePayload } from "@starlab/types/websocket";
+} from "@stars-labs/types/messages";
+import { ServerMsg, WebSocketMessagePayload } from "@stars-labs/types/websocket";
 
 /**
  * Manages WebSocket connections and message handling for MPC coordination

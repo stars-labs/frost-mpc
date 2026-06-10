@@ -11,14 +11,14 @@
 // - Cross-component state consistency
 // ===================================================================
 
-import { AppState, INITIAL_APP_STATE } from "@starlab/types/appstate";
-import { MeshStatusType } from "@starlab/types/mesh";
-import { DkgState } from "@starlab/types/dkg";
+import { AppState, INITIAL_APP_STATE } from "@stars-labs/types/appstate";
+import { MeshStatusType } from "@stars-labs/types/mesh";
+import { DkgState } from "@stars-labs/types/dkg";
 import type {
     BackgroundToPopupMessage,
     InitialStateMessage,
     OffscreenToBackgroundMessage
-} from "@starlab/types/messages";
+} from "@stars-labs/types/messages";
 
 /** Listener fired whenever `appState.dkgState` changes. Registered
  *  via `addDkgStateListener`. Used by the keepalive controller to

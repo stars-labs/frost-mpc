@@ -1,5 +1,5 @@
 {
-  "name": "@starlab/monorepo",
+  "name": "@stars-labs/monorepo",
   "description": "MPC Wallet Monorepo - Multi-Party Computation wallet with FROST signatures",
   "private": true,
   "version": "0.0.0",

@@ -1,5 +1,5 @@
 import { KeystoreService } from '../../src/services/keystoreService';
-import type { KeyShareData, KeystoreBackup } from "@starlab/types/keystore";
+import type { KeyShareData, KeystoreBackup } from "@stars-labs/types/keystore";
 // Mock CLI keystore format types
 import {  describe, it, expect, beforeEach } from 'bun:test';
 import { jest } from 'bun:test';

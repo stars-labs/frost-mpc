@@ -1,6 +1,6 @@
-import { SessionInfo, DkgState, MeshStatus, MeshStatusType } from "@starlab/types/appstate";
-import { WebRTCAppMessage } from "@starlab/types/webrtc";
-import { WebSocketMessagePayload, WebRTCSignal } from "@starlab/types/websocket";
+import { SessionInfo, DkgState, MeshStatus, MeshStatusType } from "@stars-labs/types/appstate";
+import { WebRTCAppMessage } from "@stars-labs/types/webrtc";
+import { WebSocketMessagePayload, WebRTCSignal } from "@stars-labs/types/websocket";
 
 export { DkgState, MeshStatusType }; // Export DkgState and MeshStatusType
 
@@ -1827,7 +1827,7 @@ export class WebRTCManager {
     );
 
     const { FrostDkgSecp256k1, FrostDkgEd25519 } = await import(
-      "@starlab/core-wasm"
+      "@stars-labs/core-wasm"
     );
     const instance =
       blockchain === "ethereum"

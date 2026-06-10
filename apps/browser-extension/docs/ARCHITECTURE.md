@@ -100,7 +100,7 @@ reactivity, NOT runes — see the top-of-repo `CLAUDE.md`)
 **Responsibilities:**
 - WebRTC peer-connection lifecycle + data channels
 - P2P DKG / signing ceremony execution
-- FROST-WASM host (loads `@starlab/core-wasm` → `frostDkg`)
+- FROST-WASM host (loads `@stars-labs/core-wasm` → `frostDkg`)
 - DOM-dependent operations that can't run in the MV3 service
   worker context
 
@@ -807,7 +807,7 @@ sessionManager.proposeSession(/* sessionId, total, threshold,
 sessionManager.acceptSession(sessionId, blockchain)
 //   -> relays the session response + triggers mesh setup
 
-// Mesh Status Tracking (shared type, from @starlab/types):
+// Mesh Status Tracking (shared type, from @stars-labs/types):
 enum MeshStatusType {
     Incomplete,
     PartiallyReady,

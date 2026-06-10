@@ -308,8 +308,69 @@ fn render_human(ev: &CliEvent) -> String {
             "✔ Reshare complete — group key (and address) unchanged\n  Wallet ID:  {wallet_id}\n  Group key:  {group_public_key}"
         ),
         CliEvent::Error { code, message, .. } => format!("✖ {code}: {message}"),
-        // Anything else that reaches print() falls back to the JSONL line.
-        other => other.to_line(),
+        CliEvent::Ready {
+            protocol,
+            device_id,
+            curve,
+        } => format!("ready (protocol v{protocol}, device {device_id}, curve {curve})"),
+        CliEvent::Ack { correlates } => format!("ack #{correlates}"),
+        CliEvent::Connection { connected } => if *connected {
+            "✔ connected to the signal server".to_string()
+        } else {
+            "✖ disconnected from the signal server".to_string()
+        },
+        CliEvent::Status {
+            connected,
+            device_id,
+            wallets,
+        } => {
+            let mut out = format!(
+                "Device:     {device_id}\nConnection: {}",
+                if *connected { "connected" } else { "disconnected" }
+            );
+            out.push_str("\n\n");
+            out.push_str(&render_human(&CliEvent::Wallets {
+                wallets: wallets.clone(),
+            }));
+            out
+        }
+        CliEvent::SessionAnnounced { session_id, .. } => {
+            format!("✔ Session announced\n  Session ID:  {session_id}")
+        }
+        CliEvent::SessionAvailable { session } => render_table(
+            &["SESSION", "TYPE", "QUORUM", "PROPOSER", "PARTICIPANTS"],
+            &[vec![
+                session.session_id.clone(),
+                session.session_type.clone(),
+                format!("{}-of-{}", session.threshold, session.total),
+                session.proposer.clone(),
+                session.participants.join(","),
+            ]],
+        ),
+        CliEvent::DkgProgress {
+            session_id,
+            round,
+            received,
+            need,
+        } => format!("… DKG round {round}: {received}/{need} packages (session {session_id})"),
+        CliEvent::SigningRequest {
+            session_id,
+            wallet,
+            threshold,
+            total,
+            proposer,
+        } => format!(
+            "⧖ Signing request from {proposer}\n  Wallet:    {wallet}\n  Quorum:    {threshold}-of-{total}\n  Session:   {session_id}\n  → approve with: starlab-cli session join --session-id {session_id} …"
+        ),
+        CliEvent::ReshareRequest {
+            session_id,
+            wallet,
+            threshold,
+            total,
+            proposer,
+        } => format!(
+            "⧖ Reshare request from {proposer}\n  Wallet:    {wallet}\n  Quorum:    {threshold}-of-{total}\n  Session:   {session_id}\n  → approve with: starlab-cli session join --session-id {session_id} …"
+        ),
     }
 }
 
@@ -591,5 +652,36 @@ mod output_tests {
             message: "no quorum".into(),
         });
         assert_eq!(err, "✖ timeout: no quorum");
+    }
+
+    #[test]
+    fn status_renders_device_connection_and_wallet_table() {
+        let out = render_human(&CliEvent::Status {
+            connected: true,
+            device_id: "mpc-1".into(),
+            wallets: vec![WalletEntry {
+                id: "abc".into(),
+                name: "W".into(),
+                address: "0x1".into(),
+                chain: "Ethereum".into(),
+                threshold: "2/3".into(),
+            }],
+        });
+        assert!(out.contains("Device:     mpc-1"));
+        assert!(out.contains("Connection: connected"));
+        assert!(out.contains("ID  ")); // embedded wallet table
+    }
+
+    #[test]
+    fn requests_point_at_the_join_command() {
+        let out = render_human(&CliEvent::SigningRequest {
+            session_id: "s-1".into(),
+            wallet: "w".into(),
+            threshold: 2,
+            total: 3,
+            proposer: "mpc-2".into(),
+        });
+        assert!(out.contains("session join --session-id s-1"));
+        assert!(out.contains("2-of-3"));
     }
 }

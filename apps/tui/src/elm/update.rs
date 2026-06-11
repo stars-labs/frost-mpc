@@ -758,12 +758,28 @@ pub fn update(model: &mut Model, msg: Message) -> Option<Command> {
         Message::SelectWallet { wallet_id } => {
             info!("Selected wallet: {}", wallet_id);
             model.selected_wallet = Some(wallet_id.clone());
-            
+            // Fresh wallet → fresh accounts-table depth.
+            model.ui_state.accounts_shown =
+                crate::elm::components::wallet_detail::DEFAULT_ACCOUNTS_SHOWN;
+
             // Navigate to wallet detail
             model.push_screen(Screen::WalletDetail { wallet_id: wallet_id.clone() });
-            
+
             // Load wallet details
             Some(Command::LoadWalletDetails { wallet_id })
+        }
+
+        // '+' / '-' on the WalletDetail screen: grow/shrink the BIP-44
+        // accounts table. The component re-reads `accounts_shown` at
+        // remount (app.rs marks these as needs_component_update).
+        Message::AccountsShowMore => {
+            model.ui_state.accounts_shown = model.ui_state.accounts_shown.saturating_add(1);
+            None
+        }
+
+        Message::AccountsShowLess => {
+            model.ui_state.accounts_shown = model.ui_state.accounts_shown.saturating_sub(1).max(1);
+            None
         }
         
         Message::ListWallets => {
@@ -1272,7 +1288,15 @@ pub fn update(model: &mut Model, msg: Message) -> Option<Command> {
         Message::WalletsLoaded { wallets } => {
             info!("Loaded {} wallets", wallets.len());
             let old_count = model.wallet_state.wallets.len();
-            model.wallet_state.wallets = wallets;
+            // Materialized HD account children carry their derivation path
+            // as the label ("m/44'/…"). They're an implementation detail of
+            // signing — listing them would double-derive (account 0 OF an
+            // account) and clutter the wallet view. Same filter as the CLI
+            // bridge's wallet_entries; the accounts table is their UI.
+            model.wallet_state.wallets = wallets
+                .into_iter()
+                .filter(|w| !w.label.as_deref().is_some_and(|l| l.starts_with("m/")))
+                .collect();
             
             // If on main menu and wallet count changed, force remount to update menu
             if matches!(model.current_screen, Screen::MainMenu | Screen::Welcome) && 
@@ -3365,5 +3389,63 @@ mod tests {
         // Modal should be closed, no navigation
         assert!(model.ui_state.modal.is_none());
         assert!(cmd.is_none());
+    }
+
+    #[test]
+    fn wallets_loaded_hides_materialized_account_children() {
+        let mut model = Model::new("test".to_string());
+        let mut root = crate::keystore::WalletMetadata::new(
+            "w1".to_string(),
+            "d1".to_string(),
+            "secp256k1".to_string(),
+            2,
+            3,
+            1,
+            "00".to_string(),
+        );
+        root.label = Some("My Wallet".to_string());
+        let mut child = root.clone();
+        child.session_id = "w1-child".to_string();
+        child.label = Some("m/44'/60'/0'/0/0".to_string());
+
+        update(&mut model, Message::WalletsLoaded { wallets: vec![root, child] });
+
+        assert_eq!(
+            model.wallet_state.wallets.len(),
+            1,
+            "m/-labeled HD children must not appear in the wallet list"
+        );
+        assert_eq!(model.wallet_state.wallets[0].session_id, "w1");
+    }
+
+    #[test]
+    fn accounts_show_more_and_less_adjust_with_floor_of_one() {
+        let mut model = Model::new("test".to_string());
+        let start = model.ui_state.accounts_shown;
+
+        update(&mut model, Message::AccountsShowMore);
+        assert_eq!(model.ui_state.accounts_shown, start + 1);
+
+        for _ in 0..(start + 5) {
+            update(&mut model, Message::AccountsShowLess);
+        }
+        assert_eq!(model.ui_state.accounts_shown, 1, "must floor at one account");
+    }
+
+    #[test]
+    fn select_wallet_resets_accounts_shown_to_default() {
+        let mut model = Model::new("test".to_string());
+        model.ui_state.accounts_shown = 12;
+
+        update(&mut model, Message::SelectWallet { wallet_id: "w1".to_string() });
+
+        assert_eq!(
+            model.ui_state.accounts_shown,
+            crate::elm::components::wallet_detail::DEFAULT_ACCOUNTS_SHOWN
+        );
+        assert!(matches!(
+            model.current_screen,
+            Screen::WalletDetail { ref wallet_id } if wallet_id == "w1"
+        ));
     }
 }

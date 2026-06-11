@@ -376,6 +376,25 @@ async fn send_unified_round2<C>(
     }
 }
 
+/// Account 0's `(chain, address)` pairs for one curve's hex group key.
+/// BIP-44 all the way: the UI never shows the raw group-key address — the
+/// root key is a derivation parent only, account 0 is the default identity.
+/// Empty on decode/derivation failure (never fails the completion flow).
+/// Single source of truth: `starlab_core::accounts` (same rows as the CLI).
+fn account0_addresses(curve: &str, group_public_key_hex: &str) -> Vec<(String, String)> {
+    let Ok(group) = hex::decode(group_public_key_hex) else {
+        return Vec::new();
+    };
+    starlab_core::accounts::account_addresses(curve, &group, 0)
+        .map(|entries| {
+            entries
+                .into_iter()
+                .map(|(chain, _path, address)| (chain, address))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 /// Finalize the unified ceremony: persist both curves and emit `DKGFinalized`
 /// (which the CLI bridge surfaces as `dkg_complete`). Idempotent — `finalize`
 /// returns `None` once the wallet is already written, so calling this from
@@ -407,11 +426,15 @@ async fn try_finalize_unified<C>(
     )
     .await
     {
-        // Both curves' canonical addresses, surfaced to the UI/CLI.
-        let addresses = vec![
-            ("ethereum".to_string(), outcome.eth_address.clone()),
-            ("solana".to_string(), outcome.solana_address.clone()),
-        ];
+        // Both curves' ACCOUNT-0 addresses, surfaced to the UI/CLI. The
+        // outcome's root-key addresses are deliberately not shown — see
+        // `account0_addresses`.
+        let mut addresses =
+            account0_addresses("secp256k1", &outcome.secp256k1_group_public_key);
+        addresses.extend(account0_addresses(
+            "ed25519",
+            &outcome.ed25519_group_public_key,
+        ));
         let _ = tx.send(Message::DKGFinalized {
             wallet_id: outcome.wallet_id,
             // The bridge derives the primary address from this + curve_type;
@@ -2192,11 +2215,10 @@ impl Command {
                     // "unified" literal (see Stage 5 of the plan).
                     let curve_type_str = <C as crate::utils::curve_traits::CurveIdentifier>::curve_type().to_string();
 
-                    let addresses: Vec<(String, String)> = state
-                        .blockchain_addresses
-                        .iter()
-                        .map(|b| (b.blockchain.clone(), b.address.clone()))
-                        .collect();
+                    // ACCOUNT 0's addresses, not the root group-key ones that
+                    // `state.blockchain_addresses` holds — see `account0_addresses`.
+                    let addresses: Vec<(String, String)> =
+                        account0_addresses(&curve_type_str, &hex::encode(&group_pubkey_bytes));
 
                     (
                         state.device_id.clone(),

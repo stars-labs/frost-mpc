@@ -85,6 +85,11 @@ pub enum Message {
     WalletExported { wallet_id: String, path: String },
     ImportWallet { data: Vec<u8> },
     WalletImported { wallet_id: String },
+    /// '+' on the WalletDetail screen — derive one more BIP-44 account
+    /// row in the accounts table (`Model.ui_state.accounts_shown`).
+    AccountsShowMore,
+    /// '-' on the WalletDetail screen — show one fewer account (floors at 1).
+    AccountsShowLess,
     
     // Wallet creation flow
     SelectMode(WalletMode),

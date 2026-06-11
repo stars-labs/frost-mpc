@@ -162,10 +162,26 @@ where
                 )?;
                 self.app.active(&Id::WalletList)?;
             }
-            Screen::WalletDetail { .. } => {
-                self.app.mount(
+            Screen::WalletDetail { ref wallet_id } => {
+                let mut detail = WalletDetail::default();
+                // Hand over every curve entry for this wallet id — the
+                // unified DKG stores the same id once per curve and the
+                // accounts table must cover both curves' chains.
+                let entries: Vec<_> = self
+                    .model
+                    .wallet_state
+                    .wallets
+                    .iter()
+                    .filter(|w| &w.session_id == wallet_id)
+                    .cloned()
+                    .collect();
+                detail.set_wallet(wallet_id.clone(), entries);
+                detail.set_accounts_shown(self.model.ui_state.accounts_shown);
+                // remount, not mount: '+'/'-' trigger a component update
+                // while the screen (and thus the mount) is unchanged.
+                self.app.remount(
                     Id::WalletDetail,
-                    Box::new(WalletDetail::default()),
+                    Box::new(detail),
                     vec![]
                 )?;
                 self.app.active(&Id::WalletDetail)?;
@@ -641,6 +657,10 @@ where
                 | Message::PasswordSubmitDraft
                 | Message::SignTypeChar(_)
                 | Message::SignBackspace
+                // WalletDetail's accounts table derives from
+                // `ui_state.accounts_shown`, read at mount time.
+                | Message::AccountsShowMore
+                | Message::AccountsShowLess
                 // Stage 4: signing-round messages mutate the
                 // acceptance roster on WalletState; the SigningProgress
                 // component reads that roster at mount time, so each
@@ -956,6 +976,23 @@ where
                         });
                     }
                     return None;
+                }
+                _ => return None,
+            }
+        }
+
+        // WalletDetail: '+' / '-' grow/shrink the BIP-44 accounts table.
+        // ('=' is accepted as unshifted '+' on most layouts.) Esc is
+        // handled by the global arm above.
+        if matches!(self.model.current_screen, Screen::WalletDetail { .. }) {
+            match key.code {
+                KeyCode::Char('+') | KeyCode::Char('=') => {
+                    info!("➕ WalletDetail -> AccountsShowMore");
+                    return Some(Message::AccountsShowMore);
+                }
+                KeyCode::Char('-') => {
+                    info!("➖ WalletDetail -> AccountsShowLess");
+                    return Some(Message::AccountsShowLess);
                 }
                 _ => return None,
             }

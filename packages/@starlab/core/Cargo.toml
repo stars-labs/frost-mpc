@@ -58,6 +58,8 @@ password-hash = "0.6"
 
 # Other
 bs58 = "0.5"
+ripemd = "0.1"
+bech32 = "0.11"
 thiserror = "2.0.9"
 
 [dev-dependencies]

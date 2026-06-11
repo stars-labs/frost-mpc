@@ -655,13 +655,7 @@ pub async fn sign(
 /// These are fixed so users only ever think in account indexes — exactly the
 /// BIP-44 contract. Returns None for unknown chains.
 pub fn standard_path(chain: &str, account: u32) -> Option<String> {
-    match chain.to_ascii_lowercase().as_str() {
-        "ethereum" | "eth" => Some(format!("m/44'/60'/0'/0/{account}")),
-        "bitcoin" | "btc" => Some(format!("m/84'/0'/0'/0/{account}")),
-        "solana" | "sol" => Some(format!("m/44'/501'/{account}'/0'")),
-        "sui" => Some(format!("m/44'/784'/{account}'/0'/0'")),
-        _ => None,
-    }
+    starlab_core::accounts::standard_path(chain, account)
 }
 
 /// `wallet accounts` — list account 0..count with per-chain addresses from

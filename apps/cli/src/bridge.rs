@@ -243,26 +243,15 @@ pub struct Snapshot {
     pub sessions: Vec<SessionEntry>,
 }
 
-/// The canonical display chains per curve. EVM L2s (BSC/Polygon/…) share the
-/// Ethereum address, so listing them would be noise; Aptos is omitted until
-/// it's a first-class target.
-pub(crate) fn chains_for_curve(curve: &str) -> &'static [(&'static str, &'static str)] {
-    // (config key, display name)
-    if curve == "ed25519" {
-        &[("solana", "Solana"), ("sui", "Sui")]
-    } else {
-        &[("ethereum", "Ethereum"), ("bitcoin", "Bitcoin")]
-    }
-}
+/// Single source of truth: starlab_core::accounts (shared with WASM/desktop).
+pub(crate) use starlab_core::accounts::chains_for_curve;
 
 /// Derive one chain address from a hex-encoded FROST group key. Returns ""
 /// if the key can't be decoded/derived (never fails the listing).
 pub(crate) fn derive_address(group_public_key_hex: &str, curve: &str, chain_key: &str) -> String {
     match hex::decode(group_public_key_hex) {
-        Ok(bytes) => {
-            starlab_client::blockchain_config::generate_address_for_chain(&bytes, curve, chain_key)
-                .unwrap_or_default()
-        }
+        Ok(bytes) => starlab_core::accounts::address_for_chain(chain_key, curve, &bytes)
+            .unwrap_or_default(),
         Err(_) => String::new(),
     }
 }

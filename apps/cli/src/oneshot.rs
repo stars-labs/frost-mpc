@@ -624,11 +624,12 @@ pub async fn reshare(
     Ok(true)
 }
 
-/// `sign` — initiate a threshold signing and block until it completes.
 /// Materialize (derive + persist) the HD account child wallet if it isn't in
-/// the keystore yet. Deterministic — every participant materializing the same
-/// (parent, chain, account) lands on the same child id and key. Returns the
-/// child wallet id to sign with.
+/// the keystore yet. Thin keystore-opening wrapper over the SHARED
+/// implementation in `starlab_client::elm::command::ensure_account_wallet`
+/// (the same one the elm co-signer unlock path uses), so the CLI and every
+/// elm-driven client agree on the child id + label byte-for-byte. Returns
+/// the child wallet id to sign with.
 fn ensure_account_wallet(
     opts: &OneShotOpts,
     parent_id: &str,
@@ -640,64 +641,13 @@ fn ensure_account_wallet(
 
     let mut ks = Keystore::new(&opts.keystore_path, &opts.device_id)
         .map_err(|e| anyhow::anyhow!("open keystore {}: {e}", opts.keystore_path))?;
-    let metas: Vec<_> = ks
-        .list_wallets()
-        .into_iter()
-        .filter(|w| w.session_id == parent_id)
-        .cloned()
-        .collect();
-    if metas.is_empty() {
-        anyhow::bail!("wallet '{parent_id}' not found (device {}).", opts.device_id);
-    }
-
-    // Default chain: the primary chain of the wallet's curve(s).
-    let has_secp = metas.iter().any(|m| m.curve_type == "secp256k1");
-    let chain = chain
-        .map(str::to_string)
-        .unwrap_or_else(|| if has_secp { "ethereum".into() } else { "solana".into() });
-    let path_s = standard_path(&chain, account)
-        .ok_or_else(|| anyhow::anyhow!("unknown --chain {chain:?}"))?;
-    let curve = if matches!(chain.as_str(), "solana" | "sol" | "sui") {
-        "ed25519"
-    } else {
-        "secp256k1"
-    };
-    let meta = metas
-        .iter()
-        .find(|m| m.curve_type == curve)
-        .ok_or_else(|| anyhow::anyhow!("wallet '{parent_id}' has no {curve} share for {chain}"))?;
-
-    let child_id = format!("{parent_id}-{chain}-{account}");
-    if ks.get_wallet(&child_id).is_some() {
-        return Ok(child_id);
-    }
-
-    let parsed = starlab_core::DerivationPath::parse(&path_s)
-        .map_err(|e| anyhow::anyhow!("parse {path_s}: {e}"))?;
-    let blob = ks
-        .load_wallet_file_for_curve(parent_id, curve, password)
-        .map_err(|e| anyhow::anyhow!("unlock '{parent_id}' ({curve}): {e}"))?;
-    let (child_blob, child_group_hex) = match curve {
-        "ed25519" => derive_child_for_curve::<frost_ed25519::Ed25519Sha512>(&blob, &parsed)?,
-        _ => derive_child_for_curve::<frost_secp256k1::Secp256K1Sha256>(&blob, &parsed)?,
-    };
-    ks.create_wallet_multi_chain(
-        &child_id,
-        curve,
-        vec![],
-        meta.threshold,
-        meta.total_participants,
-        &child_group_hex,
-        &child_blob,
-        password,
-        vec![],
-        None,
-        meta.participant_index,
-        meta.participants.clone(),
-        Some(path_s),
+    let (child_id, materialized) = starlab_client::elm::command::ensure_account_wallet(
+        &mut ks, parent_id, account, chain, password,
     )
-    .map_err(|e| anyhow::anyhow!("materialize account wallet: {e}"))?;
-    eprintln!("note: materialized account wallet '{child_id}' (deterministic — co-signers do the same on first use)");
+    .map_err(|e| anyhow::anyhow!("{e} (device {})", opts.device_id))?;
+    if materialized {
+        eprintln!("note: materialized account wallet '{child_id}' (deterministic — co-signers do the same on first use)");
+    }
     Ok(child_id)
 }
 
@@ -711,17 +661,15 @@ pub async fn sign(
     password: String,
 ) -> anyhow::Result<bool> {
     // BIP-44 all the way: signing happens with the ACCOUNT key, never the
-    // root. If the caller passed an already-materialized child id (contains
-    // the "-<chain>-<n>" suffix), use it as-is; otherwise materialize
+    // root. If the caller passed an already-materialized child id
+    // (`{parent}-{chain}-{n}`), use it as-is; otherwise materialize
     // account `account` of the given parent on demand.
-    let signing_wallet_id = {
-        let ks_has_it_as_is = wallet_id.rsplit('-').next().and_then(|s| s.parse::<u32>().ok());
-        if ks_has_it_as_is.is_some() && wallet_id.matches('-').count() >= 2 {
+    let signing_wallet_id =
+        if starlab_core::accounts::parse_child_wallet_id(&wallet_id).is_some() {
             wallet_id.clone()
         } else {
             ensure_account_wallet(&opts, &wallet_id, account, chain.as_deref(), &password)?
-        }
-    };
+        };
     let (tx, mut rx, roster) = start(&opts);
     tx.send(Message::TriggerReconnect)?;
     wait_connected(&mut rx, &opts).await?;
@@ -843,28 +791,14 @@ fn child_wallet_id(parent: &str, path: &str) -> String {
 
 /// Derive a child (key share + group key) for one curve from a decrypted
 /// keystore blob. Returns (child blob, child group public key hex).
+/// Anyhow-flavored shim over the SHARED implementation in
+/// `starlab_client::elm::command` (one derivation for every client).
 fn derive_child_for_curve<C: frost_core::Ciphersuite>(
     blob: &[u8],
     path: &starlab_core::DerivationPath,
 ) -> anyhow::Result<(Vec<u8>, String)> {
-    use starlab_client::elm::command::{decode_keystore_blob, encode_keystore_blob};
-    let (kp, pp) = decode_keystore_blob::<C>(blob)
-        .map_err(|e| anyhow::anyhow!("decode key share: {e}"))?;
-    let group = pp
-        .verifying_key()
-        .serialize()
-        .map_err(|e| anyhow::anyhow!("serialize group key: {e}"))?;
-    let chain_code = starlab_core::ChainCode::from_group_key(group.as_ref());
-    let derived = starlab_core::derive_child_key_path::<C>(&kp, &pp, &chain_code, path)
-        .map_err(|e| anyhow::anyhow!("derive: {e}"))?;
-    let child_group = derived
-        .public_key_package
-        .verifying_key()
-        .serialize()
-        .map_err(|e| anyhow::anyhow!("serialize child group key: {e}"))?;
-    let child_blob = encode_keystore_blob::<C>(&derived.key_package, &derived.public_key_package)
-        .map_err(|e| anyhow::anyhow!("encode child share: {e}"))?;
-    Ok((child_blob, hex::encode(child_group)))
+    starlab_client::elm::command::derive_child_for_curve::<C>(blob, path)
+        .map_err(|e| anyhow::anyhow!(e))
 }
 
 /// `wallet derive` — BIP-44-style HD child derivation. Fully offline: reads

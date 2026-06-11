@@ -447,6 +447,11 @@ pub fn update(model: &mut Model, msg: Message) -> Option<Command> {
             } else {
                 raw.clone()
             };
+            // "BIP-44 all the way": never sign with the root. A caller that
+            // passed a root id (e.g. the desktop's ElmSigningBackend) gets
+            // account 0 of the runner curve's primary chain; an explicit
+            // child id (the CLI one-shot always sends one) passes through.
+            let wallet_id = account_signing_wallet_id(&wallet_id, curve);
             model.wallet_state.pending_sign_message = Some(bytes_to_sign);
             model.wallet_state.pending_sign_wallet_id = Some(wallet_id);
             model.wallet_state.pending_sign_session_id = None;
@@ -1072,6 +1077,15 @@ pub fn update(model: &mut Model, msg: Message) -> Option<Command> {
                     }
                 },
             };
+
+            // "BIP-44 all the way": the UI navigates with the ROOT wallet id,
+            // but signing must use an ACCOUNT key — map to the account-0
+            // child of the runner curve's primary chain. (No per-account
+            // selection exists on the accounts table yet; when it does, the
+            // selected index slots in here.) The child share is materialized
+            // on demand at unlock time.
+            let wallet_id =
+                account_signing_wallet_id(&wallet_id, model.wallet_state.curve_type);
 
             let raw_message_bytes = model.wallet_state.sign_message_draft.as_bytes().to_vec();
             // For secp256k1 wallets, sign the EIP-191 hash of the message
@@ -3063,6 +3077,20 @@ fn short_session_id(id: &str) -> String {
 /// FROST will actually sign (EIP-191 hash for secp256k1, same as raw
 /// for ed25519), and the wallet's threshold so the user knows how
 /// many co-signers are being recruited.
+/// "BIP-44 all the way": signing must NEVER use the root key. Map a root
+/// wallet id to its account-0 child for the runner curve's primary chain
+/// (ethereum for secp256k1, solana for ed25519); ids that already name an
+/// account child (`{parent}-{chain}-{account}`) pass through unchanged.
+/// The child share is materialized on demand at unlock time (the user has
+/// just typed the password) by `Command::UnlockWallet`.
+fn account_signing_wallet_id(wallet_id: &str, curve_type: &str) -> String {
+    if starlab_core::accounts::parse_child_wallet_id(wallet_id).is_some() {
+        return wallet_id.to_string();
+    }
+    let chain = if curve_type == "secp256k1" { "ethereum" } else { "solana" };
+    format!("{wallet_id}-{chain}-0")
+}
+
 fn preview_lines(
     wallet_id: &str,
     curve: &str,
@@ -3070,11 +3098,25 @@ fn preview_lines(
     raw_message: Option<&[u8]>,
     wallets: &[crate::keystore::WalletMetadata],
 ) -> String {
+    // An account child id won't be in the (root-only) wallet list — fall
+    // back to its parent for the threshold metadata, and surface the
+    // BIP-44 identity ("signing as") so the user sees the account key,
+    // not the root.
+    let child = starlab_core::accounts::parse_child_wallet_id(wallet_id);
     let (threshold, total) = wallets
         .iter()
-        .find(|w| w.session_id == wallet_id)
+        .find(|w| {
+            w.session_id == wallet_id
+                || child.is_some_and(|(parent, _, _)| w.session_id == parent)
+        })
         .map(|w| (w.threshold, w.total_participants))
         .unwrap_or((0, 0));
+    let account_line = child
+        .and_then(|(_, chain, account)| {
+            starlab_core::accounts::standard_path(chain, account)
+                .map(|path| format!("Account: {} ({})", account, path))
+        })
+        .unwrap_or_default();
 
     let user_message_line = match raw_message {
         Some(bytes) => match std::str::from_utf8(bytes) {
@@ -3112,8 +3154,11 @@ fn preview_lines(
         String::new()
     };
 
-    let mut lines: Vec<String> = Vec::with_capacity(7);
+    let mut lines: Vec<String> = Vec::with_capacity(8);
     lines.push(format!("Wallet: {}", wallet_id));
+    if !account_line.is_empty() {
+        lines.push(account_line);
+    }
     if !threshold_line.is_empty() {
         lines.push(threshold_line);
     }
@@ -3287,6 +3332,7 @@ mod tests {
     #[test]
     fn headless_sign_seeds_pending_state_and_hands_off() {
         let mut model = Model::new("dev".to_string());
+        model.wallet_state.curve_type = "secp256k1";
         let cmd = update(
             &mut model,
             Message::HeadlessSign {
@@ -3297,9 +3343,11 @@ mod tests {
             },
         );
         assert!(model.wallet_state.pending_sign_message.is_some());
+        // "BIP-44 all the way": a root id is mapped to its account-0 child
+        // for the runner curve's primary chain — never the root key.
         assert_eq!(
             model.wallet_state.pending_sign_wallet_id.as_deref(),
-            Some("wallet-ab12")
+            Some("wallet-ab12-ethereum-0")
         );
         assert!(model.wallet_state.pending_sign_session_id.is_none());
         match cmd {
@@ -3447,5 +3495,131 @@ mod tests {
             model.current_screen,
             Screen::WalletDetail { ref wallet_id } if wallet_id == "w1"
         ));
+    }
+
+    // ----- "BIP-44 all the way" signing-identity tests (Gap 2) -----
+    //
+    // Signing must NEVER use the root key: every initiation path maps a
+    // root wallet id to its account-0 child; explicit child ids pass
+    // through. (The co-signer-side on-demand materialization — Gap 1 —
+    // is keystore IO and lives in `command::account_wallet_tests`.)
+
+    #[test]
+    fn account_signing_wallet_id_maps_root_to_account0_child() {
+        assert_eq!(account_signing_wallet_id("19caa3cf46d3", "secp256k1"), "19caa3cf46d3-ethereum-0");
+        assert_eq!(account_signing_wallet_id("19caa3cf46d3", "ed25519"), "19caa3cf46d3-solana-0");
+        // Already-a-child ids pass through untouched, any chain/account.
+        assert_eq!(account_signing_wallet_id("19caa3cf46d3-bitcoin-7", "secp256k1"), "19caa3cf46d3-bitcoin-7");
+        assert_eq!(account_signing_wallet_id("19caa3cf46d3-sui-2", "ed25519"), "19caa3cf46d3-sui-2");
+    }
+
+    /// (c) TUI-initiated signing (SignTransaction → SignSubmit → Confirm →
+    /// SubmitPassword) carries the account-0 CHILD id end-to-end: through
+    /// the preview, the pending stash, and the UnlockWallet dispatch (where
+    /// the child share is materialized on demand).
+    #[test]
+    fn tui_sign_initiation_uses_account0_child_id() {
+        let mut model = Model::new("test".to_string());
+        model.wallet_state.curve_type = "secp256k1";
+        model.current_screen = Screen::SignTransaction { wallet_id: "19caa3cf46d3".to_string() };
+        model.wallet_state.sign_message_draft = "hello".to_string();
+
+        update(&mut model, Message::SignSubmit);
+        let preview = model
+            .wallet_state
+            .pending_sign_preview
+            .as_ref()
+            .expect("SignSubmit must stash a preview");
+        assert_eq!(preview.wallet_id, "19caa3cf46d3-ethereum-0", "preview signs as the child");
+        // The "signing as" identity shown to the user is the child + path.
+        match &model.ui_state.modal {
+            Some(Modal::Confirm { message, .. }) => {
+                assert!(message.contains("19caa3cf46d3-ethereum-0"), "{message}");
+                assert!(message.contains("m/44'/60'/0'/0/0"), "{message}");
+            }
+            other => panic!("expected confirm modal, got {:?}", other.is_some()),
+        }
+
+        update(&mut model, Message::ConfirmSigningRequest);
+        assert_eq!(
+            model.wallet_state.pending_sign_wallet_id.as_deref(),
+            Some("19caa3cf46d3-ethereum-0"),
+            "cold path must stash the child id"
+        );
+
+        let cmd = update(&mut model, Message::SubmitPassword { value: "pw".to_string() });
+        match cmd {
+            Some(Command::UnlockWallet { wallet_id, .. }) => {
+                assert_eq!(wallet_id, "19caa3cf46d3-ethereum-0")
+            }
+            other => panic!("expected UnlockWallet, got {:?}", other.is_some()),
+        }
+    }
+
+    /// HeadlessSign (CLI one-shot / desktop ElmSigningBackend entry): a
+    /// root id is mapped to the runner curve's account-0 child; an
+    /// explicit child id is honored as-is.
+    #[test]
+    fn headless_sign_maps_root_to_child_and_keeps_explicit_child() {
+        let mut model = Model::new("test".to_string());
+        model.wallet_state.curve_type = "ed25519";
+        update(&mut model, Message::HeadlessSign {
+            wallet_id: "rootabc".to_string(),
+            message: "m".to_string(),
+            encoding: "utf8".to_string(),
+            password: "pw".to_string(),
+        });
+        assert_eq!(
+            model.wallet_state.pending_sign_wallet_id.as_deref(),
+            Some("rootabc-solana-0")
+        );
+
+        let mut model = Model::new("test".to_string());
+        model.wallet_state.curve_type = "secp256k1";
+        update(&mut model, Message::HeadlessSign {
+            wallet_id: "rootabc-ethereum-7".to_string(),
+            message: "m".to_string(),
+            encoding: "utf8".to_string(),
+            password: "pw".to_string(),
+        });
+        assert_eq!(
+            model.wallet_state.pending_sign_wallet_id.as_deref(),
+            Some("rootabc-ethereum-7")
+        );
+    }
+
+    /// Joiner/co-signer path: a signing announce naming a CHILD wallet id
+    /// flows into UnlockWallet with that exact id (the executor then
+    /// materializes it if missing — Gap 1). A root-id announce from an old
+    /// peer takes the identical path untouched (legacy compat).
+    #[test]
+    fn joiner_unlock_uses_announced_wallet_id_verbatim() {
+        for announced in ["19caa3cf46d3-ethereum-7", "legacy-root-wallet"] {
+            let mut model = Model::new("test".to_string());
+            model.active_session = Some(SessionInfo {
+                session_id: "sess1".to_string(),
+                proposer_id: "peer".to_string(),
+                total: 3,
+                threshold: 2,
+                participants: vec!["peer".to_string(), "test".to_string()],
+                session_type: SessionType::Signing {
+                    wallet_name: announced.to_string(),
+                    curve_type: "secp256k1".to_string(),
+                    blockchain: "ethereum".to_string(),
+                    group_public_key: String::new(),
+                },
+                curve_type: "secp256k1".to_string(),
+                coordination_type: "online".to_string(),
+                signing_message_hex: Some(hex::encode(b"msg")),
+            });
+
+            let cmd = update(&mut model, Message::SubmitPassword { value: "pw".to_string() });
+            match cmd {
+                Some(Command::UnlockWallet { wallet_id, .. }) => assert_eq!(wallet_id, announced),
+                other => panic!("expected UnlockWallet, got {:?}", other.is_some()),
+            }
+            assert_eq!(model.wallet_state.pending_sign_wallet_id.as_deref(), Some(announced));
+            assert_eq!(model.wallet_state.pending_sign_session_id.as_deref(), Some("sess1"));
+        }
     }
 }

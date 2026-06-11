@@ -401,6 +401,11 @@ pub struct UIState {
     pub is_busy: bool,
     pub progress: Option<ProgressInfo>,
     pub join_session_tab: usize, // 0 = DKG, 1 = Signing
+    /// How many BIP-44 accounts the WalletDetail accounts table derives
+    /// (0..n). '+' / '-' on that screen adjust it; reset to the default
+    /// whenever a wallet is selected so the table doesn't carry one
+    /// wallet's expansion over to the next.
+    pub accounts_shown: u32,
 }
 
 impl Default for UIState {
@@ -417,6 +422,7 @@ impl Default for UIState {
             is_busy: false,
             progress: None,
             join_session_tab: 0, // Default to DKG tab
+            accounts_shown: crate::elm::components::wallet_detail::DEFAULT_ACCOUNTS_SHOWN,
         }
     }
 }

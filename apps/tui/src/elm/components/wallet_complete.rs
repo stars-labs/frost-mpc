@@ -120,11 +120,13 @@ impl Component for WalletCompleteComponent {
         );
 
         // ---- Addresses section ----
+        // BIP-44 all the way: these are ACCOUNT 0's addresses (pinned
+        // standard paths), not the raw group-key address.
         let addr_header = if info.addresses.is_empty() {
-            "Addresses: (none derived for this curve)".to_string()
+            "Account 0 addresses: (none derived for this curve)".to_string()
         } else {
             format!(
-                "Addresses ({} chain{}):",
+                "Account 0 addresses ({} chain{}):",
                 info.addresses.len(),
                 if info.addresses.len() == 1 { "" } else { "s" }
             )

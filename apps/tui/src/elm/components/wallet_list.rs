@@ -221,8 +221,20 @@ impl Component for WalletList {
             let details = [format!("Created: {}", wallet.created_at),
                 format!("Device: {}", wallet.device_id),
                 format!("Index: {}/{}", wallet.participant_index, wallet.total_participants)];
-            
-            let details_text = details.join(" | ");
+
+            // BIP-44 all the way: the displayed address is ACCOUNT 0's
+            // primary chain address (pinned standard path), never the raw
+            // group-key address — the root key is a derivation parent only.
+            let account0 = hex::decode(&wallet.group_public_key)
+                .ok()
+                .and_then(|group| {
+                    starlab_core::accounts::account_addresses(&wallet.curve_type, &group, 0).ok()
+                })
+                .and_then(|addrs| addrs.into_iter().next())
+                .map(|(chain, _path, address)| format!("Account 0 ({}): {}", chain, address))
+                .unwrap_or_else(|| "Account 0: (underivable)".to_string());
+
+            let details_text = format!("{}\n{}", details.join(" | "), account0);
             
             let details_widget = Paragraph::new(details_text)
                 .block(

@@ -95,9 +95,33 @@ impl Bridge {
                     // 0x-hex address for an ed25519 wallet (#43). Fall back to
                     // the first entry only if canonical derivation fails.
                     let address = {
+                        // Account 0's primary-chain address (BIP-44 model).
                         let primary_chain =
                             if curve_type == "ed25519" { "solana" } else { "ethereum" };
-                        let primary = derive_address(group_pubkey_hex, curve_type, primary_chain);
+                        let primary = hex::decode(group_pubkey_hex)
+                            .ok()
+                            .and_then(|g| {
+                                let path = starlab_core::accounts::standard_path(primary_chain, 0)?;
+                                let parsed = starlab_core::DerivationPath::parse(&path).ok()?;
+                                let child = if curve_type == "ed25519" {
+                                    starlab_core::derive_child_verifying_key_path::<
+                                        frost_ed25519::Ed25519Sha512,
+                                    >(&g, &parsed)
+                                    .ok()?
+                                } else {
+                                    starlab_core::derive_child_verifying_key_path::<
+                                        frost_secp256k1::Secp256K1Sha256,
+                                    >(&g, &parsed)
+                                    .ok()?
+                                };
+                                starlab_core::accounts::address_for_chain(
+                                    primary_chain,
+                                    curve_type,
+                                    &child,
+                                )
+                                .ok()
+                            })
+                            .unwrap_or_default();
                         if primary.is_empty() {
                             addresses
                                 .first()
@@ -243,26 +267,15 @@ pub struct Snapshot {
     pub sessions: Vec<SessionEntry>,
 }
 
-/// The canonical display chains per curve. EVM L2s (BSC/Polygon/…) share the
-/// Ethereum address, so listing them would be noise; Aptos is omitted until
-/// it's a first-class target.
-pub(crate) fn chains_for_curve(curve: &str) -> &'static [(&'static str, &'static str)] {
-    // (config key, display name)
-    if curve == "ed25519" {
-        &[("solana", "Solana"), ("sui", "Sui")]
-    } else {
-        &[("ethereum", "Ethereum"), ("bitcoin", "Bitcoin")]
-    }
-}
+/// Single source of truth: starlab_core::accounts (shared with WASM/desktop).
+pub(crate) use starlab_core::accounts::chains_for_curve;
 
 /// Derive one chain address from a hex-encoded FROST group key. Returns ""
 /// if the key can't be decoded/derived (never fails the listing).
 pub(crate) fn derive_address(group_public_key_hex: &str, curve: &str, chain_key: &str) -> String {
     match hex::decode(group_public_key_hex) {
-        Ok(bytes) => {
-            starlab_client::blockchain_config::generate_address_for_chain(&bytes, curve, chain_key)
-                .unwrap_or_default()
-        }
+        Ok(bytes) => starlab_core::accounts::address_for_chain(chain_key, curve, &bytes)
+            .unwrap_or_default(),
         Err(_) => String::new(),
     }
 }
@@ -277,6 +290,13 @@ fn wallet_entries(wallets: &[WalletMetadata]) -> Vec<WalletEntry> {
     // id → (first-seen order index, entry under construction)
     let mut grouped: BTreeMap<String, (usize, WalletEntry)> = BTreeMap::new();
     for (i, w) in wallets.iter().enumerate() {
+        // Materialized HD account children carry their derivation path as the
+        // label ("m/44'/…"). They're an implementation detail of signing —
+        // listing them would double-derive (account 0 OF an account) and
+        // clutter the wallet view. `wallet accounts` is their UI.
+        if w.label.as_deref().is_some_and(|l| l.starts_with("m/")) {
+            continue;
+        }
         let entry = grouped.entry(w.session_id.clone()).or_insert_with(|| {
             (
                 i,
@@ -298,13 +318,20 @@ fn wallet_entries(wallets: &[WalletMetadata]) -> Vec<WalletEntry> {
         }
         if !e.curves.contains(&w.curve_type) {
             e.curves.push(w.curve_type.clone());
-            for (key, display) in chains_for_curve(&w.curve_type) {
-                let address = derive_address(&w.group_public_key, &w.curve_type, key);
-                if !address.is_empty() {
-                    e.addresses.push(crate::protocol::ChainAddress {
-                        chain: (*display).to_string(),
-                        address,
-                    });
+            // BIP-44 all the way: the listed addresses are ACCOUNT 0's
+            // (pinned standard paths), not the raw group-key address. The
+            // root key exists only as the derivation parent — it is never
+            // shown or used as an address anywhere.
+            if let Ok(group) = hex::decode(&w.group_public_key) {
+                if let Ok(entries) =
+                    starlab_core::accounts::account_addresses(&w.curve_type, &group, 0)
+                {
+                    for (display, _path, address) in entries {
+                        e.addresses.push(crate::protocol::ChainAddress {
+                            chain: display,
+                            address,
+                        });
+                    }
                 }
             }
         }
@@ -454,10 +481,13 @@ mod tests {
         let mut b = Bridge::new();
         let model = Model::new("d".to_string());
         let _ = b.on_sync(&model, None);
-        let zeros = "0".repeat(64); // valid 32-byte all-zero ed25519 key
+        // A REAL curve point is required now: DkgComplete derives ACCOUNT 0
+        // from the group key (BIP-44 model), and derivation deserializes the
+        // point. The ed25519 basepoint is the canonical valid key.
+        let ed_g = "5866666666666666666666666666666666666666666666666666666666666666";
         let msg = Message::DKGFinalized {
             wallet_id: "wallet-ed".to_string(),
-            group_pubkey_hex: zeros.clone(),
+            group_pubkey_hex: ed_g.to_string(),
             curve_type: "ed25519".to_string(),
             addresses: vec![
                 ("sui".to_string(), "0xdeadbeefcafe".to_string()), // first, but wrong
@@ -473,9 +503,12 @@ mod tests {
             })
             .expect("dkg_complete emitted");
         assert!(!addr.starts_with("0x"), "ed25519 must not report a 0x address: {addr}");
-        assert_eq!(
-            addr, "11111111111111111111111111111111",
-            "should be the Solana base58 of the all-zero group key"
+        // Account 0's Solana address: a base58 string derived from the group
+        // key (not the group key itself — BIP-44 model). Base58 of a 32-byte
+        // key is 32–44 chars.
+        assert!(
+            (32..=44).contains(&addr.len()),
+            "unexpected solana address shape: {addr}"
         );
     }
 
@@ -486,6 +519,37 @@ mod tests {
         let addr = derive_address(key, "secp256k1", "ethereum");
         assert!(addr.starts_with("0x"), "expected 0x-prefixed eth address, got {addr}");
         assert_eq!(addr.len(), 42, "eth address should be 20 bytes hex: {addr}");
+    }
+
+    #[test]
+    fn materialized_account_children_are_hidden_from_the_wallet_list() {
+        let secp_g = "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798";
+        let mk = |id: &str, label: Option<&str>| WalletMetadata {
+            session_id: id.into(),
+            device_id: "d".into(),
+            curve_type: "secp256k1".into(),
+            threshold: 2,
+            total_participants: 3,
+            participant_index: 1,
+            group_public_key: secp_g.into(),
+            participants: vec![],
+            created_at: "t".into(),
+            last_modified: "t".into(),
+            label: label.map(Into::into),
+            device_name: None,
+            blockchains: vec![],
+            blockchain: None,
+            public_address: None,
+            identifier: None,
+            tags: None,
+            description: None,
+        };
+        let entries = wallet_entries(&[
+            mk("parent1", None),
+            mk("parent1-ethereum-0", Some("m/44'/60'/0'/0/0")), // hidden
+        ]);
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].id, "parent1");
     }
 
     #[test]

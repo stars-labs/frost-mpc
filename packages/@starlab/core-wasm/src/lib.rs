@@ -1445,3 +1445,39 @@ impl FrostDkgSecp256k1Tr {
 
 
 // ============================================================================
+
+// ===========================================================================
+// Account model (#account-model): pinned standard paths + passwordless
+// address derivation, same single source (starlab_core::accounts) as the
+// CLI / desktop — all clients land on byte-identical addresses.
+// ===========================================================================
+
+/// The pinned standard derivation path for a chain + account index
+/// (ETH m/44'/60'/0'/0/i, BTC m/84'/0'/0'/0/i, SOL m/44'/501'/i'/0',
+/// Sui m/44'/784'/i'/0'/0'). Returns null for unknown chains.
+#[wasm_bindgen]
+pub fn standard_account_path(chain: &str, account: u32) -> Option<String> {
+    starlab_core::accounts::standard_path(chain, account)
+}
+
+/// Account `i`'s addresses for one curve's group key — PUBLIC derivation
+/// only (no key share, no password). Returns JSON:
+/// `[{"chain":"Ethereum","path":"m/44'/...","address":"0x…"}, …]`.
+#[wasm_bindgen]
+pub fn derive_account_addresses(
+    curve: &str,
+    group_public_key_hex: &str,
+    account: u32,
+) -> Result<String, WasmError> {
+    let group = hex::decode(group_public_key_hex)
+        .map_err(|e| WasmError::new(&format!("bad group key hex: {e}")))?;
+    let entries = starlab_core::accounts::account_addresses(curve, &group, account)
+        .map_err(WasmError::from)?;
+    let json: Vec<serde_json::Value> = entries
+        .into_iter()
+        .map(|(chain, path, address)| {
+            serde_json::json!({ "chain": chain, "path": path, "address": address })
+        })
+        .collect();
+    serde_json::to_string(&json).map_err(|e| WasmError::new(&e.to_string()))
+}

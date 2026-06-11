@@ -11,6 +11,7 @@ pub mod curve_registry;
 pub mod resharing;
 pub mod unified_dkg;
 pub mod hd_derivation;
+pub mod accounts;
 
 // Re-export main types
 pub use traits::FrostCurve;

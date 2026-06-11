@@ -167,6 +167,18 @@ pub fn generate_address_for_chain(
         ));
     }
     
+    // The four canonical chains delegate to starlab_core::accounts — the
+    // single shared implementation (CLI/WASM/desktop must agree byte-for-
+    // byte). Remaining chains keep their local encodings below.
+    if matches!(chain, "ethereum" | "bitcoin" | "solana" | "sui") {
+        return starlab_core::accounts::address_for_chain(
+            chain,
+            &curve.to_string(),
+            group_public_key,
+        )
+        .map_err(|e| e.to_string());
+    }
+
     // Generate address based on chain type
     match (chain, &curve) {
         // Ethereum-compatible chains with secp256k1

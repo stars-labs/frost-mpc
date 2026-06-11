@@ -43,6 +43,15 @@ enum Command {
         message: String,
         #[arg(long, default_value = "utf8")]
         encoding: String,
+        /// HD account to sign with (BIP-44 model — account 0 is the default
+        /// identity everywhere; the child share is materialized on demand).
+        #[arg(long, default_value_t = 0)]
+        account: u32,
+        /// Chain whose pinned path selects the account key
+        /// (ethereum|bitcoin|solana|sui). Defaults to the wallet curve's
+        /// primary chain.
+        #[arg(long)]
+        chain: Option<String>,
         #[command(flatten)]
         pw: PasswordArgs,
         #[command(flatten)]
@@ -418,12 +427,25 @@ async fn run() -> anyhow::Result<()> {
             wallet_id,
             message,
             encoding,
+            account,
+            chain,
             pw,
             common,
         } => {
             common.validate_room()?;
             let password = pw.resolve()?;
-            finish(oneshot::sign(common.init_and_opts(), wallet_id, message, encoding, password).await)
+            finish(
+                oneshot::sign(
+                    common.init_and_opts(),
+                    wallet_id,
+                    message,
+                    encoding,
+                    account,
+                    chain,
+                    password,
+                )
+                .await,
+            )
         }
         Command::Reshare {
             wallet_id,

@@ -620,18 +620,108 @@ pub async fn reshare(
 }
 
 /// `sign` — initiate a threshold signing and block until it completes.
+/// Materialize (derive + persist) the HD account child wallet if it isn't in
+/// the keystore yet. Deterministic — every participant materializing the same
+/// (parent, chain, account) lands on the same child id and key. Returns the
+/// child wallet id to sign with.
+fn ensure_account_wallet(
+    opts: &OneShotOpts,
+    parent_id: &str,
+    account: u32,
+    chain: Option<&str>,
+    password: &str,
+) -> anyhow::Result<String> {
+    use starlab_client::keystore::Keystore;
+
+    let mut ks = Keystore::new(&opts.keystore_path, &opts.device_id)
+        .map_err(|e| anyhow::anyhow!("open keystore {}: {e}", opts.keystore_path))?;
+    let metas: Vec<_> = ks
+        .list_wallets()
+        .into_iter()
+        .filter(|w| w.session_id == parent_id)
+        .cloned()
+        .collect();
+    if metas.is_empty() {
+        anyhow::bail!("wallet '{parent_id}' not found (device {}).", opts.device_id);
+    }
+
+    // Default chain: the primary chain of the wallet's curve(s).
+    let has_secp = metas.iter().any(|m| m.curve_type == "secp256k1");
+    let chain = chain
+        .map(str::to_string)
+        .unwrap_or_else(|| if has_secp { "ethereum".into() } else { "solana".into() });
+    let path_s = standard_path(&chain, account)
+        .ok_or_else(|| anyhow::anyhow!("unknown --chain {chain:?}"))?;
+    let curve = if matches!(chain.as_str(), "solana" | "sol" | "sui") {
+        "ed25519"
+    } else {
+        "secp256k1"
+    };
+    let meta = metas
+        .iter()
+        .find(|m| m.curve_type == curve)
+        .ok_or_else(|| anyhow::anyhow!("wallet '{parent_id}' has no {curve} share for {chain}"))?;
+
+    let child_id = format!("{parent_id}-{chain}-{account}");
+    if ks.get_wallet(&child_id).is_some() {
+        return Ok(child_id);
+    }
+
+    let parsed = starlab_core::DerivationPath::parse(&path_s)
+        .map_err(|e| anyhow::anyhow!("parse {path_s}: {e}"))?;
+    let blob = ks
+        .load_wallet_file_for_curve(parent_id, curve, password)
+        .map_err(|e| anyhow::anyhow!("unlock '{parent_id}' ({curve}): {e}"))?;
+    let (child_blob, child_group_hex) = match curve {
+        "ed25519" => derive_child_for_curve::<frost_ed25519::Ed25519Sha512>(&blob, &parsed)?,
+        _ => derive_child_for_curve::<frost_secp256k1::Secp256K1Sha256>(&blob, &parsed)?,
+    };
+    ks.create_wallet_multi_chain(
+        &child_id,
+        curve,
+        vec![],
+        meta.threshold,
+        meta.total_participants,
+        &child_group_hex,
+        &child_blob,
+        password,
+        vec![],
+        None,
+        meta.participant_index,
+        meta.participants.clone(),
+        Some(path_s),
+    )
+    .map_err(|e| anyhow::anyhow!("materialize account wallet: {e}"))?;
+    eprintln!("note: materialized account wallet '{child_id}' (deterministic — co-signers do the same on first use)");
+    Ok(child_id)
+}
+
 pub async fn sign(
     opts: OneShotOpts,
     wallet_id: String,
     message: String,
     encoding: String,
+    account: u32,
+    chain: Option<String>,
     password: String,
 ) -> anyhow::Result<bool> {
+    // BIP-44 all the way: signing happens with the ACCOUNT key, never the
+    // root. If the caller passed an already-materialized child id (contains
+    // the "-<chain>-<n>" suffix), use it as-is; otherwise materialize
+    // account `account` of the given parent on demand.
+    let signing_wallet_id = {
+        let ks_has_it_as_is = wallet_id.rsplit('-').next().and_then(|s| s.parse::<u32>().ok());
+        if ks_has_it_as_is.is_some() && wallet_id.matches('-').count() >= 2 {
+            wallet_id.clone()
+        } else {
+            ensure_account_wallet(&opts, &wallet_id, account, chain.as_deref(), &password)?
+        }
+    };
     let (tx, mut rx, roster) = start(&opts);
     tx.send(Message::TriggerReconnect)?;
     wait_connected(&mut rx, &opts).await?;
     tx.send(Message::HeadlessSign {
-        wallet_id,
+        wallet_id: signing_wallet_id,
         message,
         encoding,
         password,
@@ -655,13 +745,7 @@ pub async fn sign(
 /// These are fixed so users only ever think in account indexes — exactly the
 /// BIP-44 contract. Returns None for unknown chains.
 pub fn standard_path(chain: &str, account: u32) -> Option<String> {
-    match chain.to_ascii_lowercase().as_str() {
-        "ethereum" | "eth" => Some(format!("m/44'/60'/0'/0/{account}")),
-        "bitcoin" | "btc" => Some(format!("m/84'/0'/0'/0/{account}")),
-        "solana" | "sol" => Some(format!("m/44'/501'/{account}'/0'")),
-        "sui" => Some(format!("m/44'/784'/{account}'/0'/0'")),
-        _ => None,
-    }
+    starlab_core::accounts::standard_path(chain, account)
 }
 
 /// `wallet accounts` — list account 0..count with per-chain addresses from

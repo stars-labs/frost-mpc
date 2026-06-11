@@ -24,6 +24,41 @@ pub fn chains_for_curve(curve: &str) -> &'static [(&'static str, &'static str)] 
     }
 }
 
+/// The curve whose key share signs for a chain. Inverse of
+/// [`chains_for_curve`]; accepts the same aliases as [`standard_path`].
+pub fn curve_for_chain(chain: &str) -> Option<&'static str> {
+    match chain.to_ascii_lowercase().as_str() {
+        "ethereum" | "eth" | "bitcoin" | "btc" => Some("secp256k1"),
+        "solana" | "sol" | "sui" => Some("ed25519"),
+        _ => None,
+    }
+}
+
+/// Parse an HD account child wallet id of the canonical form
+/// `{parent}-{chain}-{account}` (e.g. `19caa3cf46d3-ethereum-7`) into
+/// `(parent, chain, account)`.
+///
+/// This is THE convention every client uses to name materialized account
+/// wallets, so a co-signer that receives a signing announce for a child it
+/// has never derived can recognize it and materialize it deterministically.
+/// Returns `None` for anything that isn't a well-formed child id — root
+/// ids, arbitrary hyphenated names, unknown chains — so callers can leave
+/// those on their existing path untouched.
+pub fn parse_child_wallet_id(id: &str) -> Option<(&str, &str, u32)> {
+    let (rest, account_s) = id.rsplit_once('-')?;
+    // Strict digits only: `u32::parse` would also accept "+7", which no
+    // client ever emits — reject it so odd root ids can't be misread.
+    if account_s.is_empty() || !account_s.bytes().all(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    let account = account_s.parse::<u32>().ok()?;
+    let (parent, chain) = rest.rsplit_once('-')?;
+    if parent.is_empty() || curve_for_chain(chain).is_none() {
+        return None;
+    }
+    Some((parent, chain, account))
+}
+
 /// The PINNED standard derivation path per chain (BIP-44/84 coin types).
 pub fn standard_path(chain: &str, account: u32) -> Option<String> {
     match chain.to_ascii_lowercase().as_str() {
@@ -162,6 +197,40 @@ mod tests {
         assert_eq!(standard_path("solana", 2).unwrap(), "m/44'/501'/2'/0'");
         assert_eq!(standard_path("sui", 3).unwrap(), "m/44'/784'/3'/0'/0'");
         assert!(standard_path("dogecoin", 0).is_none());
+    }
+
+    #[test]
+    fn parse_child_wallet_id_round_trips_the_canonical_form() {
+        assert_eq!(
+            parse_child_wallet_id("19caa3cf46d3-ethereum-7"),
+            Some(("19caa3cf46d3", "ethereum", 7))
+        );
+        assert_eq!(
+            parse_child_wallet_id("abc-def-solana-0"),
+            Some(("abc-def", "solana", 0))
+        );
+    }
+
+    #[test]
+    fn parse_child_wallet_id_rejects_non_child_ids() {
+        // Root ids, unknown chains, non-numeric accounts, junk.
+        assert_eq!(parse_child_wallet_id("19caa3cf46d3"), None);
+        assert_eq!(parse_child_wallet_id("wallet-dogecoin-1"), None);
+        assert_eq!(parse_child_wallet_id("wallet-ethereum-x"), None);
+        assert_eq!(parse_child_wallet_id("wallet-ethereum-+7"), None);
+        assert_eq!(parse_child_wallet_id("-ethereum-1"), None);
+        assert_eq!(parse_child_wallet_id("ethereum-1"), None);
+        assert_eq!(parse_child_wallet_id(""), None);
+    }
+
+    #[test]
+    fn curve_for_chain_matches_chains_for_curve() {
+        for curve in ["secp256k1", "ed25519"] {
+            for (key, _) in chains_for_curve(curve) {
+                assert_eq!(curve_for_chain(key), Some(curve), "{key}");
+            }
+        }
+        assert_eq!(curve_for_chain("dogecoin"), None);
     }
 
     #[test]

@@ -276,6 +276,144 @@ pub fn decode_keystore_blob<C: frost_core::Ciphersuite>(
     Ok((kp, pkp))
 }
 
+/// Derive a child (key share + group key) for one curve from a decrypted
+/// keystore blob. Returns (child blob, child group public key hex).
+/// Deterministic across participants — the chain code comes from the group
+/// key — so a threshold of co-signers deriving the SAME path can sign for
+/// the child address.
+pub fn derive_child_for_curve<C: frost_core::Ciphersuite>(
+    blob: &[u8],
+    path: &starlab_core::DerivationPath,
+) -> Result<(Vec<u8>, String), String> {
+    let (kp, pp) = decode_keystore_blob::<C>(blob)
+        .map_err(|e| format!("decode key share: {e}"))?;
+    let group = pp
+        .verifying_key()
+        .serialize()
+        .map_err(|e| format!("serialize group key: {e:?}"))?;
+    let chain_code = starlab_core::ChainCode::from_group_key(group.as_ref());
+    let derived = starlab_core::derive_child_key_path::<C>(&kp, &pp, &chain_code, path)
+        .map_err(|e| format!("derive: {e}"))?;
+    let child_group = derived
+        .public_key_package
+        .verifying_key()
+        .serialize()
+        .map_err(|e| format!("serialize child group key: {e:?}"))?;
+    let child_blob = encode_keystore_blob::<C>(&derived.key_package, &derived.public_key_package)
+        .map_err(|e| format!("encode child share: {e}"))?;
+    Ok((child_blob, hex::encode(child_group)))
+}
+
+/// Materialize (derive + persist) the HD account child wallet
+/// `{parent}-{chain}-{account}` if it isn't in the keystore yet — "BIP-44
+/// all the way": signing always happens with an ACCOUNT key, never the
+/// root. Deterministic: every participant materializing the same
+/// (parent, chain, account) lands on the same child id and key, so
+/// co-signing "just works" with no pre-derive step.
+///
+/// The child id is EXACTLY `{parent}-{chain}-{account}` and the label is
+/// EXACTLY the derivation path (wallet-list filters key off
+/// `label.starts_with("m/")`). Shared by the CLI one-shot `sign`, the elm
+/// co-signer unlock path, and TUI-initiated signing — ONE implementation.
+///
+/// Returns `(child wallet id to sign with, whether it was materialized
+/// just now — false when it was already in the keystore)`.
+pub fn ensure_account_wallet(
+    ks: &mut crate::keystore::Keystore,
+    parent_id: &str,
+    account: u32,
+    chain: Option<&str>,
+    password: &str,
+) -> Result<(String, bool), String> {
+    let metas: Vec<crate::keystore::WalletMetadata> = ks
+        .list_wallets()
+        .into_iter()
+        .filter(|w| w.session_id == parent_id)
+        .cloned()
+        .collect();
+    if metas.is_empty() {
+        return Err(format!("wallet '{parent_id}' not found"));
+    }
+
+    // Default chain: the primary chain of the wallet's curve(s).
+    let has_secp = metas.iter().any(|m| m.curve_type == "secp256k1");
+    let chain = chain
+        .map(str::to_string)
+        .unwrap_or_else(|| if has_secp { "ethereum".into() } else { "solana".into() });
+    let path_s = starlab_core::accounts::standard_path(&chain, account)
+        .ok_or_else(|| format!("unknown chain {chain:?}"))?;
+    let curve = starlab_core::accounts::curve_for_chain(&chain)
+        .ok_or_else(|| format!("unknown chain {chain:?}"))?;
+    let meta = metas
+        .iter()
+        .find(|m| m.curve_type == curve)
+        .ok_or_else(|| format!("wallet '{parent_id}' has no {curve} share for {chain}"))?
+        .clone();
+
+    let child_id = format!("{parent_id}-{chain}-{account}");
+    if ks.get_wallet(&child_id).is_some() {
+        return Ok((child_id, false));
+    }
+
+    let parsed = starlab_core::DerivationPath::parse(&path_s)
+        .map_err(|e| format!("parse {path_s}: {e}"))?;
+    let blob = ks
+        .load_wallet_file_for_curve(parent_id, curve, password)
+        .map_err(|e| format!("unlock '{parent_id}' ({curve}): {e}"))?;
+    let (child_blob, child_group_hex) = match curve {
+        "ed25519" => derive_child_for_curve::<frost_ed25519::Ed25519Sha512>(&blob, &parsed)?,
+        _ => derive_child_for_curve::<frost_secp256k1::Secp256K1Sha256>(&blob, &parsed)?,
+    };
+    ks.create_wallet_multi_chain(
+        &child_id,
+        curve,
+        vec![],
+        meta.threshold,
+        meta.total_participants,
+        &child_group_hex,
+        &child_blob,
+        password,
+        vec![],
+        None,
+        meta.participant_index,
+        meta.participants.clone(),
+        Some(path_s),
+    )
+    .map_err(|e| format!("materialize account wallet: {e}"))?;
+    info!(
+        "materialized account wallet '{}' (deterministic — co-signers do the same on first use)",
+        child_id
+    );
+    Ok((child_id, true))
+}
+
+/// Unlock-time hook: if `wallet_id` is a well-formed HD account child id
+/// (`{parent}-{chain}-{account}`) that is MISSING locally but whose parent
+/// IS in the keystore, derive + persist it now — the caller has the
+/// password in hand, so a co-signer joining a signing session for a child
+/// it never derived "just works" instead of failing the wallet lookup.
+///
+/// Anything else is a no-op: ids that don't parse as a child, children
+/// already materialized, and child-shaped ids with an unknown parent all
+/// fall through to the existing (legacy) lookup/error path untouched.
+pub fn materialize_child_wallet_if_needed(
+    ks: &mut crate::keystore::Keystore,
+    wallet_id: &str,
+    password: &str,
+) -> Result<(), String> {
+    let Some((parent, chain, account)) =
+        starlab_core::accounts::parse_child_wallet_id(wallet_id)
+    else {
+        return Ok(());
+    };
+    if ks.get_wallet(wallet_id).is_some() || ks.get_wallet(parent).is_none() {
+        return Ok(());
+    }
+    let parent = parent.to_string();
+    let chain = chain.to_string();
+    ensure_account_wallet(ks, &parent, account, Some(&chain), password).map(|_| ())
+}
+
 /// Wire prefix for a unified round-1 package (mirrors `DKG_ROUND1:`). The
 /// payload after the colon is the `UnifiedRound1Package` JSON.
 pub(crate) const UNIFIED_DKG_ROUND1_PREFIX: &str = "UNIFIED_DKG_ROUND1:";
@@ -2343,7 +2481,7 @@ impl Command {
                 // `load_wallet_file` — the shared `Arc<Keystore>` is
                 // read-only and the load path doesn't need the live
                 // cache anyway.
-                let ks = match Keystore::new(&keystore_path, &device_id) {
+                let mut ks = match Keystore::new(&keystore_path, &device_id) {
                     Ok(ks) => ks,
                     Err(e) => {
                         let err = format!(
@@ -2355,6 +2493,24 @@ impl Command {
                         return Ok(());
                     }
                 };
+
+                // BIP-44 all the way: a signing announce may reference an HD
+                // account child (`{parent}-{chain}-{account}`) this device
+                // has never materialized. The password in hand unlocks the
+                // parent too, so derive + persist the child deterministically
+                // NOW instead of failing the lookup below. Non-child ids and
+                // unknown parents are a no-op (legacy path untouched).
+                if let Err(e) =
+                    materialize_child_wallet_if_needed(&mut ks, &wallet_id, &password)
+                {
+                    let err = format!(
+                        "UnlockWallet: materializing account wallet '{}' failed: {}",
+                        wallet_id, e
+                    );
+                    error!("{}", err);
+                    let _ = tx.send(Message::WalletUnlockFailed { error: err });
+                    return Ok(());
+                }
 
                 // `load_wallet_file` returns the decrypted blob bytes.
                 // Wrong-password / wrong-wallet_id errors bubble up as
@@ -3021,5 +3177,147 @@ mod tests {
     fn decode_keystore_blob_rejects_empty_input() {
         let result = decode_keystore_blob::<frost_secp256k1::Secp256K1Sha256>(&[]);
         assert!(result.is_err(), "empty input must fail");
+    }
+}
+
+/// Gap-1 coverage: a co-signer receiving a signing announce for an HD
+/// account child it never derived must materialize it at unlock time —
+/// and ONLY then. Everything else (root ids, unknown parents, children
+/// already present) must leave the keystore untouched so legacy signing
+/// flows behave exactly as before.
+#[cfg(test)]
+mod account_wallet_tests {
+    use super::*;
+    use frost_secp256k1::Secp256K1Sha256 as Secp;
+    use starlab_core::resharing::dkg_keypackages;
+
+    const PW: &str = "correct-horse-battery";
+    const PARENT: &str = "19caa3cf46d3";
+
+    /// Temp keystore holding one 2-of-3 secp256k1 parent wallet. Returns
+    /// the dir guard (keeps the files alive), the keystore, and the
+    /// parent's group public key hex.
+    fn keystore_with_parent() -> (tempfile::TempDir, crate::keystore::Keystore, String) {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let mut ks = crate::keystore::Keystore::new(dir.path(), "device-1").expect("keystore");
+        let (kps, pp) = dkg_keypackages::<Secp>(3, 2, 17).expect("dkg");
+        let blob = encode_keystore_blob::<Secp>(&kps[&1], &pp).expect("encode");
+        let group_hex = hex::encode(pp.verifying_key().serialize().expect("group"));
+        ks.create_wallet_multi_chain(
+            PARENT,
+            "secp256k1",
+            vec![],
+            2,
+            3,
+            &group_hex,
+            &blob,
+            PW,
+            vec![],
+            None,
+            1,
+            vec!["alice".into(), "bob".into(), "carol".into()],
+            None,
+        )
+        .expect("create parent");
+        (dir, ks, group_hex)
+    }
+
+    /// (a) Join/unlock flow materializes a missing child when the parent
+    /// exists — with the EXACT id and path-label conventions, the parent's
+    /// session shape, and the SAME child group key public derivation
+    /// produces (so addresses shown by `wallet accounts` match the key
+    /// that will sign).
+    #[test]
+    fn materializes_missing_child_when_parent_exists() {
+        let (_dir, mut ks, parent_group) = keystore_with_parent();
+        let child_id = format!("{PARENT}-ethereum-7");
+
+        materialize_child_wallet_if_needed(&mut ks, &child_id, PW).expect("materialize");
+
+        let meta = ks.get_wallet(&child_id).expect("child must exist").clone();
+        assert_eq!(meta.label.as_deref(), Some("m/44'/60'/0'/0/7"), "label IS the path");
+        assert_eq!(meta.curve_type, "secp256k1");
+        assert_eq!((meta.threshold, meta.total_participants), (2, 3));
+        assert_eq!(meta.participant_index, 1);
+        assert_eq!(meta.participants, vec!["alice", "bob", "carol"]);
+
+        // The persisted child group key must equal the PUBLIC-only
+        // derivation every client's accounts table uses.
+        let path = starlab_core::DerivationPath::parse("m/44'/60'/0'/0/7").unwrap();
+        let expected = starlab_core::derive_child_verifying_key_path::<Secp>(
+            &hex::decode(&parent_group).unwrap(),
+            &path,
+        )
+        .unwrap();
+        assert_eq!(meta.group_public_key, hex::encode(expected));
+        assert_ne!(meta.group_public_key, parent_group, "child key must differ from root");
+
+        // And the encrypted share actually decodes for signing.
+        let blob = ks.load_wallet_file(&child_id, PW).expect("unlock child");
+        let (kp, pp) = decode_keystore_blob::<Secp>(&blob).expect("decode child");
+        assert_eq!(kp.verifying_key(), pp.verifying_key());
+    }
+
+    /// (b) Non-child ids and child-shaped ids with an unknown parent are
+    /// strict no-ops — the caller's legacy lookup/error path is preserved.
+    #[test]
+    fn unknown_and_non_child_ids_are_no_ops() {
+        let (_dir, mut ks, _) = keystore_with_parent();
+        for id in [
+            PARENT,                       // root id
+            "no-such-parent-ethereum-0",  // well-formed child, parent absent
+            "wallet-dogecoin-1",          // unknown chain
+            "wallet-ethereum-x",          // non-numeric account
+        ] {
+            materialize_child_wallet_if_needed(&mut ks, id, PW)
+                .unwrap_or_else(|e| panic!("{id} must be a no-op, got Err({e})"));
+        }
+        assert_eq!(ks.list_wallets().len(), 1, "nothing may be created");
+    }
+
+    /// (d) Re-join with the child already present skips materialization —
+    /// proven by passing a WRONG password, which would fail the parent
+    /// unlock if the code tried to derive again.
+    #[test]
+    fn already_present_child_skips_materialization() {
+        let (_dir, mut ks, _) = keystore_with_parent();
+        let child_id = format!("{PARENT}-ethereum-0");
+        let (id, materialized) =
+            ensure_account_wallet(&mut ks, PARENT, 0, Some("ethereum"), PW).expect("first");
+        assert_eq!(id, child_id);
+        assert!(materialized, "first call must materialize");
+
+        let (id, materialized) =
+            ensure_account_wallet(&mut ks, PARENT, 0, Some("ethereum"), PW).expect("second");
+        assert_eq!(id, child_id);
+        assert!(!materialized, "second call must find it");
+
+        materialize_child_wallet_if_needed(&mut ks, &child_id, "WRONG-password")
+            .expect("present child must short-circuit before any unlock");
+        assert_eq!(ks.list_wallets().len(), 2);
+    }
+
+    /// The default chain (no explicit `--chain`) is the primary chain of
+    /// the wallet's curve — ethereum for a secp256k1 share.
+    #[test]
+    fn default_chain_is_primary_for_curve() {
+        let (_dir, mut ks, _) = keystore_with_parent();
+        let (id, _) = ensure_account_wallet(&mut ks, PARENT, 3, None, PW).expect("ensure");
+        assert_eq!(id, format!("{PARENT}-ethereum-3"));
+    }
+
+    /// A wrong password surfaces the parent-unlock error instead of
+    /// silently writing garbage.
+    #[test]
+    fn wrong_password_fails_materialization() {
+        let (_dir, mut ks, _) = keystore_with_parent();
+        let err = materialize_child_wallet_if_needed(
+            &mut ks,
+            &format!("{PARENT}-ethereum-1"),
+            "WRONG-password",
+        )
+        .expect_err("must fail");
+        assert!(err.contains(PARENT), "error must name the parent: {err}");
+        assert!(ks.get_wallet(&format!("{PARENT}-ethereum-1")).is_none());
     }
 }

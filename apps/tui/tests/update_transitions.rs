@@ -803,7 +803,9 @@ fn sign_submit_dispatches_initiate_signing_and_clears_draft() {
         wallet_id: "wallet-test".to_string(),
     };
     model.wallet_state.curve_type = "secp256k1";
-    model.wallet_state.wallet_unlocked_id = Some("wallet-test".to_string());
+    // "BIP-44 all the way": signing uses the account-0 CHILD of the root
+    // id, so the warm marker carries the child id too.
+    model.wallet_state.wallet_unlocked_id = Some("wallet-test-ethereum-0".to_string());
     for c in "Sign this".chars() {
         update(&mut model, Message::SignTypeChar(c));
     }
@@ -823,7 +825,7 @@ fn sign_submit_dispatches_initiate_signing_and_clears_draft() {
         .as_ref()
         .expect("preview must be stashed for ConfirmSigningRequest");
     assert!(preview.warm, "warm path must be flagged");
-    assert_eq!(preview.wallet_id, "wallet-test");
+    assert_eq!(preview.wallet_id, "wallet-test-ethereum-0");
     assert_eq!(
         preview.bytes_to_sign,
         starlab_client::utils::eth_helper::eip191_hash(b"Sign this"),
@@ -834,7 +836,7 @@ fn sign_submit_dispatches_initiate_signing_and_clears_draft() {
     let cmd = update(&mut model, Message::ConfirmSigningRequest);
     match cmd {
         Some(Command::SendMessage(Message::InitiateSigning { request })) => {
-            assert_eq!(request.wallet_id, "wallet-test");
+            assert_eq!(request.wallet_id, "wallet-test-ethereum-0");
             assert_eq!(request.chain, "secp256k1");
             assert_eq!(
                 request.transaction_data,
@@ -1075,7 +1077,8 @@ fn sign_submit_when_wallet_unlocked_dispatches_initiate_signing_directly() {
     model.current_screen = Screen::SignTransaction {
         wallet_id: "w-warm".to_string(),
     };
-    model.wallet_state.wallet_unlocked_id = Some("w-warm".to_string());
+    // Warm marker is the account-0 child — that's the id signing uses.
+    model.wallet_state.wallet_unlocked_id = Some("w-warm-ethereum-0".to_string());
     model.wallet_state.curve_type = "secp256k1";
     for c in "hi".chars() {
         update(&mut model, Message::SignTypeChar(c));
@@ -1089,7 +1092,7 @@ fn sign_submit_when_wallet_unlocked_dispatches_initiate_signing_directly() {
     let cmd = update(&mut model, Message::ConfirmSigningRequest);
     match cmd {
         Some(Command::SendMessage(Message::InitiateSigning { request })) => {
-            assert_eq!(request.wallet_id, "w-warm");
+            assert_eq!(request.wallet_id, "w-warm-ethereum-0");
             // secp256k1 → transaction_data is the EIP-191 hash.
             assert_eq!(
                 request.transaction_data,
@@ -1155,7 +1158,9 @@ fn sign_submit_when_wallet_not_unlocked_routes_to_password_prompt() {
     );
     assert_eq!(
         model.wallet_state.pending_sign_wallet_id.as_deref(),
-        Some("w-cold"),
+        // Non-secp curve in this fixture → the primary chain is solana.
+        Some("w-cold-solana-0"),
+        "cold path stashes the account-0 child, never the root",
     );
     assert!(
         model.wallet_state.pending_sign_session_id.is_none(),
@@ -2687,7 +2692,7 @@ fn double_confirm_signing_request_is_a_safe_noop() {
         wallet_id: "w2".to_string(),
     };
     model.wallet_state.curve_type = "secp256k1";
-    model.wallet_state.wallet_unlocked_id = Some("w2".to_string());
+    model.wallet_state.wallet_unlocked_id = Some("w2-ethereum-0".to_string());
     for c in "once".chars() {
         update(&mut model, Message::SignTypeChar(c));
     }
